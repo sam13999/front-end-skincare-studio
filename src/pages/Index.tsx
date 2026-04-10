@@ -1,9 +1,17 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import Logo from "@/components/Logo";
 import heroBg from "@/assets/hero-bg.jpg";
 import heroBgMobile from "@/assets/hero-bg-mobile.jpg";
+import DiagnosticFlow from "@/components/diagnostic/DiagnosticFlow";
 
 const Index = () => {
+  const [showDiagnostic, setShowDiagnostic] = useState(false);
+
+  if (showDiagnostic) {
+    return <DiagnosticFlow onClose={() => setShowDiagnostic(false)} />;
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Hero Section */}
@@ -66,7 +74,7 @@ const Index = () => {
             className="animate-fade-in-up opacity-0"
             style={{ animationDelay: "0.8s" }}
           >
-            <Button variant="premium" size="xl">
+            <Button variant="premium" size="xl" onClick={() => setShowDiagnostic(true)}>
               Diagnostic personnalisé
             </Button>
           </div>
