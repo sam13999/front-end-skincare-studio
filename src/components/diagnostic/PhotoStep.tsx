@@ -1,6 +1,11 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Camera, Upload, Check, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Camera, Upload, Check, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import {
+  validatePhoto,
+  type PhotoQuality,
+  type ValidationResult,
+} from "./photoValidation";
 
 interface PhotoStepProps {
   type: "face" | "profile";
@@ -25,8 +30,6 @@ const profileChecklist = [
   "Votre profil est naturel, même légèrement incliné",
   "Aucun élément ne cache votre visage",
 ];
-
-type PhotoQuality = "none" | "insufficient" | "acceptable" | "good";
 
 const qualityConfig: Record<
   Exclude<PhotoQuality, "none">,
@@ -57,11 +60,12 @@ export const PhotoStep = ({
   photo,
   onPhotoChange,
   onNext,
-  canNext,
 }: PhotoStepProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [quality, setQuality] = useState<PhotoQuality>(photo ? "good" : "none");
+  const [validation, setValidation] = useState<ValidationResult | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
 
   const checklist = type === "face" ? faceChecklist : profileChecklist;
   const title = type === "face" ? "Photo de face" : "Photo de profil";
@@ -70,16 +74,36 @@ export const PhotoStep = ({
       ? "Prenez ou importez une photo de votre visage de face."
       : "Prenez ou importez une photo de votre profil.";
 
-  const handleFile = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = e.target?.result as string;
-      onPhotoChange(result);
-      // Mock quality assessment — always acceptable/good for demo
-      setQuality(Math.random() > 0.3 ? "good" : "acceptable");
-    };
-    reader.readAsDataURL(file);
-  };
+  const processPhoto = useCallback(
+    async (dataUrl: string) => {
+      onPhotoChange(dataUrl);
+      setAnalyzing(true);
+      try {
+        const result = await validatePhoto(dataUrl, type);
+        setQuality(result.quality);
+        setValidation(result);
+      } catch {
+        // Fallback: accept the photo
+        setQuality("acceptable");
+        setValidation(null);
+      } finally {
+        setAnalyzing(false);
+      }
+    },
+    [type, onPhotoChange]
+  );
+
+  const handleFile = useCallback(
+    (file: File) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        processPhoto(result);
+      };
+      reader.readAsDataURL(file);
+    },
+    [processPhoto]
+  );
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -89,6 +113,7 @@ export const PhotoStep = ({
   const handleRetake = () => {
     onPhotoChange(null);
     setQuality("none");
+    setValidation(null);
   };
 
   const isUsable = quality === "acceptable" || quality === "good";
@@ -114,11 +139,21 @@ export const PhotoStep = ({
         } bg-ivory-light`}
       >
         {photo ? (
-          <img
-            src={photo}
-            alt="Aperçu"
-            className="w-full h-full object-cover"
-          />
+          <>
+            <img
+              src={photo}
+              alt="Aperçu"
+              className="w-full h-full object-cover"
+            />
+            {analyzing && (
+              <div className="absolute inset-0 bg-background/60 flex flex-col items-center justify-center gap-2">
+                <Loader2 className="w-8 h-8 text-foreground animate-spin" />
+                <span className="font-sans text-xs text-foreground">
+                  Analyse en cours…
+                </span>
+              </div>
+            )}
+          </>
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-warm/50 gap-3">
             <Camera className="w-10 h-10" />
@@ -128,20 +163,46 @@ export const PhotoStep = ({
       </div>
 
       {/* Quality feedback */}
-      {photo && quality !== "none" && (
-        <div className="flex items-center gap-2 mb-5">
-          {(() => {
-            const cfg = qualityConfig[quality];
-            const Icon = cfg.icon;
-            return (
-              <>
-                <Icon className={`w-4 h-4 ${cfg.color}`} />
-                <span className={`font-sans text-sm ${cfg.color}`}>
-                  {cfg.label}
-                </span>
-              </>
-            );
-          })()}
+      {photo && quality !== "none" && !analyzing && (
+        <div className="w-full max-w-[280px] mb-5 space-y-2">
+          {/* Main status */}
+          <div className="flex items-center gap-2 justify-center">
+            {(() => {
+              const cfg = qualityConfig[quality];
+              const Icon = cfg.icon;
+              return (
+                <>
+                  <Icon className={`w-4 h-4 ${cfg.color}`} />
+                  <span className={`font-sans text-sm font-medium ${cfg.color}`}>
+                    {cfg.label}
+                  </span>
+                </>
+              );
+            })()}
+          </div>
+
+          {/* Detailed issues */}
+          {validation && validation.issues.length > 0 && (
+            <div className="space-y-1">
+              {validation.issues.map((issue) => (
+                <div
+                  key={issue.code}
+                  className="flex items-center gap-2 justify-center"
+                >
+                  <span
+                    className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${
+                      issue.severity === "critical"
+                        ? "bg-red-400"
+                        : "bg-accent"
+                    }`}
+                  />
+                  <span className="font-sans text-xs text-warm">
+                    {issue.message}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -174,6 +235,7 @@ export const PhotoStep = ({
             size="lg"
             className="flex-1"
             onClick={handleRetake}
+            disabled={analyzing}
           >
             Reprendre
           </Button>
@@ -181,7 +243,7 @@ export const PhotoStep = ({
             variant="premium"
             size="lg"
             className="flex-1"
-            disabled={!isUsable}
+            disabled={!isUsable || analyzing}
             onClick={onNext}
           >
             Utiliser
