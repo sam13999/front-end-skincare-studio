@@ -9,6 +9,9 @@ interface QuestionStepProps {
   canNext: boolean;
 }
 
+// Values that, when selected in a multi-select, deselect all others (and vice-versa).
+const EXCLUSIVE_VALUES = new Set(["Je ne sais pas", "Aucun"]);
+
 export const QuestionStep = ({
   question,
   value,
@@ -19,19 +22,27 @@ export const QuestionStep = ({
   const handleSelect = (optionValue: string) => {
     if (question.type === "single") {
       onChange(optionValue);
-    } else {
-      const current = (value as string[]) || [];
-      if (optionValue === "unknown") {
-        // "Je ne sais pas" clears others
-        onChange(["unknown"]);
+      return;
+    }
+
+    const current = (value as string[]) || [];
+
+    // If selecting an exclusive value: replace selection with just that value
+    if (EXCLUSIVE_VALUES.has(optionValue)) {
+      if (current.length === 1 && current[0] === optionValue) {
+        onChange([]);
       } else {
-        const without = current.filter((v) => v !== "unknown");
-        if (without.includes(optionValue)) {
-          onChange(without.filter((v) => v !== optionValue));
-        } else {
-          onChange([...without, optionValue]);
-        }
+        onChange([optionValue]);
       }
+      return;
+    }
+
+    // Otherwise: remove any exclusive value, then toggle this option
+    const without = current.filter((v) => !EXCLUSIVE_VALUES.has(v));
+    if (without.includes(optionValue)) {
+      onChange(without.filter((v) => v !== optionValue));
+    } else {
+      onChange([...without, optionValue]);
     }
   };
 
@@ -59,6 +70,7 @@ export const QuestionStep = ({
       <div className="grid grid-cols-2 gap-3 mb-8">
         {question.options.map((option) => {
           const selected = isSelected(option.value);
+          const isExclusive = EXCLUSIVE_VALUES.has(option.value);
           return (
             <button
               key={option.value}
@@ -67,9 +79,7 @@ export const QuestionStep = ({
                 selected
                   ? "border-green-deep bg-green-deep/5 text-foreground font-medium shadow-sm"
                   : "border-border bg-ivory-light text-warm hover:border-accent hover:bg-accent/5"
-              } ${
-                option.value === "unknown" ? "col-span-2" : ""
-              }`}
+              } ${isExclusive ? "col-span-2" : ""}`}
             >
               {option.label}
             </button>
