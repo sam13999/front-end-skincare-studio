@@ -1,12 +1,18 @@
 import { useState, useEffect, useCallback } from "react";
-import { DiagnosticData, questions } from "./types";
+import { DiagnosticData, questions, buildAndValidatePayload } from "./types";
 import { PhotoStep } from "./PhotoStep";
 import { QuestionStep } from "./QuestionStep";
 import { SummaryStep } from "./SummaryStep";
+import { IdentityStep } from "./IdentityStep";
 import { Progress } from "@/components/ui/progress";
 import { ArrowLeft, X } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 
-const TOTAL_STEPS = 10; // 2 photos + 7 questions + 1 summary
+// 1: photo face, 2: photo profile, 3: identity, 4-10: 7 questions, 11: summary
+const TOTAL_STEPS = 11;
+const IDENTITY_STEP = 3;
+const FIRST_QUESTION_STEP = 4;
+const SUMMARY_STEP = 11;
 
 interface DiagnosticFlowProps {
   onClose: () => void;
@@ -15,22 +21,35 @@ interface DiagnosticFlowProps {
 const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
   const [step, setStep] = useState(1);
   const [data, setData] = useState<DiagnosticData>(() => {
-    const saved = localStorage.getItem("diagnostic_answers");
-    const answers = saved ? JSON.parse(saved) : {};
-    return { photoFace: null, photoProfile: null, answers };
+    try {
+      const saved = localStorage.getItem("diagnostic_answers");
+      const parsed = saved ? JSON.parse(saved) : {};
+      return {
+        photoFace: null,
+        photoProfile: null,
+        answers: parsed.answers ?? {},
+        prenom: parsed.prenom ?? "",
+        email: parsed.email ?? "",
+      };
+    } catch {
+      return { photoFace: null, photoProfile: null, answers: {}, prenom: "", email: "" };
+    }
   });
 
   useEffect(() => {
-    // Only persist answers — photos are too large for localStorage (QuotaExceededError)
     try {
       localStorage.setItem(
         "diagnostic_answers",
-        JSON.stringify(data.answers)
+        JSON.stringify({
+          answers: data.answers,
+          prenom: data.prenom,
+          email: data.email,
+        })
       );
     } catch {
-      // ignore quota errors
+      /* ignore quota */
     }
-  }, [data.answers]);
+  }, [data.answers, data.prenom, data.email]);
 
   const progress = (step / TOTAL_STEPS) * 100;
 
@@ -41,22 +60,24 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
     []
   );
 
-  const setAnswer = useCallback(
-    (questionId: number, value: string | string[]) => {
-      setData((prev) => ({
-        ...prev,
-        answers: { ...prev.answers, [questionId]: value },
-      }));
-    },
-    []
-  );
+  const setAnswer = useCallback((key: string, value: string | string[]) => {
+    setData((prev) => ({
+      ...prev,
+      answers: { ...prev.answers, [key]: value },
+    }));
+  }, []);
+
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   const canNext = () => {
     if (step === 1) return !!data.photoFace;
     if (step === 2) return !!data.photoProfile;
-    if (step >= 3 && step <= 9) {
-      const q = questions[step - 3];
-      const answer = data.answers[q.id];
+    if (step === IDENTITY_STEP) {
+      return !!data.prenom?.trim() && !!data.email && emailRe.test(data.email.trim());
+    }
+    if (step >= FIRST_QUESTION_STEP && step <= FIRST_QUESTION_STEP + 6) {
+      const q = questions[step - FIRST_QUESTION_STEP];
+      const answer = data.answers[q.key];
       if (!answer) return false;
       if (Array.isArray(answer)) return answer.length > 0;
       return true;
@@ -64,24 +85,36 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
     return true;
   };
 
-  const goNext = () => {
-    if (step < TOTAL_STEPS) setStep(step + 1);
-  };
-  const goPrev = () => {
-    if (step > 1) setStep(step - 1);
-  };
+  const goNext = () => step < TOTAL_STEPS && setStep(step + 1);
+  const goPrev = () => step > 1 && setStep(step - 1);
   const goToStep = (s: number) => setStep(s);
 
   const handleLaunch = () => {
-    // Mock: in real app this would submit to backend
-    alert("Analyse lancée ! Vos données ont été enregistrées.");
+    const result = buildAndValidatePayload(data);
+    if (!result.ok) {
+      toast({
+        variant: "destructive",
+        title: "Une réponse n’est pas valide",
+        description:
+          "Une réponse du questionnaire n’est pas valide. Merci de la sélectionner à nouveau.",
+      });
+      return;
+    }
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.info("[questionnaire] payload", result.payload);
+    }
+    // Mock submit — backend wiring goes here
+    toast({
+      title: "Analyse lancée",
+      description: "Vos réponses ont été enregistrées.",
+    });
     localStorage.removeItem("diagnostic_answers");
     onClose();
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-background flex flex-col">
-      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <button
           onClick={step > 1 ? goPrev : onClose}
@@ -105,12 +138,10 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
         </button>
       </div>
 
-      {/* Progress */}
       <div className="px-4 pt-2">
         <Progress value={progress} className="h-1" />
       </div>
 
-      {/* Content */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-lg mx-auto px-5 py-6">
           {step === 1 && (
@@ -131,20 +162,34 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
               canNext={!!data.photoProfile}
             />
           )}
-          {step >= 3 && step <= 9 && (
-            <QuestionStep
-              question={questions[step - 3]}
-              value={data.answers[questions[step - 3].id]}
-              onChange={(v) => setAnswer(questions[step - 3].id, v)}
+          {step === IDENTITY_STEP && (
+            <IdentityStep
+              prenom={data.prenom ?? ""}
+              email={data.email ?? ""}
+              onPrenomChange={(v) => setData((p) => ({ ...p, prenom: v }))}
+              onEmailChange={(v) => setData((p) => ({ ...p, email: v }))}
               onNext={goNext}
               canNext={canNext()}
             />
           )}
-          {step === 10 && (
+          {step >= FIRST_QUESTION_STEP && step <= FIRST_QUESTION_STEP + 6 && (
+            <QuestionStep
+              question={questions[step - FIRST_QUESTION_STEP]}
+              value={data.answers[questions[step - FIRST_QUESTION_STEP].key]}
+              onChange={(v) =>
+                setAnswer(questions[step - FIRST_QUESTION_STEP].key, v)
+              }
+              onNext={goNext}
+              canNext={canNext()}
+            />
+          )}
+          {step === SUMMARY_STEP && (
             <SummaryStep
               data={data}
               onGoToStep={goToStep}
               onLaunch={handleLaunch}
+              firstQuestionStep={FIRST_QUESTION_STEP}
+              identityStep={IDENTITY_STEP}
             />
           )}
         </div>
