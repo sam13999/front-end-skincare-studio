@@ -15,15 +15,22 @@ interface DiagnosticFlowProps {
 const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
   const [step, setStep] = useState(1);
   const [data, setData] = useState<DiagnosticData>(() => {
-    const saved = localStorage.getItem("diagnostic_data");
-    return saved
-      ? JSON.parse(saved)
-      : { photoFace: null, photoProfile: null, answers: {} };
+    const saved = localStorage.getItem("diagnostic_answers");
+    const answers = saved ? JSON.parse(saved) : {};
+    return { photoFace: null, photoProfile: null, answers };
   });
 
   useEffect(() => {
-    localStorage.setItem("diagnostic_data", JSON.stringify(data));
-  }, [data]);
+    // Only persist answers — photos are too large for localStorage (QuotaExceededError)
+    try {
+      localStorage.setItem(
+        "diagnostic_answers",
+        JSON.stringify(data.answers)
+      );
+    } catch {
+      // ignore quota errors
+    }
+  }, [data.answers]);
 
   const progress = (step / TOTAL_STEPS) * 100;
 
@@ -68,7 +75,7 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
   const handleLaunch = () => {
     // Mock: in real app this would submit to backend
     alert("Analyse lancée ! Vos données ont été enregistrées.");
-    localStorage.removeItem("diagnostic_data");
+    localStorage.removeItem("diagnostic_answers");
     onClose();
   };
 
