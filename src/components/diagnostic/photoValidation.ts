@@ -1,45 +1,40 @@
 /**
- * Photo validation engine for skin analysis API compatibility.
- * Performs Canvas-based checks: brightness, sharpness, face coverage (simulated),
- * and returns structured quality feedback.
+ * Photo validation aligned with skin-analysis API expectations (Zyla-style).
+ * Goal: filter clearly unusable photos, accept imperfect-but-usable ones.
  */
 
-// --- Configuration ---
-
 export interface PhotoValidationConfig {
-  minBrightness: number;       // 0-255, reject if avg brightness below
-  maxBrightness: number;       // 0-255, reject if avg brightness above (overexposed/backlit)
-  minSharpness: number;        // Laplacian variance threshold
-  minFaceCoverage: number;     // 0-1, min fraction of image the face should occupy
-  minResolution: number;       // minimum dimension (px)
-  maxFileSizeKB: number;       // max file size in KB
+  minBrightness: number;
+  maxBrightness: number;
+  minSharpness: number;
+  minResolution: number;       // recommended min dim (px)
+  hardMinResolution: number;   // hard reject below
+  minFileSizeKB: number;       // warning below
+  maxFileSizeKB: number;       // hard reject above
 }
 
 export const faceConfig: PhotoValidationConfig = {
-  minBrightness: 60,
-  maxBrightness: 230,
-  minSharpness: 12,
-  minFaceCoverage: 0.15,
-  minResolution: 400,
-  maxFileSizeKB: 10000,
+  minBrightness: 45,
+  maxBrightness: 240,
+  minSharpness: 6,
+  minResolution: 600,
+  hardMinResolution: 300,
+  minFileSizeKB: 200,
+  maxFileSizeKB: 10 * 1024,
 };
 
 export const profileConfig: PhotoValidationConfig = {
-  minBrightness: 55,
-  maxBrightness: 230,
-  minSharpness: 10,
-  minFaceCoverage: 0.12,
-  minResolution: 400,
-  maxFileSizeKB: 10000,
+  ...faceConfig,
+  minSharpness: 5,
 };
 
-// --- Result types ---
+export const ALLOWED_MIME = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 
 export type PhotoQuality = "none" | "insufficient" | "acceptable" | "good";
 
 export interface ValidationIssue {
   code: string;
-  message: string;       // user-facing, premium wording
+  message: string;
   severity: "critical" | "warning";
 }
 
@@ -49,12 +44,13 @@ export interface ValidationResult {
   scores: {
     brightness: number;
     sharpness: number;
-    faceCoverage: number;
     resolution: number;
+    fileSizeKB: number;
   };
 }
 
-// --- Analysis helpers ---
+const GENERIC_REJECT =
+  "La photo semble difficile à analyser. Essayez une photo plus nette, avec le visage visible et une lumière correcte.";
 
 function getImageData(img: HTMLImageElement, maxSize = 512): ImageData {
   const canvas = document.createElement("canvas");
@@ -66,29 +62,33 @@ function getImageData(img: HTMLImageElement, maxSize = 512): ImageData {
   return ctx.getImageData(0, 0, canvas.width, canvas.height);
 }
 
-function analyzeBrightness(data: ImageData): number {
+function analyzeBrightness(data: ImageData): { mean: number; stdDev: number } {
   const pixels = data.data;
-  let sum = 0;
   const count = pixels.length / 4;
-  for (let i = 0; i < pixels.length; i += 4) {
-    // Perceived luminance
-    sum += 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
+  let sum = 0;
+  const lums: number[] = new Array(count);
+  for (let i = 0, j = 0; i < pixels.length; i += 4, j++) {
+    const l = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
+    lums[j] = l;
+    sum += l;
   }
-  return sum / count;
+  const mean = sum / count;
+  let varSum = 0;
+  for (let j = 0; j < count; j++) varSum += (lums[j] - mean) ** 2;
+  return { mean, stdDev: Math.sqrt(varSum / count) };
 }
 
 function analyzeSharpness(data: ImageData): number {
-  // Laplacian variance — higher = sharper
   const { width, height } = data;
   const gray = new Float32Array(width * height);
   for (let i = 0; i < gray.length; i++) {
     const idx = i * 4;
-    gray[i] = 0.299 * data.data[idx] + 0.587 * data.data[idx + 1] + 0.114 * data.data[idx + 2];
+    gray[i] =
+      0.299 * data.data[idx] + 0.587 * data.data[idx + 1] + 0.114 * data.data[idx + 2];
   }
-
-  let sum = 0;
-  let sumSq = 0;
-  let count = 0;
+  let sum = 0,
+    sumSq = 0,
+    count = 0;
   for (let y = 1; y < height - 1; y++) {
     for (let x = 1; x < width - 1; x++) {
       const lap =
@@ -107,45 +107,10 @@ function analyzeSharpness(data: ImageData): number {
   return Math.sqrt(Math.max(0, variance));
 }
 
-/**
- * Simulated face coverage estimation.
- * Uses skin-tone detection in the center region as a proxy for face presence.
- * Real implementation would use a face detection API.
- */
-function estimateFaceCoverage(data: ImageData): number {
-  const { width, height } = data;
-  const centerX = width * 0.2;
-  const centerY = height * 0.1;
-  const regionW = width * 0.6;
-  const regionH = height * 0.7;
-  
-  let skinPixels = 0;
-  let totalPixels = 0;
-
-  for (let y = Math.floor(centerY); y < Math.floor(centerY + regionH); y++) {
-    for (let x = Math.floor(centerX); x < Math.floor(centerX + regionW); x++) {
-      const idx = (y * width + x) * 4;
-      const r = data.data[idx];
-      const g = data.data[idx + 1];
-      const b = data.data[idx + 2];
-      
-      // Skin tone heuristic (works across many skin tones)
-      const isSkin =
-        r > 60 && g > 40 && b > 20 &&
-        r > g && r > b &&
-        Math.abs(r - g) > 10 &&
-        r - b > 15 &&
-        r < 250 && g < 230;
-      
-      if (isSkin) skinPixels++;
-      totalPixels++;
-    }
-  }
-
-  return totalPixels > 0 ? skinPixels / totalPixels : 0;
+function detectMimeFromDataUrl(dataUrl: string): string | null {
+  const m = /^data:([^;,]+)[;,]/.exec(dataUrl);
+  return m ? m[1].toLowerCase() : null;
 }
-
-// --- Main validation ---
 
 export async function validatePhoto(
   dataUrl: string,
@@ -154,107 +119,120 @@ export async function validatePhoto(
   const config = type === "face" ? faceConfig : profileConfig;
   const issues: ValidationIssue[] = [];
 
-  // Load image
-  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-    const i = new Image();
-    i.onload = () => resolve(i);
-    i.onerror = reject;
-    i.src = dataUrl;
-  });
-
-  // Resolution check
-  const minDim = Math.min(img.naturalWidth, img.naturalHeight);
-  if (minDim < config.minResolution) {
+  // Format check
+  const mime = detectMimeFromDataUrl(dataUrl);
+  if (mime && !ALLOWED_MIME.includes(mime)) {
     issues.push({
-      code: "low_resolution",
-      message: "La résolution de la photo est trop faible",
+      code: "bad_format",
+      message: "Format non pris en charge. Utilisez JPG, PNG ou WEBP.",
       severity: "critical",
     });
   }
 
-  // File size check (approximate from base64)
+  // File size (approx from base64)
   const base64Length = dataUrl.split(",")[1]?.length || 0;
   const fileSizeKB = Math.round((base64Length * 3) / 4 / 1024);
-  if (fileSizeKB > config.maxFileSizeKB) {
+  if (fileSizeKB === 0) {
+    issues.push({ code: "empty_file", message: GENERIC_REJECT, severity: "critical" });
+  } else if (fileSizeKB > config.maxFileSizeKB) {
     issues.push({
       code: "file_too_large",
-      message: "La photo est trop volumineuse",
+      message: "La photo est trop volumineuse.",
+      severity: "critical",
+    });
+  } else if (fileSizeKB < config.minFileSizeKB) {
+    // Light warning only — don't block
+    issues.push({
+      code: "file_small",
+      message: "La photo est légère, privilégiez une meilleure qualité si possible.",
       severity: "warning",
     });
   }
 
-  // Canvas analysis
-  const imageData = getImageData(img);
-  const brightness = analyzeBrightness(imageData);
-  const sharpness = analyzeSharpness(imageData);
-  const faceCoverage = estimateFaceCoverage(imageData);
+  // Load image
+  let img: HTMLImageElement;
+  try {
+    img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = reject;
+      i.src = dataUrl;
+    });
+  } catch {
+    return {
+      quality: "insufficient",
+      issues: [{ code: "load_failed", message: GENERIC_REJECT, severity: "critical" }],
+      scores: { brightness: 0, sharpness: 0, resolution: 0, fileSizeKB },
+    };
+  }
 
-  // Brightness
+  const minDim = Math.min(img.naturalWidth, img.naturalHeight);
+  if (minDim < config.hardMinResolution) {
+    issues.push({
+      code: "low_resolution",
+      message: "La résolution est trop faible.",
+      severity: "critical",
+    });
+  } else if (minDim < config.minResolution) {
+    issues.push({
+      code: "low_resolution_warn",
+      message: "Résolution un peu faible, mais utilisable.",
+      severity: "warning",
+    });
+  }
+
+  const imageData = getImageData(img);
+  const { mean: brightness, stdDev } = analyzeBrightness(imageData);
+  const sharpness = analyzeSharpness(imageData);
+
+  // Detect uniform / near-blank images (pure black, pure white, flat)
+  if (stdDev < 8) {
+    issues.push({
+      code: "blank_image",
+      message: GENERIC_REJECT,
+      severity: "critical",
+    });
+  }
+
   if (brightness < config.minBrightness) {
     issues.push({
       code: "too_dark",
-      message: "La lumière est insuffisante",
+      message: "La lumière est insuffisante.",
       severity: "critical",
     });
   } else if (brightness > config.maxBrightness) {
     issues.push({
       code: "overexposed",
-      message: "La photo est surexposée ou en contre-jour",
+      message: "La photo est surexposée ou en contre-jour.",
       severity: "critical",
     });
   }
 
-  // Sharpness
   if (sharpness < config.minSharpness * 0.5) {
     issues.push({
       code: "very_blurry",
-      message: "La photo semble trop floue",
+      message: "La photo semble trop floue.",
       severity: "critical",
     });
   } else if (sharpness < config.minSharpness) {
     issues.push({
       code: "slightly_blurry",
-      message: "La photo manque légèrement de netteté",
+      message: "Légèrement floue, mais utilisable.",
       severity: "warning",
     });
   }
 
-  // Face coverage
-  if (faceCoverage < config.minFaceCoverage * 0.5) {
-    issues.push({
-      code: "face_too_small",
-      message: "Rapprochez légèrement votre visage",
-      severity: "critical",
-    });
-  } else if (faceCoverage < config.minFaceCoverage) {
-    issues.push({
-      code: "face_small",
-      message: "Votre visage pourrait être un peu plus proche",
-      severity: "warning",
-    });
-  }
-
-  // Determine quality
   const criticalCount = issues.filter((i) => i.severity === "critical").length;
   const warningCount = issues.filter((i) => i.severity === "warning").length;
 
   let quality: PhotoQuality;
-  if (criticalCount > 0) {
-    quality = "insufficient";
-  } else if (warningCount > 0) {
-    quality = "acceptable";
-  } else {
-    quality = "good";
-  }
+  if (criticalCount > 0) quality = "insufficient";
+  else if (warningCount > 0) quality = "acceptable";
+  else quality = "good";
 
   return {
     quality,
     issues,
-    scores: {
-      brightness,
-      sharpness,
-      faceCoverage,
-      resolution: minDim,
-    },
+    scores: { brightness, sharpness, resolution: minDim, fileSizeKB },
   };
 }
