@@ -6,19 +6,21 @@ interface SummaryStepProps {
   data: DiagnosticData;
   onGoToStep: (step: number) => void;
   onLaunch: () => void;
+  firstQuestionStep: number;
+  identityStep: number;
 }
 
-export const SummaryStep = ({ data, onGoToStep, onLaunch }: SummaryStepProps) => {
-  const getAnswerLabels = (questionId: number) => {
-    const q = questions.find((q) => q.id === questionId);
-    const answer = data.answers[questionId];
-    if (!q || !answer) return "—";
-    if (Array.isArray(answer)) {
-      return answer
-        .map((v) => q.options.find((o) => o.value === v)?.label || v)
-        .join(", ");
-    }
-    return q.options.find((o) => o.value === answer)?.label || answer;
+export const SummaryStep = ({
+  data,
+  onGoToStep,
+  onLaunch,
+  firstQuestionStep,
+  identityStep,
+}: SummaryStepProps) => {
+  const renderAnswer = (key: string) => {
+    const v = data.answers[key];
+    if (!v) return "—";
+    return Array.isArray(v) ? v.join(", ") : v;
   };
 
   return (
@@ -28,7 +30,7 @@ export const SummaryStep = ({ data, onGoToStep, onLaunch }: SummaryStepProps) =>
           Récapitulatif
         </h2>
         <p className="font-sans text-warm text-sm font-light">
-          Vérifiez vos informations avant de lancer l'analyse.
+          Vérifiez vos informations avant de lancer l’analyse.
         </p>
       </div>
 
@@ -59,6 +61,22 @@ export const SummaryStep = ({ data, onGoToStep, onLaunch }: SummaryStepProps) =>
         ))}
       </div>
 
+      {/* Identity */}
+      <div className="mb-4 p-4 rounded-lg bg-ivory-light border border-border flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <p className="font-sans text-xs text-warm mb-1">Coordonnées</p>
+          <p className="font-sans text-sm text-foreground font-medium truncate">
+            {data.prenom || "—"} · {data.email || "—"}
+          </p>
+        </div>
+        <button
+          onClick={() => onGoToStep(identityStep)}
+          className="shrink-0 p-1.5 text-warm hover:text-foreground transition-colors"
+        >
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
       {/* Answers */}
       <div className="space-y-4 mb-10">
         {questions.map((q, i) => (
@@ -71,11 +89,11 @@ export const SummaryStep = ({ data, onGoToStep, onLaunch }: SummaryStepProps) =>
                 {q.title}
               </p>
               <p className="font-sans text-sm text-foreground font-medium">
-                {getAnswerLabels(q.id)}
+                {renderAnswer(q.key)}
               </p>
             </div>
             <button
-              onClick={() => onGoToStep(i + 3)}
+              onClick={() => onGoToStep(i + firstQuestionStep)}
               className="shrink-0 p-1.5 text-warm hover:text-foreground transition-colors"
             >
               <Pencil className="w-3.5 h-3.5" />
@@ -84,7 +102,6 @@ export const SummaryStep = ({ data, onGoToStep, onLaunch }: SummaryStepProps) =>
         ))}
       </div>
 
-      {/* Launch */}
       <Button variant="premium" size="xl" className="w-full" onClick={onLaunch}>
         Lancer mon analyse
       </Button>
