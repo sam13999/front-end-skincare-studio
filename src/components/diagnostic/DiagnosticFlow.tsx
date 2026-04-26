@@ -75,7 +75,7 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
   const handleLaunch = () => {
     // Mock: in real app this would submit to backend
     alert("Analyse lancée ! Vos données ont été enregistrées.");
-    localStorage.removeItem("diagnostic_data");
+    localStorage.removeItem("diagnostic_answers");
     onClose();
   };
 
