@@ -18,13 +18,18 @@ export const ReportCta = ({
 }: ReportCtaProps) => {
   const { open } = useDiagnostic();
   return (
-    <div className={`flex flex-col items-center gap-3 ${className}`}>
-      <Button variant={variant} size={size} onClick={open}>
+    <div className={`flex flex-col items-center gap-3 w-full ${className}`}>
+      <Button
+        variant={variant}
+        size={size}
+        onClick={open}
+        className="w-full sm:w-auto whitespace-normal text-center leading-tight px-6 py-4 h-auto min-h-[3.5rem]"
+      >
         {label}
       </Button>
       {showNote && (
         <p className="text-warm font-sans text-[11px] tracking-wide text-center max-w-xs leading-relaxed">
-          {"\n"}
+          Prix visible dès le départ.
         </p>
       )}
     </div>
