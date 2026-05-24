@@ -1,61 +1,47 @@
 import PageShell from "@/components/PageShell";
 import { ReportCta } from "@/components/ReportCta";
 import { ReportMockup } from "@/components/ReportMockup";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
+import lectureExpressImg from "@/assets/report/lecture-express.jpg";
+import analysePeauImg from "@/assets/report/analyse-peau.jpg";
+import logiqueRetenueImg from "@/assets/report/logique-retenue.jpg";
+import routineMatinImg from "@/assets/report/routine-matin.jpg";
+import routineSoirImg from "@/assets/report/routine-soir.jpg";
 
 const sections = [
   {
-    label: "P. 01",
-    title: "Lecture express",
-    desc:
-      "Une page d'entrée qui résume les 3 points clés à retenir sur votre peau — sans détour, sans jargon.",
-  },
-  {
     label: "P. 02",
-    title: "Analyse de votre peau",
+    title: "Lecture express",
+    image: lectureExpressImg,
     desc:
-      "Ce que vos photos et vos réponses révèlent : texture, sensibilité, déséquilibres potentiels, besoins prioritaires.",
+      "Une page d'entrée qui résume les points clés à retenir sur votre peau — sans détour, sans jargon.",
   },
   {
     label: "P. 03",
-    title: "Logique retenue",
+    title: "Analyse de la peau",
+    image: analysePeauImg,
     desc:
-      "Pourquoi cette routine — et pas une autre. Les arbitrages, les compromis, les priorités assumées.",
+      "Ce que vos photos et vos réponses révèlent : zones, texture, déséquilibres, besoins prioritaires.",
   },
   {
     label: "P. 04",
-    title: "Routine matin / soir / semaine",
+    title: "Logique retenue",
+    image: logiqueRetenueImg,
     desc:
-      "Un plan d'application clair, étape par étape, avec textures, fréquence et ordre logique.",
-  },
-  {
-    label: "P. 05",
-    title: "Produits recommandés",
-    desc:
-      "Des soins sélectionnés pour fonctionner ensemble, sans affiliation à une marque.",
+      "Pourquoi cette routine — et pas une autre. Les arbitrages, les compromis, ce qui a été écarté.",
   },
   {
     label: "P. 06",
-    title: "Conseils d'application",
+    title: "Routine du matin",
+    image: routineMatinImg,
     desc:
-      "Doses, temps de pose, ordre d'application, erreurs courantes à corriger immédiatement.",
+      "Étapes, textures et gestes pensés pour démarrer la journée sans surcharge.",
   },
   {
     label: "P. 07",
-    title: "Actifs à privilégier",
+    title: "Routine du soir",
+    image: routineSoirImg,
     desc:
-      "Ce qui mérite vraiment une place dans votre routine, en fonction de ce que votre peau montre.",
-  },
-  {
-    label: "P. 08",
-    title: "À éviter",
-    desc:
-      "Les actifs trop agressifs, les associations à fuir, les habitudes qui sabotent vos efforts.",
+      "Le détail des soins du soir, avec fréquence et rythme progressifs.",
   },
 ];
 
@@ -63,78 +49,76 @@ const ExempleRapport = () => {
   return (
     <PageShell
       title="Exemple de rapport — Skincare Studio"
-      description="Découvrez concrètement ce que contient un rapport Skincare Studio : analyse de peau, logique de routine, produits recommandés et conseils d'application."
+      description="Découvrez concrètement ce que contient un rapport Skincare Studio : lecture express, analyse de peau, logique retenue, routine matin et soir."
     >
-      <section className="pt-20 pb-12 md:pt-28 md:pb-16">
-        <div className="max-w-3xl mx-auto px-6 text-center">
+      <section className="pt-16 pb-10 md:pt-28 md:pb-16">
+        <div className="max-w-3xl mx-auto px-5 md:px-6 text-center">
           <span className="font-sans text-[10px] tracking-[0.4em] uppercase text-gold">
             Exemple de rapport
           </span>
-          <h1 className="font-serif text-foreground text-4xl md:text-5xl lg:text-6xl leading-[1.1] mt-5 mb-8">
-            Ce que contient vraiment <span className="italic">votre rapport Skincare Studio.</span>
+          <h1 className="font-serif text-foreground text-[1.9rem] sm:text-4xl md:text-5xl lg:text-6xl leading-[1.1] mt-5 mb-6 md:mb-8">
+            Ce que contient vraiment <span className="italic">votre rapport.</span>
           </h1>
-          <div className="gold-separator w-16 mx-auto mb-8" />
-          <p className="text-warm font-sans font-light text-base md:text-lg leading-relaxed">
-            Vous ne recevez pas une simple recommandation produit. Vous recevez un plan clair pour
-            comprendre votre peau, éviter les erreurs et construire une routine cohérente.
+          <div className="gold-separator w-16 mx-auto mb-6 md:mb-8" />
+          <p className="text-warm font-sans font-light text-[15px] md:text-lg leading-relaxed">
+            Pas une simple recommandation produit. Un plan clair pour comprendre votre peau,
+            éviter les erreurs et construire une routine cohérente.
           </p>
         </div>
       </section>
 
-      <section className="pb-24">
-        <div className="max-w-6xl mx-auto px-6 grid grid-cols-2 md:grid-cols-3 gap-5 md:gap-8">
-          {sections.slice(0, 6).map((s) => (
-            <ReportMockup key={s.label} label={s.label} title={s.title}>
+      <section className="pb-16 md:pb-24">
+        <div className="max-w-6xl mx-auto px-5 md:px-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-10">
+          {sections.map((s) => (
+            <ReportMockup
+              key={s.label}
+              label={s.label}
+              title={s.title}
+              image={s.image}
+              imageAlt={`Extrait du rapport — ${s.title}`}
+            >
               {s.desc}
             </ReportMockup>
           ))}
         </div>
-        <p className="text-warm font-sans font-light text-sm text-center mt-10 italic max-w-xl mx-auto">
+        <p className="text-warm font-sans font-light text-sm text-center mt-10 italic max-w-xl mx-auto px-5">
           Extraits anonymisés. Les rapports réels ne sont jamais partagés et aucun visage
           identifiable n'est diffusé.
         </p>
       </section>
 
-      <section className="bg-ivory-light py-24">
-        <div className="max-w-3xl mx-auto px-6">
-          <div className="text-center mb-10">
-            <span className="font-sans text-[10px] tracking-[0.4em] uppercase text-gold">
-              Détail des sections
-            </span>
-            <h2 className="font-serif text-foreground text-3xl md:text-4xl mt-5">
-              8 sections, une seule logique
-            </h2>
-            <div className="gold-separator w-16 mx-auto mt-6" />
-          </div>
-
-          <Accordion type="single" collapsible className="w-full">
-            {sections.map((s) => (
-              <AccordionItem key={s.label} value={s.label} className="border-border">
-                <AccordionTrigger className="font-serif text-foreground text-lg text-left hover:no-underline">
-                  <span className="text-gold font-sans text-[10px] tracking-[0.3em] mr-4">
-                    {s.label}
-                  </span>
-                  {s.title}
-                </AccordionTrigger>
-                <AccordionContent className="font-sans text-warm text-sm leading-relaxed font-light">
-                  {s.desc}
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
+      <section className="bg-ivory-light py-16 md:py-24">
+        <div className="max-w-3xl mx-auto px-5 md:px-6 text-center">
+          <span className="font-sans text-[10px] tracking-[0.4em] uppercase text-gold">
+            Et aussi
+          </span>
+          <h2 className="font-serif text-foreground text-[1.7rem] sm:text-3xl md:text-4xl mt-5 mb-6">
+            Tout ce que le rapport contient en plus
+          </h2>
+          <div className="gold-separator w-16 mx-auto mb-8" />
+          <p className="text-warm font-sans font-light text-[15px] md:text-lg leading-relaxed">
+            En complément des 5 sections principales, votre rapport inclut une routine
+            hebdomadaire, les actifs à privilégier ou éviter, les conseils d'application (doses,
+            ordre, fréquence) et une sélection de produits cohérents — sans affiliation à une
+            marque.
+          </p>
         </div>
       </section>
 
-      <section className="bg-background py-24">
-        <div className="max-w-2xl mx-auto px-6 text-center">
-          <p className="font-serif text-foreground text-2xl md:text-3xl italic leading-relaxed mb-10">
+      <section className="bg-background py-16 md:py-24">
+        <div className="max-w-2xl mx-auto px-5 md:px-6 text-center">
+          <p className="font-serif text-foreground text-xl md:text-3xl italic leading-relaxed mb-8 md:mb-10">
             Le rapport ne cherche pas à vous faire acheter plus.
             <br />
             <span className="not-italic">
-              Il vous aide à comprendre ce qui mérite vraiment d'entrer dans votre routine.
+              Il vous aide à comprendre ce qui mérite d'entrer dans votre routine.
             </span>
           </p>
-          <ReportCta showNote />
+          <div className="flex justify-center">
+            <div className="w-full max-w-sm">
+              <ReportCta showNote />
+            </div>
+          </div>
         </div>
       </section>
     </PageShell>
