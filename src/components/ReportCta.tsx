@@ -24,7 +24,7 @@ export const ReportCta = ({
       </Button>
       {showNote && (
         <p className="text-warm font-sans text-[11px] tracking-wide text-center max-w-xs leading-relaxed">
-          Prix visible dès le départ. Pas de quiz gratuit qui se transforme en paiement surprise.
+          {"\n"}
         </p>
       )}
     </div>
