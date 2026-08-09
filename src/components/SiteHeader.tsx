@@ -18,7 +18,7 @@ const SiteHeader = () => {
     <header className="sticky top-0 z-40 border-b border-[#173f36]/10 bg-[#f7f2ea]/90 backdrop-blur-xl">
       <div className="mx-auto flex h-[68px] max-w-[1180px] items-center justify-between px-5 max-[359px]:h-[60px] sm:px-6 md:px-8">
         <Link to="/" className="flex items-center gap-2" onClick={() => setOpen(false)}>
-          <Logo size="sm" className="text-[2rem]" />
+          <Logo size="sm" />
         </Link>
 
         <nav className="hidden md:flex items-center gap-8">

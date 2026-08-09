@@ -14,9 +14,9 @@ import {
   Sparkles,
 } from "lucide-react";
 import heroProduct from "@/assets/hero-product.jpg";
-import analysePeauImg from "@/assets/report/analyse-peau.jpg";
-import lectureExpressImg from "@/assets/report/lecture-express.jpg";
-import routineMatinImg from "@/assets/report/routine-matin.jpg";
+import understandSkinReportImg from "@/assets/report/homepage/comprendre-votre-peau.png";
+import strategyReportImg from "@/assets/report/homepage/strategie-skinview.png";
+import routineReportImg from "@/assets/report/homepage/routine-conseillee.png";
 import PageShell from "@/components/PageShell";
 import { ReportCta } from "@/components/ReportCta";
 
@@ -73,21 +73,21 @@ const steps = [
 
 const reportPages = [
   {
-    title: "Votre analyse",
-    image: analysePeauImg,
-    alt: "Exemple de page d’analyse de peau SkinView",
+    title: "Votre stratégie",
+    image: strategyReportImg,
+    alt: "Exemple de page présentant la stratégie, les priorités et les points à éviter dans un rapport SkinView",
     rotate: "-rotate-[3deg]",
   },
   {
     title: "Comprendre votre peau",
-    image: lectureExpressImg,
-    alt: "Exemple de page expliquant les besoins de la peau dans un rapport SkinView",
+    image: understandSkinReportImg,
+    alt: "Exemple de page du rapport SkinView expliquant la lecture globale et les besoins de la peau",
     rotate: "rotate-[1deg]",
   },
   {
     title: "Votre routine",
-    image: routineMatinImg,
-    alt: "Exemple de page de routine skincare sur mesure SkinView",
+    image: routineReportImg,
+    alt: "Exemple de page présentant la routine skincare sur mesure conseillée dans un rapport SkinView",
     rotate: "rotate-[3deg]",
   },
 ];
@@ -266,6 +266,8 @@ const Index = () => (
                     src={page.image}
                     alt={page.alt}
                     loading="lazy"
+                    width={800}
+                    height={1135}
                     className="aspect-[0.705] w-full object-cover object-top"
                   />
                 </div>
