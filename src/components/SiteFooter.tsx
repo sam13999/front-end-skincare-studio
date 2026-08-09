@@ -1,125 +1,58 @@
 import { Link } from "react-router-dom";
 
-const disclaimers = [
-  "SkinView est un service de conseil cosmétique.",
-  "Le rapport n'est pas un avis médical.",
-  "Aucune promesse de résultat — l'analyse repose sur les photos et réponses transmises.",
-  "Les photos servent uniquement à générer votre rapport.",
-  "Le rapport est envoyé par email. En cas de problème technique, reprise manuelle sous 24 à 48h.",
-  "Sans affiliation à une marque.",
+const reportLinks = [
+  { to: "/rapport-skincare-personnalise", label: "Ce que contient le rapport" },
+  { to: "/exemple-rapport", label: "Voir un exemple" },
+  { to: "/tarif", label: "Tarif" },
+  { to: "/notre-combat", label: "Notre combat" },
 ];
 
-const SiteFooter = () => {
-  return (
-    <footer className="bg-foreground text-primary-foreground">
-      <div className="max-w-5xl mx-auto px-6 py-16">
-        <div className="grid md:grid-cols-3 gap-10 mb-12">
-          <div>
-            <div className="font-serif text-3xl tracking-[-0.03em] mb-3">SkinView</div>
-            <p className="font-sans text-primary-foreground/60 text-xs leading-relaxed font-light max-w-xs">
-              Comprendre votre peau et construire une routine réellement personnalisée.
-            </p>
-          </div>
+const adviceLinks = [
+  { to: "/comprendre-sa-peau", label: "Comprendre sa peau" },
+  { to: "/ordre-routine-skincare", label: "Ordre d’une routine" },
+  { to: "/acheter-moins-de-skincare", label: "Acheter moins de skincare" },
+  { to: "/peau-sensible-actifs-a-eviter", label: "Peau sensible : actifs à éviter" },
+];
 
-          <div>
-            <div className="font-sans text-[10px] tracking-[0.3em] uppercase text-primary-foreground/50 mb-4">
-              Le rapport
-            </div>
-            <ul className="space-y-2 font-sans text-xs font-light">
-              <li>
-                <Link
-                  to="/rapport-skincare-personnalise"
-                  className="text-primary-foreground/80 hover:text-primary-foreground"
-                >
-                  Ce que contient le rapport
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/exemple-rapport"
-                  className="text-primary-foreground/80 hover:text-primary-foreground"
-                >
-                  Voir un exemple
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/tarif"
-                  className="text-primary-foreground/80 hover:text-primary-foreground"
-                >
-                  Tarif
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/notre-combat"
-                  className="text-primary-foreground/80 hover:text-primary-foreground"
-                >
-                  Notre combat
-                </Link>
-              </li>
-            </ul>
-          </div>
+const FooterLinks = ({ title, links }: { title: string; links: typeof reportLinks }) => (
+  <nav aria-label={title}>
+    <h2 className="mb-3 font-sans text-[9px] uppercase tracking-[0.24em] text-white/50">{title}</h2>
+    <ul className="space-y-1.5">
+      {links.map((link) => (
+        <li key={link.to}>
+          <Link className="font-sans text-[10.5px] leading-tight text-white/75 transition-colors hover:text-white" to={link.to}>
+            {link.label}
+          </Link>
+        </li>
+      ))}
+    </ul>
+  </nav>
+);
 
-          <div>
-            <div className="font-sans text-[10px] tracking-[0.3em] uppercase text-primary-foreground/50 mb-4">
-              Comprendre votre peau
-            </div>
-            <ul className="space-y-2 font-sans text-xs font-light">
-              <li>
-                <Link
-                  to="/comprendre-sa-peau"
-                  className="text-primary-foreground/80 hover:text-primary-foreground"
-                >
-                  Comprendre sa peau
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/ordre-routine-skincare"
-                  className="text-primary-foreground/80 hover:text-primary-foreground"
-                >
-                  Ordre d'une routine
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/acheter-moins-de-skincare"
-                  className="text-primary-foreground/80 hover:text-primary-foreground"
-                >
-                  Acheter moins de skincare
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/peau-sensible-actifs-a-eviter"
-                  className="text-primary-foreground/80 hover:text-primary-foreground"
-                >
-                  Peau sensible : actifs à éviter
-                </Link>
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        <div className="border-t border-primary-foreground/15 pt-8">
-          <ul className="space-y-1.5 mb-6">
-            {disclaimers.map((d) => (
-              <li
-                key={d}
-                className="font-sans text-[11px] text-primary-foreground/50 leading-relaxed font-light"
-              >
-                · {d}
-              </li>
-            ))}
-          </ul>
-          <p className="font-sans text-primary-foreground/40 text-[11px] tracking-wider font-light text-center">
-            © {new Date().getFullYear()} SkinView — L’analyse au service de votre routine
+const SiteFooter = () => (
+  <footer className="bg-[#173f36] text-[#f8f4ed]">
+    <div className="mx-auto max-w-[1120px] px-5 py-9 sm:px-6 sm:py-12 lg:px-8">
+      <div className="grid grid-cols-2 gap-x-5 gap-y-7 md:grid-cols-[1.2fr_1fr_1fr] md:gap-10">
+        <div className="col-span-2 md:col-span-1">
+          <div className="font-serif text-[1.8rem] leading-none tracking-[-0.035em]">SkinView</div>
+          <p className="mt-2 max-w-[300px] font-sans text-[10.5px] leading-[1.45] text-white/60">
+            Comprendre votre peau et construire une routine réellement personnalisée.
           </p>
         </div>
+        <FooterLinks title="Le rapport" links={reportLinks} />
+        <FooterLinks title="Comprendre votre peau" links={adviceLinks} />
       </div>
-    </footer>
-  );
-};
+
+      <div className="mt-7 border-t border-white/12 pt-5">
+        <p className="font-sans text-[9px] leading-[1.5] text-white/45">
+          Les photos servent uniquement à générer votre rapport. SkinView est un service de conseil cosmétique et ne remplace pas un avis médical. Sans affiliation à une marque.
+        </p>
+        <p className="mt-3 text-center font-sans text-[9px] tracking-wide text-white/35">
+          © {new Date().getFullYear()} SkinView — L’analyse au service de votre routine
+        </p>
+      </div>
+    </div>
+  </footer>
+);
 
 export default SiteFooter;

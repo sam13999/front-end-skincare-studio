@@ -18,7 +18,7 @@ const SiteHeader = () => {
     <header className="sticky top-0 z-40 border-b border-[#173f36]/10 bg-[#f7f2ea]/90 backdrop-blur-xl">
       <div className="mx-auto flex h-[68px] max-w-[1180px] items-center justify-between px-5 max-[359px]:h-[60px] sm:px-6 md:px-8">
         <Link to="/" className="flex items-center gap-2" onClick={() => setOpen(false)}>
-          <Logo size="sm" />
+          <Logo size="sm" className="text-[2rem]" />
         </Link>
 
         <nav className="hidden md:flex items-center gap-8">
@@ -47,7 +47,7 @@ const SiteHeader = () => {
           aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}
           aria-expanded={open}
         >
-          {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
         </button>
       </div>
 
