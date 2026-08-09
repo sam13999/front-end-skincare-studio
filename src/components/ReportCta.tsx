@@ -12,7 +12,7 @@ interface ReportCtaProps {
 }
 
 export const ReportCta = ({
-  label = "Obtenir ma routine personnalisée",
+  label = "Obtenir ma routine sur mesure",
   size = "xl",
   variant = "premium",
   showNote = false,

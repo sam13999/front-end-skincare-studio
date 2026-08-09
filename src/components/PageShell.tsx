@@ -11,15 +11,22 @@ interface PageShellProps {
 const PageShell = ({ children, title, description }: PageShellProps) => {
   useEffect(() => {
     if (title) document.title = title;
-    if (description) {
-      let meta = document.querySelector('meta[name="description"]');
+    const setMeta = (selector: string, attribute: "name" | "property", key: string, content?: string) => {
+      if (!content) return;
+      let meta = document.querySelector<HTMLMetaElement>(selector);
       if (!meta) {
         meta = document.createElement("meta");
-        meta.setAttribute("name", "description");
+        meta.setAttribute(attribute, key);
         document.head.appendChild(meta);
       }
-      meta.setAttribute("content", description);
-    }
+      meta.setAttribute("content", content);
+    };
+
+    setMeta('meta[name="description"]', "name", "description", description);
+    setMeta('meta[property="og:title"]', "property", "og:title", title);
+    setMeta('meta[property="og:description"]', "property", "og:description", description);
+    setMeta('meta[name="twitter:title"]', "name", "twitter:title", title);
+    setMeta('meta[name="twitter:description"]', "name", "twitter:description", description);
   }, [title, description]);
 
   return (

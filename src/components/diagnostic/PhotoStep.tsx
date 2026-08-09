@@ -1,8 +1,11 @@
-import { useRef, useState, useCallback } from "react";
+import { useCallback, useRef, useState } from "react";
+import { AlertCircle, Camera, Check, CheckCircle2, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Camera, Upload, Check, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import {
+  ACCEPTED_FILE_TYPES,
+  createRejectedResult,
   validatePhoto,
+  validatePhotoFile,
   type PhotoQuality,
   type ValidationResult,
 } from "./photoValidation";
@@ -12,23 +15,22 @@ interface PhotoStepProps {
   photo: string | null;
   onPhotoChange: (value: string | null) => void;
   onNext: () => void;
-  canNext: boolean;
 }
 
 const faceChecklist = [
   "Votre visage est entièrement visible",
-  "La photo est nette",
-  "La lumière est suffisante",
+  "La photo est nette et bien éclairée",
   "Vous êtes seul(e) sur la photo",
   "Aucun élément ne cache votre visage",
+  "Format JPG ou JPEG, 5 Mo maximum",
 ];
 
 const profileChecklist = [
   "Un côté de votre visage est bien visible",
-  "La photo est nette",
-  "La lumière est suffisante",
-  "Votre profil est naturel, même légèrement incliné",
+  "La photo est nette et bien éclairée",
+  "Votre profil reste naturel et peu incliné",
   "Aucun élément ne cache votre visage",
+  "Format JPG ou JPEG, 5 Mo maximum",
 ];
 
 const qualityConfig: Record<
@@ -36,33 +38,30 @@ const qualityConfig: Record<
   { label: string; color: string; border: string; icon: typeof AlertCircle }
 > = {
   insufficient: {
-    label: "Photo insuffisante",
-    color: "text-red-400",
+    label: "Photo refusée",
+    color: "text-red-500",
     border: "border-red-300",
     icon: AlertCircle,
   },
   acceptable: {
-    label: "Photo acceptable",
-    color: "text-accent",
-    border: "border-accent",
+    label: "Photo validée",
+    color: "text-[#315f54]",
+    border: "border-[#315f54]",
     icon: CheckCircle2,
   },
   good: {
-    label: "Très bien, vous pouvez continuer",
-    color: "text-green-deep",
-    border: "border-green-deep",
+    label: "Photo validée",
+    color: "text-[#173f36]",
+    border: "border-[#173f36]",
     icon: CheckCircle2,
   },
 };
 
-export const PhotoStep = ({
-  type,
-  photo,
-  onPhotoChange,
-  onNext,
-}: PhotoStepProps) => {
+export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const validationIdRef = useRef(0);
+  const [preview, setPreview] = useState<string | null>(photo);
   const [quality, setQuality] = useState<PhotoQuality>(photo ? "good" : "none");
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
@@ -74,131 +73,147 @@ export const PhotoStep = ({
       ? "Prenez ou importez une photo de votre visage de face."
       : "Prenez ou importez une photo de votre profil.";
 
+  const rejectUnexpectedError = useCallback(() => {
+    const result = createRejectedResult([
+      {
+        code: "unexpected_validation_error",
+        message: "La photo n’a pas pu être vérifiée. Réessayez avec une autre image.",
+        severity: "critical",
+      },
+    ]);
+    setQuality("insufficient");
+    setValidation(result);
+    onPhotoChange(null);
+  }, [onPhotoChange]);
+
   const processPhoto = useCallback(
-    async (dataUrl: string) => {
-      onPhotoChange(dataUrl);
+    async (dataUrl: string, fileSize: number) => {
+      const validationId = ++validationIdRef.current;
+      setPreview(dataUrl);
+      setQuality("none");
+      setValidation(null);
       setAnalyzing(true);
+      onPhotoChange(null);
+
       try {
-        const result = await validatePhoto(dataUrl, type);
+        const result = await validatePhoto(dataUrl, type, fileSize);
+        if (validationId !== validationIdRef.current) return;
+        const usable = result.quality === "acceptable" || result.quality === "good";
         setQuality(result.quality);
         setValidation(result);
+        onPhotoChange(usable ? dataUrl : null);
       } catch {
-        // Fallback: accept the photo
-        setQuality("acceptable");
-        setValidation(null);
+        if (validationId === validationIdRef.current) rejectUnexpectedError();
       } finally {
-        setAnalyzing(false);
+        if (validationId === validationIdRef.current) setAnalyzing(false);
       }
     },
-    [type, onPhotoChange]
+    [onPhotoChange, rejectUnexpectedError, type]
   );
 
   const handleFile = useCallback(
     (file: File) => {
+      const fileIssues = validatePhotoFile(file);
+      if (fileIssues.some((issue) => issue.severity === "critical")) {
+        validationIdRef.current += 1;
+        setPreview(null);
+        setQuality("insufficient");
+        setValidation(createRejectedResult(fileIssues, Math.round(file.size / 1024)));
+        setAnalyzing(false);
+        onPhotoChange(null);
+        return;
+      }
+
       const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        processPhoto(result);
+      reader.onload = (event) => {
+        const result = event.target?.result;
+        if (typeof result === "string") processPhoto(result, file.size);
+        else rejectUnexpectedError();
       };
+      reader.onerror = rejectUnexpectedError;
       reader.readAsDataURL(file);
     },
-    [processPhoto]
+    [onPhotoChange, processPhoto, rejectUnexpectedError]
   );
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
     if (file) handleFile(file);
+    event.target.value = "";
   };
 
   const handleRetake = () => {
+    validationIdRef.current += 1;
+    setPreview(null);
     onPhotoChange(null);
     setQuality("none");
     setValidation(null);
+    setAnalyzing(false);
   };
 
   const isUsable = quality === "acceptable" || quality === "good";
+  const hasFeedback = quality !== "none" && !analyzing;
 
   return (
     <div className="flex flex-col items-center">
-      {/* Title */}
-      <div className="text-center mb-6">
-        <h2 className="font-serif text-foreground text-2xl md:text-3xl mb-2">
-          {title}
-        </h2>
-        <p className="font-sans text-warm text-sm font-light">{subtitle}</p>
+      <div className="mb-6 text-center">
+        <h2 className="mb-2 font-serif text-2xl text-foreground md:text-3xl">{title}</h2>
+        <p className="font-sans text-sm font-light text-warm">{subtitle}</p>
       </div>
 
-      {/* Photo area */}
       <div
-        className={`relative w-full max-w-[280px] aspect-[3/4] rounded-lg overflow-hidden mb-5 border-2 transition-colors ${
-          photo
+        className={`relative mb-5 aspect-[3/4] w-full max-w-[280px] overflow-hidden rounded-lg border-2 bg-ivory-light transition-colors ${
+          preview
             ? quality !== "none"
               ? qualityConfig[quality]?.border || "border-border"
               : "border-border"
             : "border-dashed border-border"
-        } bg-ivory-light`}
+        }`}
       >
-        {photo ? (
+        {preview ? (
           <>
-            <img
-              src={photo}
-              alt="Aperçu"
-              className="w-full h-full object-cover"
-            />
+            <img src={preview} alt={`Aperçu de votre ${title.toLowerCase()}`} className="h-full w-full object-cover" />
             {analyzing && (
-              <div className="absolute inset-0 bg-background/60 flex flex-col items-center justify-center gap-2">
-                <Loader2 className="w-8 h-8 text-foreground animate-spin" />
-                <span className="font-sans text-xs text-foreground">
-                  Analyse en cours…
-                </span>
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/80 px-5 text-center">
+                <Loader2 className="h-8 w-8 animate-spin text-foreground" aria-hidden="true" />
+                <span className="font-sans text-xs font-medium text-foreground">Validation du visage en cours…</span>
+                <span className="font-sans text-[10px] leading-snug text-warm">Cette étape peut prendre quelques secondes.</span>
               </div>
             )}
           </>
         ) : (
-          <div className="flex flex-col items-center justify-center h-full text-warm/50 gap-3">
-            <Camera className="w-10 h-10" />
+          <div className="flex h-full flex-col items-center justify-center gap-3 text-warm/50">
+            <Camera className="h-10 w-10" aria-hidden="true" />
             <span className="font-sans text-xs">Aucune photo</span>
           </div>
         )}
       </div>
 
-      {/* Quality feedback */}
-      {photo && quality !== "none" && !analyzing && (
-        <div className="w-full max-w-[280px] mb-5 space-y-2">
-          {/* Main status */}
-          <div className="flex items-center gap-2 justify-center">
+      {hasFeedback && (
+        <div className="mb-5 w-full max-w-[300px] space-y-2" role="status" aria-live="polite">
+          <div className="flex items-center justify-center gap-2">
             {(() => {
-              const cfg = qualityConfig[quality];
-              const Icon = cfg.icon;
+              const config = qualityConfig[quality];
+              const Icon = config.icon;
               return (
                 <>
-                  <Icon className={`w-4 h-4 ${cfg.color}`} />
-                  <span className={`font-sans text-sm font-medium ${cfg.color}`}>
-                    {cfg.label}
-                  </span>
+                  <Icon className={`h-4 w-4 ${config.color}`} aria-hidden="true" />
+                  <span className={`font-sans text-sm font-medium ${config.color}`}>{config.label}</span>
                 </>
               );
             })()}
           </div>
 
-          {/* Detailed issues */}
           {validation && validation.issues.length > 0 && (
-            <div className="space-y-1">
+            <div className="space-y-1.5 rounded-lg bg-white/55 px-3 py-2.5">
               {validation.issues.map((issue) => (
-                <div
-                  key={issue.code}
-                  className="flex items-center gap-2 justify-center"
-                >
+                <div key={issue.code} className="flex items-start gap-2">
                   <span
-                    className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${
-                      issue.severity === "critical"
-                        ? "bg-red-400"
-                        : "bg-accent"
+                    className={`mt-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
+                      issue.severity === "critical" ? "bg-red-400" : "bg-[#8c7757]"
                     }`}
                   />
-                  <span className="font-sans text-xs text-warm">
-                    {issue.message}
-                  </span>
+                  <span className="font-sans text-[11px] leading-[1.4] text-warm">{issue.message}</span>
                 </div>
               ))}
             </div>
@@ -206,56 +221,44 @@ export const PhotoStep = ({
         </div>
       )}
 
-      {/* Buttons */}
-      {!photo ? (
-        <div className="flex gap-3 mb-8 w-full max-w-[280px]">
+      {!preview ? (
+        <div className="mb-8 flex w-full max-w-[280px] gap-3">
           <Button
             variant="premium"
             size="lg"
             className="flex-1 gap-2"
+            disabled={analyzing}
             onClick={() => cameraInputRef.current?.click()}
           >
-            <Camera className="w-4 h-4" />
+            <Camera className="h-4 w-4" aria-hidden="true" />
             Prendre
           </Button>
           <Button
             variant="premium-outline"
             size="lg"
             className="flex-1 gap-2"
+            disabled={analyzing}
             onClick={() => fileInputRef.current?.click()}
           >
-            <Upload className="w-4 h-4" />
+            <Upload className="h-4 w-4" aria-hidden="true" />
             Importer
           </Button>
         </div>
       ) : (
-        <div className="flex gap-3 mb-8 w-full max-w-[280px]">
-          <Button
-            variant="premium-outline"
-            size="lg"
-            className="flex-1"
-            onClick={handleRetake}
-            disabled={analyzing}
-          >
+        <div className="mb-8 flex w-full max-w-[280px] gap-3">
+          <Button variant="premium-outline" size="lg" className="flex-1" onClick={handleRetake} disabled={analyzing}>
             Reprendre
           </Button>
-          <Button
-            variant="premium"
-            size="lg"
-            className="flex-1"
-            disabled={!isUsable || analyzing}
-            onClick={onNext}
-          >
+          <Button variant="premium" size="lg" className="flex-1" disabled={!isUsable || analyzing} onClick={onNext}>
             Utiliser
           </Button>
         </div>
       )}
 
-      {/* Hidden inputs */}
       <input
         ref={cameraInputRef}
         type="file"
-        accept="image/*"
+        accept={ACCEPTED_FILE_TYPES}
         capture="user"
         className="hidden"
         onChange={handleInputChange}
@@ -263,27 +266,18 @@ export const PhotoStep = ({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept={ACCEPTED_FILE_TYPES}
         className="hidden"
         onChange={handleInputChange}
       />
 
-      {/* Checklist */}
-      <div className="w-full bg-ivory-light rounded-lg p-5 border border-border">
-        <p className="font-sans text-foreground text-sm font-medium mb-3">
-          Pour une analyse fiable, vérifiez simplement que :
-        </p>
+      <div className="w-full rounded-lg border border-border bg-ivory-light p-5">
+        <p className="mb-3 font-sans text-sm font-medium text-foreground">Pour une analyse fiable, vérifiez que :</p>
         <ul className="space-y-2">
-          {checklist.map((item, i) => (
-            <li key={i} className="flex items-start gap-2.5">
-              <Check
-                className={`w-4 h-4 mt-0.5 shrink-0 ${
-                  photo && isUsable ? "text-green-deep" : "text-warm/30"
-                }`}
-              />
-              <span className="font-sans text-sm text-warm font-light">
-                {item}
-              </span>
+          {checklist.map((item) => (
+            <li key={item} className="flex items-start gap-2.5">
+              <Check className={`mt-0.5 h-4 w-4 shrink-0 ${preview && isUsable ? "text-green-deep" : "text-warm/30"}`} aria-hidden="true" />
+              <span className="font-sans text-sm font-light text-warm">{item}</span>
             </li>
           ))}
         </ul>

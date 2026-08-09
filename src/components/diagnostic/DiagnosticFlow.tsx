@@ -101,7 +101,6 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
       return;
     }
     if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
       console.info("[questionnaire] payload", result.payload);
     }
     // Mock submit — backend wiring goes here
@@ -150,7 +149,6 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
               photo={data.photoFace}
               onPhotoChange={(v) => setPhoto("photoFace", v)}
               onNext={goNext}
-              canNext={!!data.photoFace}
             />
           )}
           {step === 2 && (
@@ -159,7 +157,6 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
               photo={data.photoProfile}
               onPhotoChange={(v) => setPhoto("photoProfile", v)}
               onNext={goNext}
-              canNext={!!data.photoProfile}
             />
           )}
           {step === IDENTITY_STEP && (

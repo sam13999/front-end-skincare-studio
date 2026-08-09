@@ -1,26 +1,28 @@
-/**
- * Photo validation aligned with skin-analysis API expectations (Zyla-style).
- * Goal: filter clearly unusable photos, accept imperfect-but-usable ones.
- */
+import type { Detection, FaceDetector as MediaPipeFaceDetector } from "@mediapipe/tasks-vision";
 
 export interface PhotoValidationConfig {
   minBrightness: number;
   maxBrightness: number;
   minSharpness: number;
-  minResolution: number;       // recommended min dim (px)
-  hardMinResolution: number;   // hard reject below
-  minFileSizeKB: number;       // warning below
-  maxFileSizeKB: number;       // hard reject above
+  minResolution: number;
+  maxResolution: number;
+  minFileSizeKB: number;
+  maxFileSizeKB: number;
+  minFacePixelSize: number;
+  minVisibleFaceRatio: number;
 }
 
+// Aligned with the documented Zyla Skin Analyze Advanced image requirements.
 export const faceConfig: PhotoValidationConfig = {
   minBrightness: 45,
   maxBrightness: 240,
   minSharpness: 6,
-  minResolution: 600,
-  hardMinResolution: 300,
-  minFileSizeKB: 200,
-  maxFileSizeKB: 10 * 1024,
+  minResolution: 201,
+  maxResolution: 4095,
+  minFileSizeKB: 100,
+  maxFileSizeKB: 5 * 1024,
+  minFacePixelSize: 400,
+  minVisibleFaceRatio: 0.9,
 };
 
 export const profileConfig: PhotoValidationConfig = {
@@ -28,7 +30,8 @@ export const profileConfig: PhotoValidationConfig = {
   minSharpness: 5,
 };
 
-export const ALLOWED_MIME = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+export const ALLOWED_MIME = ["image/jpeg", "image/jpg"];
+export const ACCEPTED_FILE_TYPES = "image/jpeg,.jpg,.jpeg";
 
 export type PhotoQuality = "none" | "insufficient" | "acceptable" | "good";
 
@@ -38,26 +41,113 @@ export interface ValidationIssue {
   severity: "critical" | "warning";
 }
 
+export interface ValidationScores {
+  brightness: number;
+  sharpness: number;
+  resolution: number;
+  fileSizeKB: number;
+  faceCount: number;
+  faceWidth: number;
+  faceHeight: number;
+  faceConfidence: number;
+}
+
 export interface ValidationResult {
   quality: PhotoQuality;
   issues: ValidationIssue[];
-  scores: {
-    brightness: number;
-    sharpness: number;
-    resolution: number;
-    fileSizeKB: number;
-  };
+  scores: ValidationScores;
 }
 
+export interface FaceObservation {
+  confidence: number;
+  box?: {
+    originX: number;
+    originY: number;
+    width: number;
+    height: number;
+  };
+  keypointCount: number;
+}
+
+const WASM_PATH = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";
+const MODEL_PATH =
+  "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite";
+const NO_FACE_MESSAGE =
+  "Nous ne détectons pas de visage exploitable sur cette photo. Reprenez-la avec le visage bien visible et face à la lumière.";
 const GENERIC_REJECT =
   "La photo semble difficile à analyser. Essayez une photo plus nette, avec le visage visible et une lumière correcte.";
+
+let detectorPromise: Promise<MediaPipeFaceDetector> | null = null;
+
+const emptyScores = (fileSizeKB = 0): ValidationScores => ({
+  brightness: 0,
+  sharpness: 0,
+  resolution: 0,
+  fileSizeKB,
+  faceCount: 0,
+  faceWidth: 0,
+  faceHeight: 0,
+  faceConfidence: 0,
+});
+
+export function createRejectedResult(issues: ValidationIssue[], fileSizeKB = 0): ValidationResult {
+  return { quality: "insufficient", issues, scores: emptyScores(fileSizeKB) };
+}
+
+export function validatePhotoFile(file: File): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const fileSizeKB = file.size / 1024;
+
+  if (!file.size) {
+    issues.push({ code: "empty_file", message: "Le fichier sélectionné est vide.", severity: "critical" });
+  }
+  if (!ALLOWED_MIME.includes(file.type.toLowerCase())) {
+    issues.push({
+      code: "bad_format",
+      message: "Format non pris en charge. Utilisez une photo JPG ou JPEG.",
+      severity: "critical",
+    });
+  }
+  if (fileSizeKB > faceConfig.maxFileSizeKB) {
+    issues.push({
+      code: "file_too_large",
+      message: "La photo dépasse 5 Mo. Choisissez une image moins volumineuse.",
+      severity: "critical",
+    });
+  }
+
+  return issues;
+}
+
+async function getFaceDetector(): Promise<MediaPipeFaceDetector> {
+  if (!detectorPromise) {
+    detectorPromise = (async () => {
+      const { FaceDetector, FilesetResolver } = await import("@mediapipe/tasks-vision");
+      const vision = await FilesetResolver.forVisionTasks(WASM_PATH);
+      return FaceDetector.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: MODEL_PATH,
+          delegate: "CPU",
+        },
+        runningMode: "IMAGE",
+        minDetectionConfidence: 0.6,
+        minSuppressionThreshold: 0.3,
+      });
+    })().catch((error) => {
+      detectorPromise = null;
+      throw error;
+    });
+  }
+  return detectorPromise;
+}
 
 function getImageData(img: HTMLImageElement, maxSize = 512): ImageData {
   const canvas = document.createElement("canvas");
   const scale = Math.min(1, maxSize / Math.max(img.naturalWidth, img.naturalHeight));
   canvas.width = Math.round(img.naturalWidth * scale);
   canvas.height = Math.round(img.naturalHeight * scale);
-  const ctx = canvas.getContext("2d")!;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("canvas_unavailable");
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
   return ctx.getImageData(0, 0, canvas.width, canvas.height);
 }
@@ -66,173 +156,241 @@ function analyzeBrightness(data: ImageData): { mean: number; stdDev: number } {
   const pixels = data.data;
   const count = pixels.length / 4;
   let sum = 0;
-  const lums: number[] = new Array(count);
-  for (let i = 0, j = 0; i < pixels.length; i += 4, j++) {
-    const l = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
-    lums[j] = l;
-    sum += l;
+  const lums = new Float32Array(count);
+  for (let i = 0, j = 0; i < pixels.length; i += 4, j += 1) {
+    const luminance = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
+    lums[j] = luminance;
+    sum += luminance;
   }
   const mean = sum / count;
-  let varSum = 0;
-  for (let j = 0; j < count; j++) varSum += (lums[j] - mean) ** 2;
-  return { mean, stdDev: Math.sqrt(varSum / count) };
+  let varianceSum = 0;
+  for (let index = 0; index < count; index += 1) varianceSum += (lums[index] - mean) ** 2;
+  return { mean, stdDev: Math.sqrt(varianceSum / count) };
 }
 
 function analyzeSharpness(data: ImageData): number {
   const { width, height } = data;
   const gray = new Float32Array(width * height);
-  for (let i = 0; i < gray.length; i++) {
-    const idx = i * 4;
-    gray[i] =
-      0.299 * data.data[idx] + 0.587 * data.data[idx + 1] + 0.114 * data.data[idx + 2];
+  for (let index = 0; index < gray.length; index += 1) {
+    const pixelIndex = index * 4;
+    gray[index] =
+      0.299 * data.data[pixelIndex] +
+      0.587 * data.data[pixelIndex + 1] +
+      0.114 * data.data[pixelIndex + 2];
   }
-  let sum = 0,
-    sumSq = 0,
-    count = 0;
-  for (let y = 1; y < height - 1; y++) {
-    for (let x = 1; x < width - 1; x++) {
-      const lap =
+
+  let sum = 0;
+  let sumSquares = 0;
+  let count = 0;
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      const laplacian =
         -gray[(y - 1) * width + x] -
         gray[y * width + (x - 1)] +
         4 * gray[y * width + x] -
         gray[y * width + (x + 1)] -
         gray[(y + 1) * width + x];
-      sum += lap;
-      sumSq += lap * lap;
-      count++;
+      sum += laplacian;
+      sumSquares += laplacian * laplacian;
+      count += 1;
     }
   }
   const mean = sum / count;
-  const variance = sumSq / count - mean * mean;
-  return Math.sqrt(Math.max(0, variance));
+  return Math.sqrt(Math.max(0, sumSquares / count - mean * mean));
 }
 
 function detectMimeFromDataUrl(dataUrl: string): string | null {
-  const m = /^data:([^;,]+)[;,]/.exec(dataUrl);
-  return m ? m[1].toLowerCase() : null;
+  const match = /^data:([^;,]+)[;,]/.exec(dataUrl);
+  return match ? match[1].toLowerCase() : null;
+}
+
+function toFaceObservations(detections: Detection[]): FaceObservation[] {
+  return detections.map((detection) => ({
+    confidence: detection.categories[0]?.score ?? 0,
+    box: detection.boundingBox,
+    keypointCount: detection.keypoints.length,
+  }));
+}
+
+export function evaluateFaceObservations(
+  faces: FaceObservation[],
+  imageWidth: number,
+  imageHeight: number,
+  config: PhotoValidationConfig
+): ValidationIssue[] {
+  if (faces.length === 0) {
+    return [{ code: "no_face", message: NO_FACE_MESSAGE, severity: "critical" }];
+  }
+  if (faces.length > 1) {
+    return [
+      {
+        code: "multiple_faces",
+        message: "Plusieurs visages sont visibles. Utilisez une photo où vous êtes seul(e).",
+        severity: "critical",
+      },
+    ];
+  }
+
+  const face = faces[0];
+  if (!face.box || face.keypointCount < 4) {
+    return [{ code: "face_incomplete", message: NO_FACE_MESSAGE, severity: "critical" }];
+  }
+
+  const { originX, originY, width, height } = face.box;
+  const visibleWidth = Math.max(0, Math.min(originX + width, imageWidth) - Math.max(originX, 0));
+  const visibleHeight = Math.max(0, Math.min(originY + height, imageHeight) - Math.max(originY, 0));
+  const visibleRatio = (visibleWidth * visibleHeight) / Math.max(1, width * height);
+
+  if (visibleRatio < config.minVisibleFaceRatio) {
+    return [
+      {
+        code: "face_cut_off",
+        message: "Votre visage est partiellement hors cadre. Replacez-le entièrement dans la photo.",
+        severity: "critical",
+      },
+    ];
+  }
+  if (Math.min(width, height) < config.minFacePixelSize) {
+    return [
+      {
+        code: "face_too_small",
+        message: "Votre visage est trop éloigné. Rapprochez-vous pour qu’il soit clairement visible.",
+        severity: "critical",
+      },
+    ];
+  }
+
+  return [];
 }
 
 export async function validatePhoto(
   dataUrl: string,
-  type: "face" | "profile"
+  type: "face" | "profile",
+  suppliedFileSize?: number
 ): Promise<ValidationResult> {
   const config = type === "face" ? faceConfig : profileConfig;
   const issues: ValidationIssue[] = [];
-
-  // Format check
   const mime = detectMimeFromDataUrl(dataUrl);
-  if (mime && !ALLOWED_MIME.includes(mime)) {
+  const base64Length = dataUrl.split(",")[1]?.length ?? 0;
+  const fileSizeKB = Math.round((suppliedFileSize ?? (base64Length * 3) / 4) / 1024);
+
+  if (!mime || !ALLOWED_MIME.includes(mime)) {
     issues.push({
       code: "bad_format",
-      message: "Format non pris en charge. Utilisez JPG, PNG ou WEBP.",
+      message: "Format non pris en charge. Utilisez une photo JPG ou JPEG.",
       severity: "critical",
     });
   }
-
-  // File size (approx from base64)
-  const base64Length = dataUrl.split(",")[1]?.length || 0;
-  const fileSizeKB = Math.round((base64Length * 3) / 4 / 1024);
-  if (fileSizeKB === 0) {
-    issues.push({ code: "empty_file", message: GENERIC_REJECT, severity: "critical" });
+  if (!base64Length) {
+    issues.push({ code: "empty_file", message: "Le fichier sélectionné est vide.", severity: "critical" });
   } else if (fileSizeKB > config.maxFileSizeKB) {
     issues.push({
       code: "file_too_large",
-      message: "La photo est trop volumineuse.",
+      message: "La photo dépasse 5 Mo. Choisissez une image moins volumineuse.",
       severity: "critical",
     });
   } else if (fileSizeKB < config.minFileSizeKB) {
-    // Light warning only — don't block
     issues.push({
       code: "file_small",
-      message: "La photo est légère, privilégiez une meilleure qualité si possible.",
+      message: "La photo est très compressée. Une image de meilleure qualité est préférable.",
       severity: "warning",
     });
   }
 
-  // Load image
   let img: HTMLImageElement;
   try {
     img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const i = new Image();
-      i.onload = () => resolve(i);
-      i.onerror = reject;
-      i.src = dataUrl;
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = reject;
+      image.src = dataUrl;
     });
   } catch {
-    return {
-      quality: "insufficient",
-      issues: [{ code: "load_failed", message: GENERIC_REJECT, severity: "critical" }],
-      scores: { brightness: 0, sharpness: 0, resolution: 0, fileSizeKB },
-    };
+    return createRejectedResult(
+      [{ code: "load_failed", message: "Impossible de lire cette image. Choisissez une autre photo.", severity: "critical" }],
+      fileSizeKB
+    );
   }
 
-  const minDim = Math.min(img.naturalWidth, img.naturalHeight);
-  if (minDim < config.hardMinResolution) {
+  const minDimension = Math.min(img.naturalWidth, img.naturalHeight);
+  const maxDimension = Math.max(img.naturalWidth, img.naturalHeight);
+  if (minDimension < config.minResolution) {
     issues.push({
       code: "low_resolution",
-      message: "La résolution est trop faible.",
+      message: "La résolution est trop faible. Utilisez une photo supérieure à 200 × 200 px.",
       severity: "critical",
     });
-  } else if (minDim < config.minResolution) {
-    issues.push({
-      code: "low_resolution_warn",
-      message: "Résolution un peu faible, mais utilisable.",
-      severity: "warning",
-    });
   }
-
-  const imageData = getImageData(img);
-  const { mean: brightness, stdDev } = analyzeBrightness(imageData);
-  const sharpness = analyzeSharpness(imageData);
-
-  // Detect uniform / near-blank images (pure black, pure white, flat)
-  if (stdDev < 8) {
+  if (maxDimension > config.maxResolution) {
     issues.push({
-      code: "blank_image",
-      message: GENERIC_REJECT,
+      code: "high_resolution",
+      message: "La résolution dépasse 4095 px. Choisissez une version plus légère de la photo.",
       severity: "critical",
     });
   }
 
-  if (brightness < config.minBrightness) {
+  let faceObservations: FaceObservation[] = [];
+  try {
+    const detector = await getFaceDetector();
+    faceObservations = toFaceObservations(detector.detect(img).detections);
+    issues.push(...evaluateFaceObservations(faceObservations, img.naturalWidth, img.naturalHeight, config));
+  } catch {
     issues.push({
-      code: "too_dark",
-      message: "La lumière est insuffisante.",
-      severity: "critical",
-    });
-  } else if (brightness > config.maxBrightness) {
-    issues.push({
-      code: "overexposed",
-      message: "La photo est surexposée ou en contre-jour.",
+      code: "face_validation_unavailable",
+      message: "Impossible de vérifier le visage pour le moment. Vérifiez votre connexion puis réessayez.",
       severity: "critical",
     });
   }
 
-  if (sharpness < config.minSharpness * 0.5) {
-    issues.push({
-      code: "very_blurry",
-      message: "La photo semble trop floue.",
-      severity: "critical",
-    });
-  } else if (sharpness < config.minSharpness) {
-    issues.push({
-      code: "slightly_blurry",
-      message: "Légèrement floue, mais utilisable.",
-      severity: "warning",
-    });
+  let brightness = 0;
+  let sharpness = 0;
+  try {
+    const imageData = getImageData(img);
+    const brightnessResult = analyzeBrightness(imageData);
+    brightness = brightnessResult.mean;
+    sharpness = analyzeSharpness(imageData);
+
+    if (brightnessResult.stdDev < 8) {
+      issues.push({ code: "blank_image", message: GENERIC_REJECT, severity: "critical" });
+    }
+    if (brightness < config.minBrightness) {
+      issues.push({ code: "too_dark", message: "La lumière est insuffisante.", severity: "critical" });
+    } else if (brightness > config.maxBrightness) {
+      issues.push({
+        code: "overexposed",
+        message: "La photo est surexposée ou prise à contre-jour.",
+        severity: "critical",
+      });
+    }
+    if (sharpness < config.minSharpness * 0.5) {
+      issues.push({ code: "very_blurry", message: "La photo semble trop floue.", severity: "critical" });
+    } else if (sharpness < config.minSharpness) {
+      issues.push({
+        code: "slightly_blurry",
+        message: "La photo est légèrement floue. Une image plus nette est préférable.",
+        severity: "warning",
+      });
+    }
+  } catch {
+    issues.push({ code: "pixel_analysis_failed", message: GENERIC_REJECT, severity: "critical" });
   }
 
-  const criticalCount = issues.filter((i) => i.severity === "critical").length;
-  const warningCount = issues.filter((i) => i.severity === "warning").length;
-
-  let quality: PhotoQuality;
-  if (criticalCount > 0) quality = "insufficient";
-  else if (warningCount > 0) quality = "acceptable";
-  else quality = "good";
+  const criticalCount = issues.filter((issue) => issue.severity === "critical").length;
+  const warningCount = issues.filter((issue) => issue.severity === "warning").length;
+  const face = faceObservations[0];
 
   return {
-    quality,
+    quality: criticalCount > 0 ? "insufficient" : warningCount > 0 ? "acceptable" : "good",
     issues,
-    scores: { brightness, sharpness, resolution: minDim, fileSizeKB },
+    scores: {
+      brightness,
+      sharpness,
+      resolution: minDimension,
+      fileSizeKB,
+      faceCount: faceObservations.length,
+      faceWidth: face?.box?.width ?? 0,
+      faceHeight: face?.box?.height ?? 0,
+      faceConfidence: face?.confidence ?? 0,
+    },
   };
 }

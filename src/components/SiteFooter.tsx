@@ -36,7 +36,7 @@ const SiteFooter = () => (
         <div className="col-span-2 md:col-span-1">
           <div className="font-serif text-[1.8rem] leading-none tracking-[-0.035em]">SkinView</div>
           <p className="mt-2 max-w-[300px] font-sans text-[10.5px] leading-[1.45] text-white/60">
-            Comprendre votre peau et construire une routine réellement personnalisée.
+            Comprendre votre peau et construire une routine skincare réellement sur mesure.
           </p>
         </div>
         <FooterLinks title="Le rapport" links={reportLinks} />
