@@ -4,8 +4,8 @@ import { ReportCta } from "@/components/ReportCta";
 const NotreCombat = () => {
   return (
     <PageShell
-      title="Notre combat — Skincare Studio"
-      description="Skincare Studio existe pour simplifier la skincare et arrêter les achats à l'aveugle. Comprendre sa peau avant de dépenser encore."
+      title="Notre combat — SkinView"
+      description="SkinView existe pour simplifier la skincare et arrêter les achats à l'aveugle. Comprendre sa peau avant de dépenser encore."
     >
       <section className="pt-20 pb-12 md:pt-28 md:pb-16">
         <div className="max-w-3xl mx-auto px-6 text-center">
@@ -40,7 +40,7 @@ const NotreCombat = () => {
           </p>
 
           <p className="font-sans text-warm text-base leading-relaxed font-light">
-            Skincare Studio existe pour remettre de la logique avant l'achat : comprendre
+            SkinView existe pour remettre de la logique avant l'achat : comprendre
             d'abord, choisir ensuite.
           </p>
         </div>

@@ -10,7 +10,7 @@ interface ReportCtaProps {
 }
 
 export const ReportCta = ({
-  label = "Recevoir mon rapport personnalisé — 29 €",
+  label = "Obtenir ma routine personnalisée",
   size = "xl",
   variant = "premium",
   showNote = false,
@@ -23,13 +23,13 @@ export const ReportCta = ({
         variant={variant}
         size={size}
         onClick={open}
-        className="w-full sm:w-auto whitespace-normal text-center leading-tight px-6 py-4 h-auto min-h-[3.5rem]"
+        className="group w-full whitespace-normal px-6 py-4 text-center leading-tight h-auto min-h-[3.5rem] max-[359px]:min-h-[3.25rem]"
       >
         {label}
       </Button>
       {showNote && (
-        <p className="text-warm font-sans text-[11px] tracking-wide text-center max-w-xs leading-relaxed">
-          Prix visible dès le départ.
+        <p className="text-warm font-sans text-[11px] text-center max-w-xs leading-relaxed">
+          Vos photos restent confidentielles.
         </p>
       )}
     </div>

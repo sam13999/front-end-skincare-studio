@@ -15,8 +15,8 @@ const SiteHeader = () => {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-40 bg-background/85 backdrop-blur-md border-b border-border/60">
-      <div className="max-w-6xl mx-auto px-5 md:px-8 h-16 flex items-center justify-between">
+    <header className="sticky top-0 z-40 border-b border-[#173f36]/10 bg-[#f7f2ea]/90 backdrop-blur-xl">
+      <div className="mx-auto flex h-[68px] max-w-[1180px] items-center justify-between px-5 max-[359px]:h-[60px] sm:px-6 md:px-8">
         <Link to="/" className="flex items-center gap-2" onClick={() => setOpen(false)}>
           <Logo size="sm" />
         </Link>
@@ -38,13 +38,14 @@ const SiteHeader = () => {
         </nav>
 
         <div className="hidden md:block">
-          <ReportCta label="Mon rapport — 29 €" size="sm" />
+          <ReportCta label="Obtenir ma routine" size="sm" />
         </div>
 
         <button
-          className="md:hidden p-2 -mr-2 text-foreground"
+          className="min-h-11 min-w-11 md:hidden p-2 -mr-2 text-foreground"
           onClick={() => setOpen((v) => !v)}
-          aria-label="Menu"
+          aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}
+          aria-expanded={open}
         >
           {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
@@ -68,7 +69,7 @@ const SiteHeader = () => {
               </NavLink>
             ))}
             <div className="pt-2">
-              <ReportCta label="Recevoir mon rapport — 29 €" size="default" />
+              <ReportCta size="default" />
             </div>
           </div>
         </div>

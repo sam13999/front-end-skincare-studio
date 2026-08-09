@@ -15,16 +15,16 @@ const included = [
 const Tarif = () => {
   return (
     <PageShell
-      title="Tarif — Rapport personnalisé Skincare Studio 29 €"
-      description="Rapport skincare personnalisé à 29 €. Prix visible dès le départ, sans surprise. Analyse, routine, produits et conseils d'application inclus."
+      title="Tarif — Analyse de peau et routine personnalisée SkinView 49 €"
+      description="Analyse de peau et routine skincare personnalisée à 49 €. Rapport détaillé, produits, actifs et conseils d'application inclus."
     >
       <section className="pt-20 pb-12 md:pt-28 md:pb-16">
         <div className="max-w-3xl mx-auto px-6 text-center">
           <span className="font-sans text-[10px] tracking-[0.4em] uppercase text-gold">Tarif</span>
           <h1 className="font-serif text-foreground text-4xl md:text-5xl lg:text-6xl leading-[1.1] mt-5 mb-8">
-            Rapport personnalisé Skincare Studio
+            Analyse et routine personnalisée SkinView
             <br />
-            <span className="italic">29 €.</span>
+            <span className="italic">49 €.</span>
           </h1>
           <div className="gold-separator w-16 mx-auto" />
         </div>
@@ -39,7 +39,7 @@ const Tarif = () => {
               <div className="font-sans text-[10px] tracking-[0.3em] uppercase text-gold mb-3">
                 Standard
               </div>
-              <div className="font-serif text-foreground text-6xl md:text-7xl mb-2">29 €</div>
+              <div className="font-serif text-foreground text-6xl md:text-7xl mb-2">49 €</div>
               <p className="font-sans text-warm text-xs tracking-wide">
                 Paiement unique. Prix visible dès le départ.
               </p>
@@ -61,31 +61,6 @@ const Tarif = () => {
             </div>
           </div>
 
-          <div className="mt-12 p-6 border border-dashed border-border rounded-sm bg-background">
-            <div className="font-sans text-[10px] tracking-[0.3em] uppercase text-gold mb-4 text-center">
-              Structure future (non active)
-            </div>
-            <div className="grid sm:grid-cols-3 gap-3 text-center">
-              <div className="p-4 border border-border/60 rounded-sm">
-                <div className="font-serif text-foreground text-2xl">19 €</div>
-                <div className="font-sans text-warm text-[11px] tracking-wide mt-1">
-                  Prix lancement
-                </div>
-              </div>
-              <div className="p-4 border border-border/60 rounded-sm">
-                <div className="font-serif text-foreground text-2xl">29 €</div>
-                <div className="font-sans text-warm text-[11px] tracking-wide mt-1">
-                  Prix standard
-                </div>
-              </div>
-              <div className="p-4 border border-border/60 rounded-sm">
-                <div className="font-serif text-foreground text-2xl">49 €</div>
-                <div className="font-sans text-warm text-[11px] tracking-wide mt-1">
-                  Offre duo
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -104,7 +79,7 @@ const Tarif = () => {
         <div className="max-w-2xl mx-auto px-6">
           <ul className="space-y-2">
             {[
-              "Skincare Studio ne remplace pas un dermatologue.",
+              "SkinView est un service de conseil cosmétique.",
               "Le rapport n'est pas un avis médical.",
               "Aucune promesse de résultat.",
               "Le rapport est envoyé par email. Reprise manuelle sous 24 à 48h en cas de problème technique.",

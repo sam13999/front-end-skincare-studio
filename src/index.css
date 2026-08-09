@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=Jost:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Instrument+Serif:ital@0;1&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,8 +6,8 @@
 
 @layer base {
   :root {
-    --background: 30 28% 93%;
-    --foreground: 163 43% 15%;
+    --background: 36 38% 95%;
+    --foreground: 164 46% 17%;
 
     --card: 36 33% 97%;
     --card-foreground: 163 43% 15%;
@@ -34,7 +34,7 @@
     --input: 30 24% 86%;
     --ring: 163 43% 15%;
 
-    --radius: 0.375rem;
+    --radius: 1.25rem;
 
     --gold: 42 42% 60%;
     --gold-light: 42 35% 70%;
@@ -60,15 +60,30 @@
     @apply border-border;
   }
 
+  html {
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Jost', sans-serif;
-    font-weight: 300;
+    min-width: 320px;
+    overflow-x: hidden;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 400;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Cormorant Garamond', serif;
+    font-family: 'Instrument Serif', serif;
     font-weight: 400;
+  }
+
+  button, a {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  ::selection {
+    background: hsl(var(--green-deep) / 0.16);
   }
 }
 
@@ -89,14 +104,44 @@
     background-color: hsl(var(--ivory-light));
   }
   .font-serif-display {
-    font-family: 'Cormorant Garamond', serif;
+    font-family: 'Instrument Serif', serif;
   }
   .font-sans-light {
-    font-family: 'Jost', sans-serif;
+    font-family: 'DM Sans', sans-serif;
     font-weight: 300;
   }
   .gold-separator {
     height: 1px;
     background: linear-gradient(90deg, transparent, hsl(var(--gold) / 0.5), transparent);
+  }
+  .eyebrow {
+    @apply font-sans text-[10px] font-medium uppercase tracking-[0.2em] text-[#8c7757];
+  }
+  .section-title {
+    @apply font-serif text-[clamp(2.35rem,8vw,4.5rem)] leading-[0.98] tracking-[-0.035em] text-[#173f36];
+  }
+  .section-copy {
+    @apply max-w-[620px] font-sans text-[15px] leading-[1.65] text-[#52625e] sm:text-base;
+  }
+  .hero-enter {
+    animation: hero-enter 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .hero-enter-delay-1 { animation-delay: 90ms; }
+  .hero-enter-delay-2 { animation-delay: 180ms; }
+  .hero-enter-delay-3 { animation-delay: 270ms; }
+}
+
+@keyframes hero-enter {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

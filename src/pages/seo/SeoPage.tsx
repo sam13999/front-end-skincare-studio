@@ -12,7 +12,7 @@ interface SeoPageProps {
 
 export const SeoPage = ({ title, metaTitle, metaDescription, intro, sections }: SeoPageProps) => {
   return (
-    <PageShell title={metaTitle ?? `${title} — Skincare Studio`} description={metaDescription ?? intro}>
+    <PageShell title={metaTitle ?? `${title} — SkinView`} description={metaDescription ?? intro}>
       <article className="pt-20 pb-16 md:pt-28">
         <div className="max-w-2xl mx-auto px-6">
           <span className="font-sans text-[10px] tracking-[0.4em] uppercase text-gold">

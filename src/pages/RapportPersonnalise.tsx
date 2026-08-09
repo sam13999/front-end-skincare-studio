@@ -17,7 +17,7 @@ const inclusions = [
 const RapportPersonnalise = () => {
   return (
     <PageShell
-      title="Rapport skincare personnalisé — Skincare Studio"
+      title="Rapport skincare personnalisé — SkinView"
       description="Un rapport personnalisé pour comprendre votre peau et construire une routine skincare cohérente. Analyse, routine, produits et conseils d'application."
     >
       <section className="pt-20 pb-12 md:pt-28 md:pb-16">
@@ -88,7 +88,7 @@ const RapportPersonnalise = () => {
           </p>
           <ReportCta showNote />
           <p className="font-sans text-warm text-[11px] mt-8 leading-relaxed max-w-md mx-auto">
-            Skincare Studio ne remplace pas un dermatologue. Le rapport n'est pas un avis médical.
+            SkinView est un service de conseil cosmétique. Le rapport n'est pas un avis médical.
             L'analyse repose sur les photos et réponses transmises. Les photos servent uniquement
             à générer votre rapport.
           </p>

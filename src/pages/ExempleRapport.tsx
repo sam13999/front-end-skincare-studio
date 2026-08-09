@@ -48,8 +48,8 @@ const sections = [
 const ExempleRapport = () => {
   return (
     <PageShell
-      title="Exemple de rapport — Skincare Studio"
-      description="Découvrez concrètement ce que contient un rapport Skincare Studio : lecture express, analyse de peau, logique retenue, routine matin et soir."
+      title="Exemple de rapport — SkinView"
+      description="Découvrez concrètement ce que contient un rapport SkinView : lecture express, analyse de peau, logique retenue, routine matin et soir."
     >
       <section className="pt-16 pb-10 md:pt-28 md:pb-16">
         <div className="max-w-3xl mx-auto px-5 md:px-6 text-center">

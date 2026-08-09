@@ -41,7 +41,7 @@ export const ReportMockup = ({
                 {label}
               </span>
               <span className="font-sans text-[9px] tracking-[0.25em] uppercase text-warm/60">
-                Skincare Studio
+                SkinView
               </span>
             </div>
             <h4 className="font-serif text-foreground text-lg md:text-xl leading-snug mb-3">

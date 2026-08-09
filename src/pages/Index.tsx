@@ -1,373 +1,359 @@
 import { Link } from "react-router-dom";
-import heroBg from "@/assets/hero-bg.jpg";
-import heroBgMobile from "@/assets/hero-bg-mobile.jpg";
+import {
+  ArrowRight,
+  Blend,
+  Camera,
+  Check,
+  ClipboardList,
+  FileText,
+  FlaskConical,
+  LockKeyhole,
+  MessageCircleMore,
+  ScanLine,
+  ShieldCheck,
+  Sparkles,
+  Sun,
+  Moon,
+} from "lucide-react";
+import heroProduct from "@/assets/hero-product.jpg";
 import lectureExpressImg from "@/assets/report/lecture-express.jpg";
 import analysePeauImg from "@/assets/report/analyse-peau.jpg";
-import logiqueRetenueImg from "@/assets/report/logique-retenue.jpg";
 import routineMatinImg from "@/assets/report/routine-matin.jpg";
-import routineSoirImg from "@/assets/report/routine-soir.jpg";
 import PageShell from "@/components/PageShell";
 import { ReportCta } from "@/components/ReportCta";
-import { ReportMockup } from "@/components/ReportMockup";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 
-const highlights = [
+const deliverables = [
   {
-    label: "P. 02",
-    title: "Lecture express",
-    image: lectureExpressImg,
-    desc: "Les 3 points clés à retenir sur votre peau, en un coup d'œil.",
+    icon: ScanLine,
+    title: "Analyse détaillée de votre peau",
+    text: "Une lecture structurée de ce que votre peau montre et des points importants à comprendre.",
   },
   {
-    label: "P. 03",
-    title: "Analyse de la peau",
-    image: analysePeauImg,
-    desc: "Ce que vos photos et vos réponses révèlent vraiment.",
+    icon: MessageCircleMore,
+    title: "Vos besoins expliqués",
+    text: "Nous expliquons pourquoi votre peau réagit ainsi et ce dont elle a réellement besoin.",
   },
   {
-    label: "P. 04",
-    title: "Logique retenue",
-    image: logiqueRetenueImg,
-    desc: "Pourquoi cette routine — et pas une autre.",
+    icon: ShieldCheck,
+    title: "Priorités & points de vigilance",
+    text: "Ce qu’il faut traiter en priorité, ce qu’il faut éviter et les erreurs qui peuvent ralentir les résultats.",
   },
   {
-    label: "P. 06",
-    title: "Routine du matin",
-    image: routineMatinImg,
-    desc: "Étapes, textures et gestes pour bien démarrer la journée.",
+    icon: Sparkles,
+    title: "Votre routine personnalisée",
+    text: "Des produits, actifs, fréquences et étapes sélectionnés selon votre peau, vos besoins et votre quotidien.",
+    featured: true,
+  },
+];
+
+const steps = [
+  {
+    icon: ClipboardList,
+    title: "Questionnaire",
+    text: "Quelques questions sur votre peau, vos habitudes et vos préoccupations.",
   },
   {
-    label: "P. 07",
-    title: "Routine du soir",
-    image: routineSoirImg,
-    desc: "Le détail des soins du soir, pensés pour la régularité.",
+    icon: Camera,
+    title: "Photos",
+    text: "Vous transmettez quelques photos prises dans les conditions demandées.",
+  },
+  {
+    icon: Blend,
+    title: "Analyse croisée",
+    text: "Nous croisons vos réponses, vos photos et les informations utiles sur les actifs skincare.",
+  },
+  {
+    icon: FileText,
+    title: "Rapport + routine",
+    text: "Vous recevez une analyse détaillée et une routine construite spécifiquement pour votre profil.",
+  },
+];
+
+const reportPages = [
+  { title: "Votre analyse", image: analysePeauImg, rotate: "-rotate-[3deg]" },
+  { title: "Comprendre votre peau", image: lectureExpressImg, rotate: "rotate-[1deg]" },
+  { title: "Votre routine", image: routineMatinImg, rotate: "rotate-[3deg]" },
+];
+
+const routines = [
+  {
+    icon: Sun,
+    period: "Matin",
+    items: ["Nettoyage si nécessaire", "Actif ciblé", "Hydratation", "Protection solaire"],
+  },
+  {
+    icon: Moon,
+    period: "Soir",
+    items: ["Nettoyage", "Actif adapté", "Traitement selon la fréquence", "Hydratation"],
+  },
+];
+
+const method = [
+  {
+    icon: ScanLine,
+    title: "Besoins de la peau",
+    text: "Photos et réponses permettent d’identifier les besoins visibles et les priorités.",
+  },
+  {
+    icon: FlaskConical,
+    title: "Analyse des actifs",
+    text: "Rôle, concentration, fréquence et compatibilité guident la construction de la routine.",
+  },
+  {
+    icon: Blend,
+    title: "Complémentarité",
+    text: "Chaque étape a une fonction claire, sans multiplier inutilement les produits.",
   },
 ];
 
 const Index = () => {
   return (
     <PageShell
-      title="Skincare Studio — Avant de racheter un soin, comprenez votre peau"
-      description="Recevez un rapport personnalisé clair pour comprendre votre peau, éviter les erreurs et construire une routine cohérente. 29 €, prix visible dès le départ."
+      title="SkinView — Analyse de peau & routine skincare personnalisée"
+      description="Envoyez vos photos, répondez à quelques questions et recevez une analyse détaillée de votre peau avec une routine skincare personnalisée."
     >
-      {/* HERO */}
-      <section className="relative min-h-[88vh] md:min-h-[92vh] flex flex-col items-center justify-center overflow-hidden">
-        <img
-          src={heroBg}
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover hidden md:block"
-          width={1920}
-          height={1080}
-        />
-        <img
-          src={heroBgMobile}
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover md:hidden"
-          width={768}
-          height={1024}
-        />
-        <div className="absolute inset-0 bg-ivory/60" />
-
-        <div className="relative z-10 flex flex-col items-center text-center px-5 max-w-3xl mx-auto py-16 md:py-20 w-full">
-          <div
-            className="mb-6 md:mb-8 flex items-center gap-3 text-gold animate-fade-in-up opacity-0"
-            style={{ animationDelay: "0.1s" }}
-          >
-            <div className="w-8 h-px bg-gold/50" />
-            <span className="font-sans text-[10px] tracking-[0.4em] uppercase font-light">
-              Rapport personnalisé
-            </span>
-            <div className="w-8 h-px bg-gold/50" />
-          </div>
-
-          <h1
-            className="font-serif text-foreground text-[1.85rem] sm:text-4xl md:text-5xl lg:text-6xl leading-[1.1] mb-5 md:mb-6 animate-fade-in-up opacity-0"
-            style={{ animationDelay: "0.3s" }}
-          >
-            Avant de racheter un soin,
-            <br />
-            <span className="italic font-light">sachez ce que votre peau attend.</span>
-          </h1>
-
-          <p
-            className="text-warm font-sans font-light text-[15px] md:text-lg leading-relaxed max-w-xl mb-8 md:mb-10 animate-fade-in-up opacity-0 px-2"
-            style={{ animationDelay: "0.5s" }}
-          >
-            Un rapport personnalisé pour comprendre ce que votre peau montre, éviter les erreurs
-            et construire une routine cohérente.
-          </p>
-
-          <div className="w-full max-w-sm animate-fade-in-up opacity-0" style={{ animationDelay: "0.7s" }}>
-            <ReportCta showNote />
-          </div>
-
-          <Link
-            to="/exemple-rapport"
-            className="mt-7 font-sans text-[11px] md:text-xs tracking-[0.2em] uppercase text-foreground/70 hover:text-foreground border-b border-foreground/30 hover:border-foreground pb-1 transition-colors animate-fade-in-up opacity-0"
-            style={{ animationDelay: "0.9s" }}
-          >
-            Voir un exemple de rapport
-          </Link>
-        </div>
-      </section>
-
-      {/* PROBLÈME */}
-      <section className="bg-ivory-light py-16 md:py-32">
-        <div className="max-w-3xl mx-auto px-5 md:px-6 text-center">
-          <span className="font-sans text-[10px] tracking-[0.4em] uppercase text-gold">
-            Le problème
-          </span>
-          <h2 className="font-serif text-foreground text-[1.7rem] sm:text-3xl md:text-5xl leading-tight mt-5 mb-6 md:mb-8">
-            La skincare est devenue <span className="italic">trop confuse.</span>
-          </h2>
-          <div className="gold-separator w-16 mx-auto mb-6 md:mb-8" />
-          <p className="text-warm font-sans font-light text-[15px] md:text-lg leading-relaxed mb-5">
-            Entre les routines TikTok, les paniers Sephora, les actifs à la mode et les conseils
-            contradictoires, il devient facile d'acheter sans savoir ce qui correspond
-            réellement à votre peau.
-          </p>
-          <p className="text-foreground/80 font-sans font-light text-[15px] md:text-lg leading-relaxed italic">
-            Le problème n'est pas le manque de produits. C'est le manque de logique entre ce que
-            la peau montre, les actifs utilisés et l'ordre d'application.
-          </p>
-        </div>
-      </section>
-
-      {/* CE QUE VOUS RECEVEZ */}
-      <section className="bg-background py-16 md:py-32">
-        <div className="max-w-5xl mx-auto px-5 md:px-6">
-          <div className="text-center mb-12 md:mb-16">
-            <span className="font-sans text-[10px] tracking-[0.4em] uppercase text-gold">
-              Ce que vous recevez
-            </span>
-            <h2 className="font-serif text-foreground text-[1.7rem] sm:text-3xl md:text-5xl leading-tight mt-5 mb-5 md:mb-6">
-              Un rapport clair, <span className="italic">pas une réponse générique.</span>
-            </h2>
-            <div className="gold-separator w-16 mx-auto mb-6" />
-            <p className="text-warm font-sans font-light text-[15px] md:text-lg leading-relaxed max-w-2xl mx-auto">
-              L'objectif n'est pas d'ajouter encore plus de produits. C'est de comprendre quoi
-              garder, quoi éviter, quoi corriger et dans quel ordre avancer.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-3 sm:gap-y-5 max-w-3xl mx-auto">
-            {[
-              ["Lecture express", "L'essentiel à retenir, en un coup d'œil."],
-              ["Analyse de peau", "Ce que votre peau montre vraiment."],
-              ["Logique retenue", "Pourquoi chaque soin est là."],
-              ["Routine matin & soir", "Un plan d'application précis."],
-              ["Conseils d'application", "Doses, fréquence, ordre."],
-              ["Actifs à privilégier", "Ce qui mérite une place dans votre routine."],
-              ["Erreurs à éviter", "Ce qui sabote vos efforts sans le savoir."],
-              ["Routine hebdomadaire", "Le rythme à tenir, sans surcharge."],
-            ].map(([title, desc]) => (
-              <div key={title} className="flex gap-4 py-3 border-b border-border/60">
-                <div className="text-gold font-serif text-xl leading-none mt-0.5">·</div>
-                <div>
-                  <div className="font-serif text-foreground text-base md:text-lg leading-tight">{title}</div>
-                  <p className="text-warm font-sans font-light text-sm leading-relaxed mt-1">
-                    {desc}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* HIGHLIGHTS — 5 captures réelles */}
-      <section className="bg-ivory-light py-16 md:py-32">
-        <div className="max-w-6xl mx-auto px-5 md:px-6">
-          <div className="text-center mb-12 md:mb-16">
-            <span className="font-sans text-[10px] tracking-[0.4em] uppercase text-gold">
-              Aperçu du rapport
-            </span>
-            <h2 className="font-serif text-foreground text-[1.7rem] sm:text-3xl md:text-5xl leading-tight mt-5 mb-5 md:mb-6">
-              Des pages pensées pour <span className="italic">être utiles, pas remplies.</span>
-            </h2>
-            <div className="gold-separator w-16 mx-auto mb-6" />
-            <p className="text-warm font-sans font-light text-[15px] md:text-lg leading-relaxed max-w-2xl mx-auto">
-              Chaque rapport explique ce que votre peau montre, la logique retenue et la routine
-              à suivre. Voici les 5 sections clés telles qu'elles apparaissent dans le document.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-10">
-            {highlights.map((h) => (
-              <ReportMockup
-                key={h.title}
-                label={h.label}
-                title={h.title}
-                image={h.image}
-                imageAlt={`Extrait du rapport — ${h.title}`}
-              >
-                {h.desc}
-              </ReportMockup>
-            ))}
-          </div>
-
-          <p className="text-warm font-sans font-light text-sm text-center mt-10 italic max-w-xl mx-auto">
-            Extraits anonymisés. Aucun visage identifiable n'est diffusé.
-          </p>
-
-          <div className="flex flex-col items-center gap-5 mt-10 md:mt-12">
-            <div className="w-full max-w-sm">
-              <ReportCta />
+      <section className="relative overflow-hidden bg-[#f5f0e8]">
+        <div className="mx-auto grid max-w-[1180px] items-center gap-9 px-5 pb-16 pt-10 max-[359px]:pt-5 sm:px-6 sm:pt-14 lg:min-h-[760px] lg:grid-cols-[1.02fr_0.98fr] lg:gap-16 lg:px-8 lg:py-16">
+          <div className="relative z-10 max-w-[620px]">
+            <div className="hero-enter mb-6 inline-flex items-center gap-2 rounded-full border border-[#173f36]/12 bg-white/55 px-3.5 py-2 text-[10px] font-medium uppercase tracking-[0.18em] text-[#315f54] max-[359px]:mb-5">
+              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+              Votre peau, votre routine
             </div>
+
+            <h1 className="hero-enter hero-enter-delay-1 max-w-[580px] text-[clamp(2.55rem,12vw,4.4rem)] leading-[0.94] tracking-[-0.045em] text-[#173f36] max-[359px]:text-[2.35rem] sm:text-[4.5rem] lg:text-[5.15rem]">
+              Recevez une routine personnalisée <em className="font-normal">pensée pour votre peau.</em>
+            </h1>
+
+            <p className="hero-enter hero-enter-delay-2 mt-6 text-base font-medium leading-snug text-[#173f36] max-[359px]:mt-5 max-[359px]:text-sm sm:text-lg">
+              Comprenez votre peau. Agissez avec clarté.
+            </p>
+            <p className="hero-enter hero-enter-delay-2 mt-3 max-w-[550px] text-[15px] leading-[1.65] text-[#40534e] max-[359px]:hidden sm:text-base">
+              Répondez à quelques questions et envoyez vos photos. SkinView analyse votre peau,
+              explique ses besoins, identifie les priorités et construit une routine adaptée à
+              votre profil.
+            </p>
+
+            <p className="hero-enter hero-enter-delay-2 mt-2 hidden text-[14px] leading-[1.5] text-[#40534e] max-[359px]:block">
+              Répondez à quelques questions et envoyez vos photos. SkinView croise ces informations
+              pour comprendre votre peau et construire votre routine.
+            </p>
+
+            <div className="hero-enter hero-enter-delay-3 mt-7 flex items-end gap-3 border-t border-[#173f36]/12 pt-6 max-[359px]:mt-5 max-[359px]:pt-4">
+              <span className="font-serif text-[3.5rem] leading-none tracking-[-0.04em] text-[#173f36]">49 €</span>
+              <span className="max-w-[170px] pb-1 text-xs leading-snug text-[#52625e]">
+                Analyse complète + routine personnalisée
+              </span>
+            </div>
+
+            <div className="hero-enter hero-enter-delay-3 mt-5 w-full sm:max-w-[390px]">
+              <ReportCta showNote />
+            </div>
+          </div>
+
+          <div className="hero-enter hero-enter-delay-2 relative mx-auto w-full max-w-[580px] lg:max-w-none">
+            <div className="absolute -inset-4 rounded-[36px] border border-[#173f36]/8 sm:-inset-5" aria-hidden="true" />
+            <div className="relative aspect-[1.08/1] overflow-hidden rounded-[28px] bg-[#e8ddce] shadow-[0_28px_70px_-45px_rgba(23,63,54,0.5)] sm:aspect-[4/3] lg:aspect-[4/5]">
+              <img
+                src={heroProduct}
+                alt="Composition skincare avec un flacon non marqué, du travertin, du lin beige et des feuillages"
+                className="h-full w-full object-cover object-[56%_64%] lg:object-[54%_center]"
+                width={1152}
+                height={1440}
+                fetchPriority="high"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#173f36]/8 via-transparent to-white/5" />
+            </div>
+          </div>
+        </div>
+
+        <div className="border-y border-[#173f36]/10 bg-white/35">
+          <div className="mx-auto flex max-w-[1180px] flex-wrap items-center justify-center gap-x-7 gap-y-3 px-5 py-4 text-[11px] font-medium text-[#40534e] sm:justify-between sm:px-8">
+            {[
+              "Photos confidentielles",
+              "Analyse personnalisée",
+              "Routine sur mesure",
+              "Rapport clair",
+            ].map((item) => (
+              <span key={item} className="inline-flex items-center gap-2">
+                <Check className="h-3.5 w-3.5 text-[#315f54]" aria-hidden="true" /> {item}
+              </span>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-[#fbf8f3] py-20 sm:py-24 lg:py-28">
+        <div className="mx-auto max-w-[1120px] px-5 sm:px-6 lg:px-8">
+          <div className="mb-10 max-w-[620px] sm:mb-14">
+            <span className="eyebrow">Votre rapport personnalisé</span>
+            <h2 className="section-title mt-4">Ce que vous recevez</h2>
+            <p className="section-copy mt-4">
+              Une lecture claire de votre peau, puis une stratégie concrète pour savoir quoi faire
+              et pourquoi.
+            </p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:gap-5">
+            {deliverables.map(({ icon: Icon, title, text, featured }) => (
+              <article
+                key={title}
+                className={`group rounded-[24px] border p-6 transition duration-300 sm:p-7 ${
+                  featured
+                    ? "border-[#315f54] bg-[#e9efe9] shadow-[0_18px_45px_-38px_rgba(23,63,54,0.8)]"
+                    : "border-[#173f36]/10 bg-white/55 hover:-translate-y-0.5 hover:border-[#173f36]/25"
+                }`}
+              >
+                <div className={`mb-5 flex h-12 w-12 items-center justify-center rounded-full ${featured ? "bg-[#173f36] text-white" : "bg-[#f0ece4] text-[#315f54]"}`}>
+                  <Icon className="h-5 w-5" aria-hidden="true" />
+                </div>
+                <h3 className="text-[1.65rem] leading-[1.03] text-[#173f36] sm:text-[1.8rem]">{title}</h3>
+                <p className="mt-3 max-w-[430px] text-sm leading-relaxed text-[#52625e]">{text}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="border-y border-[#173f36]/8 bg-[#f2ece3] py-20 sm:py-24 lg:py-28">
+        <div className="mx-auto max-w-[1120px] px-5 sm:px-6 lg:px-8">
+          <div className="mb-11 text-center sm:mb-14">
+            <span className="eyebrow">Simple et guidé</span>
+            <h2 className="section-title mt-4">Comment ça marche</h2>
+          </div>
+
+          <ol className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 lg:gap-5">
+            {steps.map(({ icon: Icon, title, text }, index) => (
+              <li key={title} className="relative rounded-[22px] border border-[#173f36]/10 bg-[#fbf8f3] p-6 sm:p-7">
+                <div className="mb-7 flex items-center justify-between">
+                  <span className="font-serif text-3xl text-[#315f54]">{String(index + 1).padStart(2, "0")}</span>
+                  <Icon className="h-5 w-5 text-[#315f54]" aria-hidden="true" />
+                </div>
+                <h3 className="text-[1.55rem] leading-none text-[#173f36]">{title}</h3>
+                <p className="mt-3 text-sm leading-relaxed text-[#52625e]">{text}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      <section className="overflow-hidden bg-[#fbf8f3] py-20 sm:py-24 lg:py-32">
+        <div className="mx-auto grid max-w-[1120px] items-center gap-14 px-5 sm:px-6 lg:grid-cols-[0.88fr_1.12fr] lg:gap-20 lg:px-8">
+          <div>
+            <span className="eyebrow">Aperçu du rapport</span>
+            <h2 className="section-title mt-4">Voyez clairement ce que votre peau vous dit.</h2>
+            <p className="section-copy mt-5">
+              Un rapport clair, structuré et personnalisé, conçu pour vous permettre de comprendre
+              les choix proposés — pas simplement suivre une liste de produits.
+            </p>
             <Link
               to="/exemple-rapport"
-              className="font-sans text-[11px] md:text-xs tracking-[0.2em] uppercase text-foreground/70 hover:text-foreground border-b border-foreground/30 hover:border-foreground pb-1 transition-colors"
+              className="group mt-7 inline-flex min-h-11 items-center gap-2 border-b border-[#173f36]/30 text-sm font-medium text-[#173f36] transition hover:border-[#173f36]"
             >
-              Voir un exemple complet
+              Voir un exemple de rapport
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
             </Link>
           </div>
-        </div>
-      </section>
 
-      {/* POURQUOI 29 € */}
-      <section className="bg-background py-16 md:py-32">
-        <div className="max-w-3xl mx-auto px-5 md:px-6 text-center">
-          <span className="font-sans text-[10px] tracking-[0.4em] uppercase text-gold">
-            Pourquoi 29 €
-          </span>
-          <h2 className="font-serif text-foreground text-[1.7rem] sm:text-3xl md:text-5xl leading-tight mt-5 mb-6 md:mb-8">
-            Un mauvais achat skincare coûte souvent{" "}
-            <span className="italic">plus cher que le rapport.</span>
-          </h2>
-          <div className="gold-separator w-16 mx-auto mb-6 md:mb-8" />
-          <p className="text-warm font-sans font-light text-[15px] md:text-lg leading-relaxed mb-8 md:mb-10">
-            Un sérum mal choisi, une crème trop riche ou un actif trop agressif peut coûter plus
-            cher qu'un rapport complet. Le but n'est pas d'acheter plus, mais d'acheter avec plus
-            de logique.
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl mx-auto text-left mb-10 md:mb-12">
-            {[
-              ["Rapport personnalisé", "29 €"],
-              ["Un sérum mal choisi", "20 à 50 €"],
-              ["Routine incohérente", "Plusieurs achats inutiles"],
-              ["Objectif Skincare Studio", "Réduire l'essai-erreur"],
-            ].map(([label, value]) => (
-              <div
-                key={label}
-                className="flex items-baseline justify-between gap-4 px-5 py-4 bg-ivory-light border border-border rounded-sm"
-              >
-                <span className="font-sans text-warm text-xs tracking-wide">{label}</span>
-                <span className="font-serif text-foreground text-base">{value}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex justify-center">
-            <div className="w-full max-w-sm">
-              <ReportCta showNote />
+          <div className="relative mx-auto w-full max-w-[650px] pb-8 pt-4">
+            <div className="absolute inset-x-[7%] bottom-0 top-[12%] rounded-[30px] bg-[#e7ddd0]" aria-hidden="true" />
+            <div className="relative grid grid-cols-3 items-end gap-0 px-1 sm:px-5">
+              {reportPages.map((page, index) => (
+                <figure
+                  key={page.title}
+                  className={`relative ${index === 1 ? "z-20 -mx-3 mb-5 sm:-mx-5" : "z-10"} ${page.rotate}`}
+                >
+                  <div className="overflow-hidden rounded-[5px] border border-white/70 bg-white shadow-[0_20px_45px_-22px_rgba(23,63,54,0.42)]">
+                    <img
+                      src={page.image}
+                      alt={`Extrait du rapport : ${page.title}`}
+                      loading="lazy"
+                      className="aspect-[0.705] h-auto w-full object-cover object-top"
+                    />
+                  </div>
+                  <figcaption className="mt-4 text-center font-serif text-[0.9rem] leading-tight text-[#173f36] sm:text-lg">
+                    {page.title}
+                  </figcaption>
+                </figure>
+              ))}
             </div>
           </div>
         </div>
       </section>
 
-      {/* COMBAT (condensé) */}
-      <section className="bg-ivory-light py-16 md:py-24">
-        <div className="max-w-3xl mx-auto px-5 md:px-6 text-center">
-          <span className="font-sans text-[10px] tracking-[0.4em] uppercase text-gold">
-            Notre combat
-          </span>
-          <h2 className="font-serif text-foreground text-[1.6rem] sm:text-2xl md:text-4xl leading-tight mt-5 mb-6">
-            Arrêter les achats skincare <span className="italic">à l'aveugle.</span>
-          </h2>
-          <div className="gold-separator w-16 mx-auto mb-6" />
-          <p className="text-warm font-sans font-light text-[15px] md:text-lg leading-relaxed">
-            Nous ne sommes pas contre les routines TikTok. Nous sommes contre les routines
-            copiées sans comprendre. Comprendre d'abord, choisir ensuite.
+      <section className="bg-[#ebe5db] py-20 sm:py-24 lg:py-28">
+        <div className="mx-auto max-w-[1120px] px-5 sm:px-6 lg:px-8">
+          <div className="mx-auto mb-11 max-w-[680px] text-center sm:mb-14">
+            <span className="eyebrow">Une logique d’ensemble</span>
+            <h2 className="section-title mt-4">Pas une routine générique.</h2>
+            <p className="section-copy mx-auto mt-4">Votre routine est construite à partir de votre peau.</p>
+          </div>
+
+          <div className="mx-auto grid max-w-[900px] gap-4 md:grid-cols-2 md:gap-5">
+            {routines.map(({ icon: Icon, period, items }) => (
+              <article key={period} className="rounded-[26px] border border-[#173f36]/12 bg-[#fbf8f3] p-6 sm:p-8">
+                <div className="mb-6 flex items-center justify-between border-b border-[#173f36]/10 pb-5">
+                  <h3 className="text-[2rem] leading-none text-[#173f36]">{period}</h3>
+                  <Icon className="h-5 w-5 text-[#315f54]" aria-hidden="true" />
+                </div>
+                <ol className="space-y-4">
+                  {items.map((item, index) => (
+                    <li key={item} className="flex items-baseline gap-4 text-sm text-[#40534e]">
+                      <span className="font-serif text-xl text-[#8c7757]">{String(index + 1).padStart(2, "0")}</span>
+                      {item}
+                    </li>
+                  ))}
+                </ol>
+              </article>
+            ))}
+          </div>
+
+          <p className="mx-auto mt-8 max-w-[720px] text-center text-sm leading-relaxed text-[#52625e]">
+            Exemple illustratif. Nous ne sélectionnons pas des produits isolément : nous
+            construisons une routine cohérente dans son ensemble, selon les fréquences et la
+            tolérance de votre peau.
           </p>
-          <Link
-            to="/notre-combat"
-            className="inline-block mt-8 font-sans text-[11px] md:text-xs tracking-[0.2em] uppercase text-foreground/70 hover:text-foreground border-b border-foreground/30 hover:border-foreground pb-1 transition-colors"
-          >
-            Lire le manifeste
-          </Link>
         </div>
       </section>
 
-      {/* FAQ + Réassurance */}
-      <section className="bg-background py-16 md:py-32">
-        <div className="max-w-3xl mx-auto px-5 md:px-6">
-          <div className="text-center mb-10 md:mb-12">
-            <span className="font-sans text-[10px] tracking-[0.4em] uppercase text-gold">
-              Questions fréquentes
-            </span>
-            <h2 className="font-serif text-foreground text-[1.7rem] sm:text-3xl md:text-4xl leading-tight mt-5">
-              Tout ce qu'on vous a déjà demandé
+      <section className="bg-[#173f36] py-20 text-[#f8f4ed] sm:py-24 lg:py-28">
+        <div className="mx-auto max-w-[1120px] px-5 sm:px-6 lg:px-8">
+          <div className="mb-12 max-w-[760px]">
+            <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-[#d7c49e]">Notre méthode</span>
+            <h2 className="mt-4 text-[clamp(2.35rem,7vw,4.4rem)] leading-[0.98] tracking-[-0.035em]">
+              Une recommandation ne vaut que si l’ensemble est cohérent.
             </h2>
-            <div className="gold-separator w-16 mx-auto mt-6" />
           </div>
 
-          <Accordion type="single" collapsible className="w-full">
-            {[
-              {
-                q: "Est-ce un avis médical ?",
-                a: "Non. Skincare Studio ne remplace pas un dermatologue et ne fournit pas d'avis médical. Le rapport est un outil de clarification de votre routine, sans promesse de résultat.",
-              },
-              {
-                q: "Quand vais-je recevoir mon rapport ?",
-                a: "Le rapport est envoyé par email. En cas de problème technique, une reprise manuelle est prévue sous 24 à 48h.",
-              },
-              {
-                q: "Que deviennent mes photos ?",
-                a: "Les photos sont utilisées uniquement pour générer le rapport. Aucun visage identifiable n'est diffusé.",
-              },
-              {
-                q: "Est-ce que les produits sont sponsorisés ?",
-                a: "Non. Les recommandations sont faites sans affiliation à une marque.",
-              },
-              {
-                q: "Dois-je acheter tous les produits recommandés ?",
-                a: "Non. Le rapport vous aide à choisir ce qui mérite vraiment une place dans votre routine, en fonction de ce que vous avez déjà.",
-              },
-              {
-                q: "Pourquoi le rapport coûte 29 € ?",
-                a: "Parce qu'un seul mauvais achat skincare coûte souvent plus cher. Le rapport est conçu pour réduire l'essai-erreur avant l'achat.",
-              },
-              {
-                q: "Est-ce réservé aux femmes ?",
-                a: "Non. Skincare Studio peut être utilisé par toute personne qui souhaite mieux comprendre sa peau.",
-              },
-            ].map((item) => (
-              <AccordionItem key={item.q} value={item.q} className="border-border">
-                <AccordionTrigger className="font-serif text-foreground text-base md:text-lg text-left hover:no-underline py-5">
-                  {item.q}
-                </AccordionTrigger>
-                <AccordionContent className="font-sans text-warm text-sm leading-relaxed font-light">
-                  {item.a}
-                </AccordionContent>
-              </AccordionItem>
+          <div className="grid gap-8 border-t border-white/15 pt-10 md:grid-cols-3 md:gap-10">
+            {method.map(({ icon: Icon, title, text }) => (
+              <article key={title}>
+                <Icon className="mb-5 h-5 w-5 text-[#d7c49e]" aria-hidden="true" />
+                <h3 className="text-[1.55rem] leading-tight text-[#f8f4ed]">{title}</h3>
+                <p className="mt-3 text-sm leading-relaxed text-[#f8f4ed]/70">{text}</p>
+              </article>
             ))}
-          </Accordion>
+          </div>
         </div>
       </section>
 
-      {/* CTA FINAL */}
-      <section className="bg-ivory-light py-16 md:py-32">
-        <div className="max-w-2xl mx-auto px-5 md:px-6 text-center">
-          <div className="gold-separator w-16 mx-auto mb-6 md:mb-8" />
-          <h2 className="font-serif text-foreground text-[1.7rem] sm:text-3xl md:text-5xl leading-tight mb-6 md:mb-8">
-            Avant de racheter un soin,
-            <br />
-            <span className="italic">commencez par comprendre votre peau.</span>
-          </h2>
-          <p className="text-warm font-sans font-light text-[15px] md:text-base leading-relaxed mb-8 md:mb-10 max-w-md mx-auto">
-            Moins d'achats au hasard. Plus de logique dans votre routine.
+      <section className="bg-[#f7f2ea] py-20 sm:py-24 lg:py-28">
+        <div className="mx-auto max-w-[820px] px-5 text-center sm:px-6">
+          <LockKeyhole className="mx-auto mb-6 h-6 w-6 text-[#315f54]" aria-hidden="true" />
+          <h2 className="section-title">Prête à mieux comprendre votre peau ?</h2>
+          <p className="section-copy mx-auto mt-4 max-w-[570px]">
+            Votre analyse complète et votre routine personnalisée, réunies dans un rapport clair.
           </p>
-          <div className="flex justify-center">
-            <div className="w-full max-w-sm">
-              <ReportCta showNote />
-            </div>
+          <div className="mt-8">
+            <div className="font-serif text-5xl leading-none text-[#173f36]">49 €</div>
+            <div className="mt-2 text-xs text-[#52625e]">Paiement unique</div>
           </div>
+          <div className="mx-auto mt-6 w-full sm:max-w-[390px]">
+            <ReportCta showNote />
+          </div>
+          <p className="mx-auto mt-9 max-w-[650px] border-t border-[#173f36]/10 pt-7 text-[11px] leading-relaxed text-[#697672]">
+            SkinView est un service de conseil cosmétique. Il ne remplace pas l’avis ou le suivi
+            d’un professionnel de santé.
+          </p>
         </div>
       </section>
     </PageShell>
