@@ -1,12 +1,14 @@
 import PageShell from "@/components/PageShell";
 import { ReportCta } from "@/components/ReportCta";
 import { ReportMockup } from "@/components/ReportMockup";
+import { reportPreviewPages } from "@/data/reportPreviewPages";
+import { Link } from "react-router-dom";
 
 const inclusions = [
-  ["Synthèse rapide", "Une lecture express pour comprendre l'essentiel."],
-  ["Analyse de votre peau", "Une lecture claire de ce que votre peau montre."],
-  ["Logique de routine expliquée", "Pourquoi cette routine — et pas une autre."],
-  ["Routine matin / soir / semaine", "Un plan structuré, étape par étape."],
+  ["Diagnostic cosmétique", "Les signes visibles et les objectifs retenus."],
+  ["Compréhension de votre peau", "Une lecture claire de ce que votre peau montre."],
+  ["Stratégie expliquée", "Pourquoi cette logique de routine — et pas une autre."],
+  ["Routine conseillée", "Un plan structuré, étape par étape."],
   ["Produits qui fonctionnent ensemble", "Des soins sélectionnés pour leur cohérence."],
   ["Conseils d'application précis", "Dose, ordre, fréquence, temps de pose."],
   ["Actifs à privilégier", "Ce qui mérite une place dans votre routine."],
@@ -15,10 +17,14 @@ const inclusions = [
 ];
 
 const RapportPersonnalise = () => {
+  const featuredPages = reportPreviewPages.filter((page) =>
+    ["diagnostic", "strategy", "routine"].includes(page.id),
+  );
+
   return (
     <PageShell
-      title="Rapport skincare personnalisé — SkinView"
-      description="Un rapport personnalisé pour comprendre votre peau et construire une routine skincare cohérente. Analyse, routine, produits et conseils d'application."
+      title="Rapport skincare sur mesure et analyse de peau | SkinView"
+      description="Un rapport sur mesure pour comprendre votre peau et construire une routine skincare cohérente : analyse, stratégie, actifs et conseils d’application."
     >
       <section className="pt-20 pb-12 md:pt-28 md:pb-16">
         <div className="max-w-3xl mx-auto px-6 text-center">
@@ -26,7 +32,7 @@ const RapportPersonnalise = () => {
             Le rapport
           </span>
           <h1 className="font-serif text-foreground text-4xl md:text-5xl lg:text-6xl leading-[1.1] mt-5 mb-8">
-            Un rapport personnalisé pour comprendre votre peau et{" "}
+            Un rapport sur mesure pour comprendre votre peau et{" "}
             <span className="italic">construire une routine cohérente.</span>
           </h1>
           <div className="gold-separator w-16 mx-auto mb-8" />
@@ -40,15 +46,25 @@ const RapportPersonnalise = () => {
 
       <section className="pb-20">
         <div className="max-w-5xl mx-auto px-6 grid sm:grid-cols-2 md:grid-cols-3 gap-5 md:gap-8">
-          <ReportMockup label="P. 01" title="Lecture express">
-            Les 3 points clés à retenir, immédiatement.
-          </ReportMockup>
-          <ReportMockup label="P. 02" title="Analyse de votre peau">
-            Ce que vos photos et réponses révèlent.
-          </ReportMockup>
-          <ReportMockup label="P. 04" title="Routine matin & soir">
-            Étape par étape, sans surcharge.
-          </ReportMockup>
+          {featuredPages.map((page) => (
+            <ReportMockup
+              key={page.id}
+              label={page.label}
+              title={page.title}
+              image={page.image}
+              imageAlt={page.alt}
+            >
+              {page.description}
+            </ReportMockup>
+          ))}
+        </div>
+        <div className="mt-8 text-center">
+          <Link
+            to="/exemple-rapport"
+            className="inline-flex min-h-11 items-center border-b border-foreground/25 font-sans text-sm text-foreground transition hover:border-foreground"
+          >
+            Voir toutes les pages de l’exemple de rapport SkinView
+          </Link>
         </div>
       </section>
 

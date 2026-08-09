@@ -14,11 +14,9 @@ import {
   Sparkles,
 } from "lucide-react";
 import heroProduct from "@/assets/hero-product.jpg";
-import understandSkinReportImg from "@/assets/report/homepage/comprendre-votre-peau.png";
-import strategyReportImg from "@/assets/report/homepage/strategie-skinview.png";
-import routineReportImg from "@/assets/report/homepage/routine-conseillee.png";
 import PageShell from "@/components/PageShell";
 import { ReportCta } from "@/components/ReportCta";
+import { homepageReportPages } from "@/data/reportPreviewPages";
 
 const PAGE_TITLE = "Analyse de peau & routine skincare sur mesure | SkinView";
 const PAGE_DESCRIPTION =
@@ -71,26 +69,7 @@ const steps = [
   },
 ];
 
-const reportPages = [
-  {
-    title: "Votre stratégie",
-    image: strategyReportImg,
-    alt: "Exemple de page présentant la stratégie, les priorités et les points à éviter dans un rapport SkinView",
-    rotate: "-rotate-[3deg]",
-  },
-  {
-    title: "Comprendre votre peau",
-    image: understandSkinReportImg,
-    alt: "Exemple de page du rapport SkinView expliquant la lecture globale et les besoins de la peau",
-    rotate: "rotate-[1deg]",
-  },
-  {
-    title: "Votre routine",
-    image: routineReportImg,
-    alt: "Exemple de page présentant la routine skincare sur mesure conseillée dans un rapport SkinView",
-    rotate: "rotate-[3deg]",
-  },
-];
+const reportRotations = ["-rotate-[3deg]", "rotate-[1deg]", "rotate-[3deg]"];
 
 const analysisValue = [
   {
@@ -256,10 +235,10 @@ const Index = () => (
         <div className="relative mx-auto h-[250px] w-full max-w-[620px] sm:h-[360px]">
           <div className="absolute inset-x-[5%] bottom-0 top-[18%] rounded-[26px] bg-[#e7ddd0]" aria-hidden="true" />
           <div className="absolute inset-x-0 bottom-4 grid grid-cols-3 items-end px-1 sm:px-5">
-            {reportPages.map((page, index) => (
+            {homepageReportPages.map((page, index) => (
               <figure
                 key={page.title}
-                className={`relative ${index === 1 ? "z-20 -mx-3 mb-4 sm:-mx-5" : "z-10"} ${page.rotate}`}
+                className={`relative ${index === 1 ? "z-20 -mx-3 mb-4 sm:-mx-5" : "z-10"} ${reportRotations[index]}`}
               >
                 <div className="overflow-hidden rounded-[4px] border border-white/70 bg-white shadow-[0_18px_38px_-20px_rgba(23,63,54,0.42)]">
                   <img

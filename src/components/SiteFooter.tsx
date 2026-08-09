@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 
 const reportLinks = [
   { to: "/rapport-skincare-personnalise", label: "Ce que contient le rapport" },
-  { to: "/exemple-rapport", label: "Voir un exemple" },
+  { to: "/exemple-rapport", label: "Voir un exemple de rapport" },
   { to: "/tarif", label: "Tarif" },
   { to: "/notre-combat", label: "Notre combat" },
 ];

@@ -6,7 +6,7 @@ import { ReportCta } from "@/components/ReportCta";
 
 const navItems = [
   { to: "/rapport-skincare-personnalise", label: "Le rapport" },
-  { to: "/exemple-rapport", label: "Exemple" },
+  { to: "/exemple-rapport", label: "Exemple de rapport" },
   { to: "/notre-combat", label: "Notre combat" },
   { to: "/tarif", label: "Tarif" },
 ];

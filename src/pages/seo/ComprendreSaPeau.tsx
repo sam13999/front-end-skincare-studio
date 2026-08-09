@@ -2,8 +2,10 @@ import SeoPage from "./SeoPage";
 
 const ComprendreSaPeau = () => (
   <SeoPage
-    title="Comprendre sa peau avant d'acheter encore"
-    intro="Comprendre sa peau, ce n'est pas la classer en deux mots. C'est lire ce qu'elle montre, ce qu'elle évite et ce qu'elle tolère vraiment."
+    title="Reconnaître les besoins visibles de sa peau"
+    metaTitle="Reconnaître les besoins de sa peau | Guide SkinView"
+    metaDescription="Brillance, tiraillements, sensibilité, imperfections : apprenez à lire les signes visibles de votre peau avant de choisir vos soins."
+    intro="Reconnaître les besoins de sa peau, ce n'est pas la classer en deux mots. C'est observer ce qu'elle montre, ce qu'elle tolère et la façon dont elle évolue."
     sections={[
       {
         title: "Au-delà de « peau grasse » ou « peau sèche »",
