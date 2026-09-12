@@ -7,7 +7,7 @@ import { IdentityStep } from "./IdentityStep";
 import { Progress } from "@/components/ui/progress";
 import { ArrowLeft, X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { createSession, runPipeline, uploadPhotos } from "@/lib/api";
+import { createSession, runPipeline, uploadPhotos, type RunPipelineResponse } from "@/lib/api";
 
 // 1: photo face, 2: photo profile, 3: identity, 4-10: 7 questions, 11: summary
 const TOTAL_STEPS = 11;
@@ -22,6 +22,7 @@ interface DiagnosticFlowProps {
 const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
   const [step, setStep] = useState(1);
   const [launching, setLaunching] = useState(false);
+  const [pipelineResult, setPipelineResult] = useState<RunPipelineResponse | null>(null);
   const [data, setData] = useState<DiagnosticData>(() => {
     try {
       const saved = localStorage.getItem("diagnostic_answers");
@@ -114,10 +115,11 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
     try {
       const session = await createSession(result.payload);
       await uploadPhotos(session.session_id, { face: data.photoFace, profil: data.photoProfile });
-      const pipeline = await runPipeline(session.session_id);
+      const pipeline = await runPipeline(session.session_id, result.payload.questionnaire.email);
+      setPipelineResult(pipeline);
       toast({
         title: "Analyse terminée",
-        description: `Pipeline ${pipeline.status}. Aucun email n’a été envoyé pour ce test.`,
+        description: pipeline.email_status?.sent === true ? "Votre rapport a été envoyé par email." : "Votre rapport est disponible ci-dessous.",
       });
       localStorage.removeItem("diagnostic_answers");
     } catch (error) {
@@ -205,6 +207,7 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
               onGoToStep={goToStep}
               onLaunch={handleLaunch}
               launching={launching}
+              pipelineResult={pipelineResult}
               firstQuestionStep={FIRST_QUESTION_STEP}
               identityStep={IDENTITY_STEP}
             />

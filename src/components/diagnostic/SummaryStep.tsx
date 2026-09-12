@@ -1,12 +1,14 @@
 import { DiagnosticData, questions } from "./types";
 import { Button } from "@/components/ui/button";
 import { Pencil } from "lucide-react";
+import { API_BASE_URL, type RunPipelineResponse } from "@/lib/api";
 
 interface SummaryStepProps {
   data: DiagnosticData;
   onGoToStep: (step: number) => void;
   onLaunch: () => void;
   launching?: boolean;
+  pipelineResult?: RunPipelineResponse | null;
   firstQuestionStep: number;
   identityStep: number;
 }
@@ -18,6 +20,7 @@ export const SummaryStep = ({
   firstQuestionStep,
   identityStep,
   launching = false,
+  pipelineResult = null,
 }: SummaryStepProps) => {
   const renderAnswer = (key: string) => {
     const v = data.answers[key];
@@ -104,9 +107,33 @@ export const SummaryStep = ({
         ))}
       </div>
 
-      <Button variant="premium" size="xl" className="w-full" onClick={onLaunch} disabled={launching}>
-        {launching ? "Analyse en cours…" : "Lancer mon analyse"}
-      </Button>
+      {pipelineResult ? (
+        <div className="space-y-3">
+          <p className="font-sans text-sm text-foreground" role="status">
+            {pipelineResult.email_status?.sent === true
+              ? `Email envoyé à ${data.email}.`
+              : pipelineResult.email_status?.reason
+                ? `Email non envoyé : ${pipelineResult.email_status.reason}`
+                : "Email non envoyé."}
+          </p>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button asChild variant="premium" size="xl" className="w-full">
+              <a href={`${API_BASE_URL}/v1/session/${encodeURIComponent(pipelineResult.session_id)}/html`} target="_blank" rel="noreferrer">
+                Voir mon rapport HTML
+              </a>
+            </Button>
+            <Button asChild variant="premium-outline" size="xl" className="w-full">
+              <a href={`${API_BASE_URL}/v1/session/${encodeURIComponent(pipelineResult.session_id)}/pdf`} target="_blank" rel="noreferrer">
+                Télécharger mon rapport PDF
+              </a>
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button variant="premium" size="xl" className="w-full" onClick={onLaunch} disabled={launching}>
+          {launching ? "Analyse en cours…" : "Lancer mon analyse"}
+        </Button>
+      )}
     </div>
   );
 };

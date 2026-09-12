@@ -71,11 +71,11 @@ export async function uploadPhotos(
   return parseResponse(response);
 }
 
-export async function runPipeline(sessionId: string): Promise<RunPipelineResponse> {
+export async function runPipeline(sessionId: string, recipientEmail: string): Promise<RunPipelineResponse> {
   const response = await fetch(`${API_BASE_URL}/v1/session/${encodeURIComponent(sessionId)}/run`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ send_email: false }),
+    body: JSON.stringify({ recipient_email: recipientEmail, send_email: true }),
   });
   return parseResponse<RunPipelineResponse>(response);
 }
