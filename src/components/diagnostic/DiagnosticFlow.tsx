@@ -107,8 +107,8 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
     if (import.meta.env.DEV) {
       console.info("[questionnaire] payload", result.payload);
     }
-    if (!data.photoFace || !data.photoProfile) {
-      toast({ variant: "destructive", title: "Photos manquantes", description: "Ajoutez vos deux photos avant de lancer l’analyse." });
+    if (!data.photoFace && !data.photoProfile) {
+      toast({ variant: "destructive", title: "Photos manquantes", description: "Ajoutez au moins une photo exploitable avant de lancer l’analyse." });
       return;
     }
     setLaunching(true);

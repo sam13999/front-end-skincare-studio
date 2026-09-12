@@ -43,7 +43,7 @@ export const SummaryStep = ({
       <div className="flex gap-4 mb-8">
         {[
           { label: "Face", photo: data.photoFace, step: 1 },
-          { label: "Profil", photo: data.photoProfile, step: 2 },
+          { label: "Vue 3/4", photo: data.photoProfile, step: 2 },
         ].map((item) => (
           <div key={item.label} className="flex-1">
             <div className="relative rounded-lg overflow-hidden border border-border aspect-[3/4] bg-ivory-light mb-2">

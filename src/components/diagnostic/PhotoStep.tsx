@@ -28,7 +28,7 @@ const faceChecklist = [
 const profileChecklist = [
   "Un côté de votre visage est bien visible",
   "La photo est nette et bien éclairée",
-  "Votre profil reste naturel et peu incliné",
+  "Votre visage est légèrement tourné (20–30°), avec ses principaux traits visibles",
   "Aucun élément ne cache votre visage",
   "Format JPG ou JPEG, 5 Mo maximum",
 ];
@@ -71,7 +71,7 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
   const subtitle =
     type === "face"
       ? "Prenez ou importez une photo de votre visage de face."
-      : "Prenez ou importez une photo de votre profil.";
+      : "Prenez ou importez une vue 3/4, le visage légèrement tourné (20–30°).";
 
   const rejectUnexpectedError = useCallback(() => {
     const result = createRejectedResult([
@@ -222,7 +222,7 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
       )}
 
       {!preview ? (
-        <div className="mb-8 flex w-full max-w-[280px] gap-3">
+        <div className="mb-3 flex w-full max-w-[280px] gap-3">
           <Button
             variant="premium"
             size="lg"
@@ -245,7 +245,7 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
           </Button>
         </div>
       ) : (
-        <div className="mb-8 flex w-full max-w-[280px] gap-3">
+        <div className="mb-3 flex w-full max-w-[280px] gap-3">
           <Button variant="premium-outline" size="lg" className="flex-1" onClick={handleRetake} disabled={analyzing}>
             Reprendre
           </Button>
@@ -253,6 +253,12 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
             Utiliser
           </Button>
         </div>
+      )}
+
+      {!isUsable && !analyzing && (
+        <Button variant="ghost" size="sm" className="mb-8" onClick={onNext}>
+          Continuer sans cette photo
+        </Button>
       )}
 
       <input

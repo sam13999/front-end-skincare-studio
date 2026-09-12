@@ -26,12 +26,14 @@ async function parseResponse<T>(response: Response): Promise<T> {
     : await response.text();
 
   if (!response.ok) {
-    const detail = typeof body === "object" && body && "detail" in body
-      ? (body as { detail?: unknown }).detail
-      : body;
-    const message = Array.isArray(detail)
-      ? detail.map((item) => (typeof item === "object" && item && "msg" in item ? (item as { msg: string }).msg : String(item))).join(" ")
-      : String(detail || `Erreur serveur (${response.status}).`);
+    const code = typeof body === "object" && body && "code" in body
+      ? String((body as { code?: unknown }).code || "")
+      : "";
+    const messages: Record<string, string> = {
+      photos_not_usable: "Nous n’avons pas réussi à analyser vos photos. Reprenez-les avec le visage net, bien éclairé et entièrement visible.",
+      analysis_temporarily_unavailable: "L’analyse est temporairement indisponible. Merci de réessayer dans quelques minutes.",
+    };
+    const message = messages[code] || "Une erreur est survenue pendant l’analyse. Merci de réessayer.";
     throw new Error(message);
   }
 
@@ -59,11 +61,12 @@ export function dataUrlToFile(dataUrl: string, filename: string): File {
 
 export async function uploadPhotos(
   sessionId: string,
-  photos: { face: string; profil: string }
+  photos: { face?: string | null; profil?: string | null }
 ): Promise<unknown> {
   const formData = new FormData();
-  formData.append("face", dataUrlToFile(photos.face, "face.jpg"));
-  formData.append("profil", dataUrlToFile(photos.profil, "profil.jpg"));
+  if (photos.face) formData.append("face", dataUrlToFile(photos.face, "face.jpg"));
+  if (photos.profil) formData.append("profil", dataUrlToFile(photos.profil, "profil.jpg"));
+  if (!photos.face && !photos.profil) throw new Error("Une photo exploitable est nécessaire.");
   const response = await fetch(`${API_BASE_URL}/v1/session/${encodeURIComponent(sessionId)}/photos`, {
     method: "POST",
     body: formData,
