@@ -27,6 +27,10 @@ export const QuestionStep = ({
 
     const current = (value as string[]) || [];
 
+    if (current.length >= 4 && !current.includes(optionValue) && !EXCLUSIVE_VALUES.has(optionValue)) {
+      return;
+    }
+
     // If selecting an exclusive value: replace selection with just that value
     if (EXCLUSIVE_VALUES.has(optionValue)) {
       if (current.length === 1 && current[0] === optionValue) {
@@ -71,10 +75,12 @@ export const QuestionStep = ({
         {question.options.map((option) => {
           const selected = isSelected(option.value);
           const isExclusive = EXCLUSIVE_VALUES.has(option.value);
+          const maxReached = question.type === "multiple" && currentSelection(value).length >= 4 && !selected && !isExclusive;
           return (
             <button
               key={option.value}
               onClick={() => handleSelect(option.value)}
+              disabled={maxReached}
               className={`p-4 rounded-lg border text-center transition-all duration-200 font-sans text-sm ${
                 selected
                   ? "border-green-deep bg-green-deep/5 text-foreground font-medium shadow-sm"
@@ -100,3 +106,7 @@ export const QuestionStep = ({
     </div>
   );
 };
+
+function currentSelection(value: string | string[] | undefined): string[] {
+  return Array.isArray(value) ? value : [];
+}

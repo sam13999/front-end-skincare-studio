@@ -234,6 +234,12 @@ export function buildAndValidatePayload(
       message: "Sélection requise.",
     });
   } else {
+    if (produits.length > 4) {
+      errors.push({
+        field: "produits_utilises_regulierement",
+        message: "Sélectionnez au maximum 4 produits.",
+      });
+    }
     for (const v of produits) {
       if (!ALLOWED_VALUES.produits_utilises_regulierement.includes(v)) {
         errors.push({

@@ -6,6 +6,7 @@ interface SummaryStepProps {
   data: DiagnosticData;
   onGoToStep: (step: number) => void;
   onLaunch: () => void;
+  launching?: boolean;
   firstQuestionStep: number;
   identityStep: number;
 }
@@ -16,6 +17,7 @@ export const SummaryStep = ({
   onLaunch,
   firstQuestionStep,
   identityStep,
+  launching = false,
 }: SummaryStepProps) => {
   const renderAnswer = (key: string) => {
     const v = data.answers[key];
@@ -102,8 +104,8 @@ export const SummaryStep = ({
         ))}
       </div>
 
-      <Button variant="premium" size="xl" className="w-full" onClick={onLaunch}>
-        Lancer mon analyse
+      <Button variant="premium" size="xl" className="w-full" onClick={onLaunch} disabled={launching}>
+        {launching ? "Analyse en cours…" : "Lancer mon analyse"}
       </Button>
     </div>
   );

@@ -7,6 +7,7 @@ import { IdentityStep } from "./IdentityStep";
 import { Progress } from "@/components/ui/progress";
 import { ArrowLeft, X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { createSession, runPipeline, uploadPhotos } from "@/lib/api";
 
 // 1: photo face, 2: photo profile, 3: identity, 4-10: 7 questions, 11: summary
 const TOTAL_STEPS = 11;
@@ -20,6 +21,7 @@ interface DiagnosticFlowProps {
 
 const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
   const [step, setStep] = useState(1);
+  const [launching, setLaunching] = useState(false);
   const [data, setData] = useState<DiagnosticData>(() => {
     try {
       const saved = localStorage.getItem("diagnostic_answers");
@@ -89,7 +91,8 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
   const goPrev = () => step > 1 && setStep(step - 1);
   const goToStep = (s: number) => setStep(s);
 
-  const handleLaunch = () => {
+  const handleLaunch = async () => {
+    if (launching) return;
     const result = buildAndValidatePayload(data);
     if (!result.ok) {
       toast({
@@ -103,13 +106,29 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
     if (import.meta.env.DEV) {
       console.info("[questionnaire] payload", result.payload);
     }
-    // Mock submit — backend wiring goes here
-    toast({
-      title: "Analyse lancée",
-      description: "Vos réponses ont été enregistrées.",
-    });
-    localStorage.removeItem("diagnostic_answers");
-    onClose();
+    if (!data.photoFace || !data.photoProfile) {
+      toast({ variant: "destructive", title: "Photos manquantes", description: "Ajoutez vos deux photos avant de lancer l’analyse." });
+      return;
+    }
+    setLaunching(true);
+    try {
+      const session = await createSession(result.payload);
+      await uploadPhotos(session.session_id, { face: data.photoFace, profil: data.photoProfile });
+      const pipeline = await runPipeline(session.session_id);
+      toast({
+        title: "Analyse terminée",
+        description: `Pipeline ${pipeline.status}. Aucun email n’a été envoyé pour ce test.`,
+      });
+      localStorage.removeItem("diagnostic_answers");
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "L’analyse n’a pas pu être lancée",
+        description: error instanceof Error ? error.message : "Vérifiez votre connexion puis réessayez.",
+      });
+    } finally {
+      setLaunching(false);
+    }
   };
 
   return (
@@ -185,6 +204,7 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
               data={data}
               onGoToStep={goToStep}
               onLaunch={handleLaunch}
+              launching={launching}
               firstQuestionStep={FIRST_QUESTION_STEP}
               identityStep={IDENTITY_STEP}
             />
