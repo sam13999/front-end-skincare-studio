@@ -67,7 +67,7 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
   const [analyzing, setAnalyzing] = useState(false);
 
   const checklist = type === "face" ? faceChecklist : profileChecklist;
-  const title = type === "face" ? "Photo de face" : "Photo de profil";
+  const title = type === "face" ? "Photo de face" : "Vue 3/4";
   const subtitle =
     type === "face"
       ? "Prenez ou importez une photo de votre visage de face."
