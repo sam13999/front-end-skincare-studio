@@ -1,3 +1,5 @@
+export const QUESTIONNAIRE_VERSION = "v2" as const;
+
 export interface DiagnosticData {
   photoFace: string | null;
   photoProfile: string | null;
@@ -7,177 +9,210 @@ export interface DiagnosticData {
 }
 
 export interface QuestionOption {
-  label: string; // displayed to user
-  value: string; // EXACT backend value — never modify
+  label: string;
+  value: string;
 }
 
 export interface Question {
   id: number;
-  /** Backend key — must match payload exactly */
   key: BackendKey;
   title: string;
   subtitle?: string;
   type: "single" | "multiple";
+  maxSelections?: number;
+  exclusiveValues?: readonly string[];
   options: QuestionOption[];
 }
 
 export type BackendKey =
   | "objectif_principal"
-  | "probleme_principal_visible"
-  | "zone_plus_problematique"
-  | "routine_actuelle"
+  | "signes_remarques"
+  | "zones_preoccupantes"
+  | "ressenti_peau"
+  | "frequence_routine"
   | "produits_utilises_regulierement"
-  | "reactivite_peau"
-  | "ce_que_vous_voulez_eviter";
+  | "reactivite_nouveaux_soins"
+  | "experience_actifs_forts"
+  | "produits_portes_journee"
+  | "textures_preferees"
+  | "preferences_a_eviter";
 
-/**
- * Allowed backend values, locked. Used both as <select> source and as
- * the strict whitelist for pre-submit validation.
- * DO NOT modify accents, spacing, casing, or punctuation.
- */
 export const ALLOWED_VALUES: Record<BackendKey, readonly string[]> = {
   objectif_principal: [
-    "Réduire les imperfections",
-    "Uniformiser le teint / atténuer les marques",
-    "Améliorer l’éclat",
-    "Apaiser / réduire l’inconfort",
-    "Hydrater / renforcer la barrière cutanée",
+    "Réduire les boutons et imperfections",
+    "Réduire les points noirs et l’apparence des pores",
+    "Atténuer les marques ou taches",
+    "Lisser le grain de peau",
+    "Retrouver plus d’éclat",
+    "Apaiser les rougeurs ou l’inconfort",
+    "Améliorer l’hydratation et le confort",
     "Prévenir les premiers signes de l’âge",
     "Je ne sais pas",
   ],
-  probleme_principal_visible: [
-    "Boutons / imperfections",
-    "Marques / irrégularités",
-    "Rougeurs",
-    "Teint terne",
+  signes_remarques: [
+    "Boutons ou imperfections",
+    "Points noirs / pores visibles",
+    "Marques ou taches après boutons",
+    "Grain de peau irrégulier",
+    "Brillance fréquente",
     "Sécheresse / tiraillements",
-    "Brillance / pores visibles",
-    "Premières rides / relâchement",
+    "Rougeurs / picotements",
+    "Teint terne",
+    "Ridules / perte de fermeté",
+    "Aucun en particulier",
     "Je ne sais pas",
   ],
-  zone_plus_problematique: [
+  zones_preoccupantes: [
     "Front",
-    "Joues",
-    "Menton",
     "Nez",
+    "Menton",
+    "Joues",
     "Contour des yeux",
-    "Plusieurs zones",
+    "Contour de la bouche",
+    "Ensemble du visage",
+    "Aucune zone en particulier",
     "Je ne sais pas",
   ],
-  routine_actuelle: [
-    "Non",
-    "Oui, simple (1–2 produits)",
-    "Oui, régulière (3–4 produits)",
-    "Oui, complète (5+ produits)",
-    "Je change souvent",
+  ressenti_peau: [
+    "Elle tiraille facilement",
+    "Elle devient brillante rapidement",
+    "Certaines zones brillent et d’autres tiraillent",
+    "Elle rougit ou picote facilement",
+    "Elle est généralement confortable",
+    "Elle change beaucoup selon les périodes",
     "Je ne sais pas",
+  ],
+  frequence_routine: [
+    "Matin et soir presque tous les jours",
+    "Une fois par jour presque tous les jours",
+    "Quelques jours par semaine",
+    "De façon irrégulière",
+    "Je n’ai pas vraiment de routine",
   ],
   produits_utilises_regulierement: [
     "Aucun",
-    "Nettoyant doux",
-    "Nettoyant purifiant / anti-imperfections",
-    "Sérum hydratant / apaisant",
-    "Sérum anti-imperfections",
-    "Sérum anti-taches",
-    "Sérum anti-âge",
-    "Crème légère",
-    "Crème riche",
-    "Protection solaire (SPF)",
-    "Exfoliant",
+    "Démaquillant / eau micellaire",
+    "Huile ou baume nettoyant",
+    "Nettoyant visage",
+    "Lotion / toner / essence",
+    "Sérum ou soin hydratant / apaisant",
+    "Sérum ou soin anti-imperfections",
+    "Sérum ou soin anti-taches / marques",
+    "Sérum ou soin éclat",
+    "Sérum ou soin anti-âge",
+    "Exfoliant / peeling",
     "Rétinol / rétinoïde",
+    "Crème hydratante légère",
+    "Crème hydratante riche / réparatrice",
     "Huile visage",
+    "Soin contour des yeux",
+    "Masque / soin ponctuel",
+    "Protection solaire",
+    "Protection solaire teintée",
+    "Autre soin ciblé",
+    "Je ne sais pas exactement",
   ],
-  reactivite_peau: [
-    "Oui (rougeurs, picotements…)",
-    "Parfois",
-    "Non",
+  reactivite_nouveaux_soins: [
+    "Elle tolère généralement bien les nouveaux soins",
+    "Elle peut parfois picoter ou rougir légèrement",
+    "Elle réagit assez facilement avec rougeurs, picotements ou inconfort",
+    "Elle est actuellement irritée ou très inconfortable",
     "Je ne sais pas",
   ],
-  ce_que_vous_voulez_eviter: [
+  experience_actifs_forts: [
+    "Je n’ai jamais utilisé d’exfoliant ni de rétinol",
+    "J’ai déjà utilisé un exfoliant et je le tolère bien",
+    "J’utilise ou j’ai utilisé du rétinol / rétinoïde et je le tolère bien",
+    "J’ai déjà mal toléré un exfoliant",
+    "J’ai déjà mal toléré du rétinol / rétinoïde",
+    "Je ne sais pas",
+  ],
+  produits_portes_journee: [
+    "Rien de particulier",
+    "Protection solaire",
+    "Protection solaire teintée",
+    "Fond de teint / BB crème / CC crème",
+    "Maquillage léger sans produit teinté couvrant",
+    "Produits longue tenue ou résistants à l’eau",
+  ],
+  textures_preferees: [
+    "Textures très légères / fluides",
+    "Gel / gel-crème",
+    "Crèmes légères",
+    "Crèmes riches / enveloppantes",
+    "Je n’ai pas de préférence",
+    "Je ne sais pas",
+  ],
+  preferences_a_eviter: [
     "Trop d’étapes",
-    "Sensation grasse / lourde",
-    "Produits agressifs",
-    "Résultats trop lents",
-    "Parfum / odeur forte",
+    "Sensation grasse ou lourde",
+    "Fini collant",
+    "Parfum ou odeur marquée",
+    "Soins qui picotent ou irritent facilement",
+    "Rien en particulier",
     "Je ne sais pas",
   ],
 };
 
-/** Helper to build options where label === value (exact backend strings). */
-const opts = (key: BackendKey, labels?: Record<string, string>): QuestionOption[] =>
-  ALLOWED_VALUES[key].map((v) => ({ label: labels?.[v] ?? v, value: v }));
+const opts = (key: BackendKey): QuestionOption[] =>
+  ALLOWED_VALUES[key].map((value) => ({ label: value, value }));
 
-export const questions: Question[] = [
+const multi = (
+  key: BackendKey,
+  title: string,
+  subtitle: string,
+  maxSelections: number,
+  exclusiveValues: readonly string[],
+): Question => ({
+  id: 0,
+  key,
+  title,
+  subtitle,
+  type: "multiple",
+  maxSelections,
+  exclusiveValues,
+  options: opts(key),
+});
+
+const questionDefinitions: Omit<Question, "id">[] = [
   {
-    id: 1,
     key: "objectif_principal",
-    title: "Quel est votre objectif principal ?",
-    subtitle: "Choisissez celui qui vous parle le plus.",
+    title: "Quel est votre objectif principal pour votre peau ?",
+    subtitle: "Choisissez la priorité qui compte le plus pour vous.",
     type: "single",
     options: opts("objectif_principal"),
   },
+  multi("signes_remarques", "Quels signes remarquez-vous régulièrement sur votre peau ?", "Sélectionnez jusqu’à 2 réponses.", 2, ["Aucun en particulier", "Je ne sais pas"]),
+  multi("zones_preoccupantes", "Quelles zones vous préoccupent le plus ?", "Sélectionnez jusqu’à 2 zones.", 2, ["Ensemble du visage", "Aucune zone en particulier", "Je ne sais pas"]),
+  multi("ressenti_peau", "Comment décririez-vous votre peau au quotidien ?", "Sélectionnez jusqu’à 2 réponses.", 2, ["Je ne sais pas"]),
   {
-    id: 2,
-    key: "probleme_principal_visible",
-    title: "Quel est le problème le plus visible aujourd’hui ?",
-    subtitle: "Ce que vous remarquez en premier dans le miroir.",
+    key: "frequence_routine",
+    title: "À quelle fréquence suivez-vous réellement une routine visage ?",
+    subtitle: "Pensez à vos habitudes habituelles, pas à votre routine idéale.",
     type: "single",
-    options: opts("probleme_principal_visible"),
+    options: opts("frequence_routine"),
   },
+  multi("produits_utilises_regulierement", "Quels produits utilisez-vous actuellement de façon régulière ?", "Sélectionnez tout ce que vous utilisez, même si ce n’est pas tous les jours.", 8, ["Aucun", "Je ne sais pas exactement"]),
   {
-    id: 3,
-    key: "zone_plus_problematique",
-    title: "Quelle zone vous préoccupe le plus ?",
-    subtitle: "Une seule réponse.",
+    key: "reactivite_nouveaux_soins",
+    title: "Comment votre peau réagit-elle généralement quand vous introduisez un nouveau soin ?",
+    subtitle: "Pensez aux rougeurs, picotements ou sensations d’inconfort.",
     type: "single",
-    options: opts("zone_plus_problematique"),
+    options: opts("reactivite_nouveaux_soins"),
   },
-  {
-    id: 4,
-    key: "routine_actuelle",
-    title: "Avez-vous une routine actuelle ?",
-    subtitle: "Soyez honnête, sans jugement.",
-    type: "single",
-    options: opts("routine_actuelle"),
-  },
-  {
-    id: 5,
-    key: "produits_utilises_regulierement",
-    title: "Quels produits utilisez-vous régulièrement ?",
-    subtitle: "Vous pouvez en sélectionner plusieurs.",
-    type: "multiple",
-    options: opts("produits_utilises_regulierement"),
-  },
-  {
-    id: 6,
-    key: "reactivite_peau",
-    title: "Votre peau est-elle réactive ?",
-    subtitle: "Rougeurs, picotements, inconfort après un produit.",
-    type: "single",
-    options: opts("reactivite_peau"),
-  },
-  {
-    id: 7,
-    key: "ce_que_vous_voulez_eviter",
-    title: "Que souhaitez-vous éviter ?",
-    subtitle: "Une seule réponse.",
-    type: "single",
-    options: opts("ce_que_vous_voulez_eviter"),
-  },
+  multi("experience_actifs_forts", "Quelle expérience avez-vous avec les exfoliants ou le rétinol ?", "Sélectionnez jusqu’à 2 réponses si nécessaire.", 2, ["Je n’ai jamais utilisé d’exfoliant ni de rétinol", "Je ne sais pas"]),
+  multi("produits_portes_journee", "Que portez-vous généralement sur votre visage pendant la journée ?", "Cela nous aide notamment à adapter le nettoyage du soir.", 3, ["Rien de particulier"]),
+  multi("textures_preferees", "Quelles textures préférez-vous sur votre visage ?", "Sélectionnez jusqu’à 2 réponses.", 2, ["Je n’ai pas de préférence", "Je ne sais pas"]),
+  multi("preferences_a_eviter", "Qu’aimeriez-vous particulièrement éviter dans votre future routine ?", "Sélectionnez jusqu’à 2 réponses.", 2, ["Rien en particulier", "Je ne sais pas"]),
 ];
 
-// --- Payload + validation ---
+export const questions: Question[] = questionDefinitions.map((question, index) => ({ ...question, id: index + 1 }));
 
 export interface QuestionnairePayload {
+  questionnaire_version: typeof QUESTIONNAIRE_VERSION;
   prenom: string;
   email: string;
-  objectif_principal: string;
-  probleme_principal_visible: string;
-  zone_plus_problematique: string;
-  routine_actuelle: string;
-  produits_utilises_regulierement: string[];
-  reactivite_peau: string;
-  ce_que_vous_voulez_eviter: string;
+  [key: string]: string | string[];
 }
 
 export interface ValidationError {
@@ -186,94 +221,76 @@ export interface ValidationError {
   invalidValue?: unknown;
 }
 
+export function restoreStoredDiagnosticData(raw: string | null): Pick<DiagnosticData, "answers" | "prenom" | "email"> {
+  try {
+    const parsed = JSON.parse(raw || "{}");
+    const currentVersion = parsed.questionnaire_version === QUESTIONNAIRE_VERSION;
+    return {
+      answers: currentVersion && parsed.answers && typeof parsed.answers === "object" ? parsed.answers : {},
+      prenom: typeof parsed.prenom === "string" ? parsed.prenom : "",
+      email: typeof parsed.email === "string" ? parsed.email : "",
+    };
+  } catch {
+    return { answers: {}, prenom: "", email: "" };
+  }
+}
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/**
- * Builds the strict backend payload from the diagnostic data.
- * Validates every value against ALLOWED_VALUES — no transformation, no fallback.
- */
 export function buildAndValidatePayload(
-  data: DiagnosticData
-): { ok: true; payload: { questionnaire: QuestionnairePayload } } | { ok: false; errors: ValidationError[] } {
+  data: DiagnosticData,
+): { ok: true; payload: { questionnaire_version: typeof QUESTIONNAIRE_VERSION; questionnaire: QuestionnairePayload } } | { ok: false; errors: ValidationError[] } {
   const errors: ValidationError[] = [];
   const prenom = (data.prenom ?? "").trim();
   const email = (data.email ?? "").trim();
-
   if (!prenom) errors.push({ field: "prenom", message: "Le prénom est requis." });
-  if (!email || !EMAIL_RE.test(email))
-    errors.push({ field: "email", message: "Email invalide." });
+  if (!email || !EMAIL_RE.test(email)) errors.push({ field: "email", message: "Email invalide." });
 
-  const singleKeys: BackendKey[] = [
-    "objectif_principal",
-    "probleme_principal_visible",
-    "zone_plus_problematique",
-    "routine_actuelle",
-    "reactivite_peau",
-    "ce_que_vous_voulez_eviter",
-  ];
+  const questionnaire: Record<string, unknown> = {
+    questionnaire_version: QUESTIONNAIRE_VERSION,
+    prenom,
+    email,
+  };
 
-  const single: Partial<Record<BackendKey, string>> = {};
-  for (const key of singleKeys) {
-    const v = data.answers[key];
-    if (typeof v !== "string" || !v) {
-      errors.push({ field: key, message: "Réponse manquante." });
+  for (const question of questions) {
+    const value = data.answers[question.key];
+    if (question.type === "single") {
+      if (typeof value !== "string" || !value) {
+        errors.push({ field: question.key, message: "Réponse manquante." });
+      } else if (!ALLOWED_VALUES[question.key].includes(value)) {
+        errors.push({ field: question.key, message: "Valeur non autorisée.", invalidValue: value });
+      } else {
+        questionnaire[question.key] = value;
+      }
       continue;
     }
-    if (!ALLOWED_VALUES[key].includes(v)) {
-      errors.push({ field: key, message: "Valeur non autorisée.", invalidValue: v });
+
+    const selected = Array.isArray(value) ? [...new Set(value)] : [];
+    if (selected.length < 1) {
+      errors.push({ field: question.key, message: "Sélection requise." });
       continue;
     }
-    single[key] = v;
-  }
-
-  const produits = data.answers.produits_utilises_regulierement;
-  let produitsArr: string[] = [];
-  if (!Array.isArray(produits) || produits.length === 0) {
-    errors.push({
-      field: "produits_utilises_regulierement",
-      message: "Sélection requise.",
-    });
-  } else {
-    if (produits.length > 4) {
-      errors.push({
-        field: "produits_utilises_regulierement",
-        message: "Sélectionnez au maximum 4 produits.",
-      });
+    if (selected.length > (question.maxSelections ?? Number.POSITIVE_INFINITY)) {
+      errors.push({ field: question.key, message: `Sélectionnez au maximum ${question.maxSelections} réponses.` });
     }
-    for (const v of produits) {
-      if (!ALLOWED_VALUES.produits_utilises_regulierement.includes(v)) {
-        errors.push({
-          field: "produits_utilises_regulierement",
-          message: "Valeur non autorisée.",
-          invalidValue: v,
-        });
+    for (const selectedValue of selected) {
+      if (!ALLOWED_VALUES[question.key].includes(selectedValue)) {
+        errors.push({ field: question.key, message: "Valeur non autorisée.", invalidValue: selectedValue });
       }
     }
-    produitsArr = produits as string[];
-  }
-
-  if (errors.length > 0) {
-    if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
-      console.warn("[questionnaire] validation errors", errors);
+    const exclusives = new Set(question.exclusiveValues ?? []);
+    if (selected.some((item) => exclusives.has(item)) && selected.length > 1) {
+      errors.push({ field: question.key, message: "Ce choix ne peut pas être combiné avec les autres." });
     }
-    return { ok: false, errors };
+    questionnaire[question.key] = selected;
   }
 
+  if (errors.length > 0) return { ok: false, errors };
   return {
     ok: true,
     payload: {
-      questionnaire: {
-        prenom,
-        email,
-        objectif_principal: single.objectif_principal!,
-        probleme_principal_visible: single.probleme_principal_visible!,
-        zone_plus_problematique: single.zone_plus_problematique!,
-        routine_actuelle: single.routine_actuelle!,
-        produits_utilises_regulierement: produitsArr,
-        reactivite_peau: single.reactivite_peau!,
-        ce_que_vous_voulez_eviter: single.ce_que_vous_voulez_eviter!,
-      },
+      questionnaire_version: QUESTIONNAIRE_VERSION,
+      questionnaire: questionnaire as QuestionnairePayload,
     },
   };
 }
