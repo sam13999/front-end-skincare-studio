@@ -1,7 +1,6 @@
 import { ArrowRight, Blend, Camera, Check, ChevronRight, ClipboardList, FileText, FlaskConical, LockKeyhole, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
-import heroBg from "@/assets/hero-bg.jpg";
-import heroBgMobile from "@/assets/hero-bg-mobile.jpg";
+import heroProduct from "@/assets/hero-product.jpg";
 import PageShell from "@/components/PageShell";
 import { ReportCta } from "@/components/ReportCta";
 import { homepageReportPages } from "@/data/reportPreviewPages";
@@ -78,17 +77,14 @@ const Index = () => (
         </div>
 
         <div className="hero-visual reveal-up order-1 overflow-hidden rounded-[1.5rem] bg-[#d9cbbb] shadow-[0_30px_75px_-42px_rgba(24,62,52,0.62)] lg:order-2">
-          <picture>
-            <source media="(max-width: 639px)" srcSet={heroBgMobile} />
-            <img
-              src={heroBg}
-              alt="Femme dans une lumière naturelle, peau réelle et lumineuse"
-              width={1200}
-              height={1500}
-              fetchPriority="high"
-              className="h-[360px] w-full object-cover object-center sm:h-[500px] lg:h-[680px]"
-            />
-          </picture>
+          <img
+            src={heroProduct}
+            alt="Soin cosmétique dans une lumière naturelle, entouré de matières végétales"
+            width={1124}
+            height={1400}
+            fetchPriority="high"
+            className="h-[430px] w-full object-cover object-center sm:h-[540px] lg:h-[680px]"
+          />
         </div>
       </div>
 
