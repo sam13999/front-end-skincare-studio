@@ -82,6 +82,8 @@ describe("AdminPage", () => {
     fireEvent.change(screen.getByLabelText("Token admin"), { target: { value: "test-token" } });
     fireEvent.submit(screen.getByRole("button", { name: "Se connecter" }).closest("form")!);
 
+    await screen.findByText("Client140926test");
+    fireEvent.click(screen.getByRole("button", { name: "QA" }));
     await waitFor(() => expect(screen.getByText("Warnings")).toBeInTheDocument());
     expect(screen.getByText("Blocage")).toBeInTheDocument();
     expect(screen.getByText("Texte long")).toBeInTheDocument();
