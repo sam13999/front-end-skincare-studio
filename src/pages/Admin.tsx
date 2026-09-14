@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   AlertTriangle,
@@ -127,7 +127,7 @@ function Login({ onAuthenticated }: { onAuthenticated: (token: string) => void }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  async function submit(event: React.FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault();
     if (!value.trim()) return;
     setBusy(true);
@@ -435,7 +435,7 @@ function Info({ label, value }: { label: string; value: string }) {
   return <div><p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">{label}</p><p className="mt-1 break-words text-sm text-slate-800">{value}</p></div>;
 }
 
-function InfoCard({ title, children }: { title: string; children: React.ReactNode }) {
+function InfoCard({ title, children }: { title: string; children: ReactNode }) {
   return <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5"><h2 className="mb-4 font-semibold text-slate-950">{title}</h2>{children}</div>;
 }
 
