@@ -6,6 +6,7 @@ import {
   questions,
   restoreStoredDiagnosticData,
 } from "@/components/diagnostic/types";
+import { hasUsablePhotoForLaunch } from "@/components/diagnostic/photoLaunch";
 
 const answerAll = () =>
   Object.fromEntries(questions.map((question) => [
@@ -62,5 +63,11 @@ describe("questionnaire SkinView v2", () => {
     expect(restored.answers).toEqual({});
     expect(restored.prenom).toBe("Samir");
     expect(restored.email).toBe("s@example.com");
+  });
+
+  it("allows launch with one usable photo but not with none", () => {
+    expect(hasUsablePhotoForLaunch(null, null)).toBe(false);
+    expect(hasUsablePhotoForLaunch("face.jpg", null)).toBe(true);
+    expect(hasUsablePhotoForLaunch(null, "profile.jpg")).toBe(true);
   });
 });

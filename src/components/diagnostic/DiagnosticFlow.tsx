@@ -4,6 +4,7 @@ import { PhotoStep } from "./PhotoStep";
 import { QuestionStep } from "./QuestionStep";
 import { SummaryStep } from "./SummaryStep";
 import { IdentityStep } from "./IdentityStep";
+import { hasUsablePhotoForLaunch } from "./photoLaunch";
 import { Progress } from "@/components/ui/progress";
 import { ArrowLeft, X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
@@ -77,8 +78,8 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
       toast({ variant: "destructive", title: "Une réponse n’est pas valide", description: "Merci de vérifier les réponses du questionnaire." });
       return;
     }
-    if (!data.photoFace || !data.photoProfile) {
-      toast({ variant: "destructive", title: "Photos manquantes", description: "Ajoutez les deux photos avant de lancer l’analyse." });
+    if (!hasUsablePhotoForLaunch(data.photoFace, data.photoProfile)) {
+      toast({ variant: "destructive", title: "Photos manquantes", description: "Ajoutez au moins une photo exploitable avant de lancer l’analyse." });
       return;
     }
     setLaunching(true);
