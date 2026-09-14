@@ -243,6 +243,7 @@ function PromptCard({ name, runs }: { name: string; runs: PromptRun[] }) {
           </div>
           <JsonPanel value={latest.parsed_output || latest.raw_output} label="Résultat formaté" />
           {latest.raw_output && <JsonPanel value={latest.raw_output} label="Sortie brute" />}
+          {runs.length > 1 && <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600"><p className="font-semibold text-slate-700">Tentatives précédentes</p><div className="mt-2 space-y-1">{runs.slice(0, -1).map((run, index) => <p key={`${String(run.timestamp)}-${index}`}>Run {index + 1} · {run.repaired ? "Repair" : "Tentative"} · {run.status || "—"} · {formatDate(run.timestamp)}</p>)}</div></div>}
         </div>
       )}
     </details>
@@ -279,6 +280,7 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
   const raw = detail.raw_session || {};
   const products = raw.products_retained || raw.produits_retenus || raw.selected_products;
   const routine = raw.routine_finale || raw.final_routine || raw.routine;
+  const promptOrder = ["prompt_2", "prompt_4", "prompt_1", "prompt_3", "prompt_0"];
 
   async function artifact(kind: string, action: "open" | "download", filename: string) {
     setBusy(kind);
@@ -391,7 +393,7 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
         <div className="flex flex-wrap gap-2"><button type="button" className="action-button" onClick={() => navigator.clipboard?.writeText(JSON.stringify(detail.analysis, null, 2))}><Copy className="h-3.5 w-3.5" /> Copier l’analyse</button><button type="button" className="action-button" onClick={() => downloadText("analysis.json", JSON.stringify(detail.analysis, null, 2), "application/json")}><Download className="h-3.5 w-3.5" /> Vue JSON brute</button></div>
       </div>}
 
-      {tab === "prompts" && <div className="space-y-3">{Object.entries(detail.prompts).map(([name, runs]) => <PromptCard key={name} name={name} runs={runs} />)}</div>}
+      {tab === "prompts" && <div className="space-y-3">{promptOrder.map((name) => <PromptCard key={name} name={name} runs={detail.prompts[name] || []} />)}</div>}
 
       {tab === "qa" && <div className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-3"><StatCard label="OK" value={detail.qa.totals.ok} tone="emerald" /><StatCard label="Warnings" value={detail.qa.totals.warnings} tone="amber" /><StatCard label="Blocages" value={detail.qa.totals.blocking} tone="red" /></div>
