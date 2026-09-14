@@ -48,6 +48,7 @@ export interface PromptRun {
   qa_report?: unknown;
   debug_info?: unknown;
   artifact_name?: string;
+  repaired?: boolean;
 }
 
 export interface AdminDetailResponse {
