@@ -1,4 +1,4 @@
-import { ArrowRight, Blend, Camera, Check, ChevronRight, ClipboardList, FileText, FlaskConical, LockKeyhole, ShieldCheck } from "lucide-react";
+import { ArrowRight, Blend, Camera, Check, ChevronRight, FileText, LockKeyhole, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import heroProduct from "@/assets/hero-product.jpg";
 import PageShell from "@/components/PageShell";
@@ -56,7 +56,7 @@ const steps = [
 const Index = () => (
   <PageShell title={PAGE_TITLE} description={PAGE_DESCRIPTION}>
     <section className="overflow-hidden bg-[#f4eee6]">
-      <div className="site-container grid gap-7 py-6 sm:py-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:gap-16 lg:py-16">
+      <div className="site-container grid gap-0 py-0 sm:gap-7 sm:py-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:gap-16 lg:py-16">
         <div className="order-2 max-w-[590px] lg:order-1">
           <p className="eyebrow reveal-up">L’expertise dermo-cosmétique au service de votre peau</p>
           <h1 className="reveal-up mt-5 max-w-[650px] text-balance font-serif text-[clamp(2.65rem,10vw,5.4rem)] leading-[0.95] tracking-[-0.055em] text-[#183e34]">
@@ -76,14 +76,14 @@ const Index = () => (
           </div>
         </div>
 
-        <div className="hero-visual reveal-up order-1 overflow-hidden rounded-[1.5rem] bg-[#d9cbbb] shadow-[0_30px_75px_-42px_rgba(24,62,52,0.62)] lg:order-2">
+        <div className="hero-visual reveal-up order-1 -mx-5 overflow-hidden bg-[#d9cbbb] shadow-[0_30px_75px_-42px_rgba(24,62,52,0.62)] sm:mx-0 sm:rounded-[1.5rem] lg:order-2">
           <img
             src={heroProduct}
             alt="Soin cosmétique dans une lumière naturelle, entouré de matières végétales"
             width={1124}
             height={1400}
             fetchPriority="high"
-            className="h-[430px] w-full object-cover object-center sm:h-[540px] lg:h-[680px]"
+            className="h-[390px] w-full object-cover object-center sm:h-[540px] lg:h-[680px]"
           />
         </div>
       </div>
@@ -93,7 +93,6 @@ const Index = () => (
           {[
             { icon: ShieldCheck, text: "Analyse personnalisée" },
             { icon: LockKeyhole, text: "Photos confidentielles" },
-            { icon: FlaskConical, text: "Actifs et fréquences" },
             { icon: Check, text: "Routine sur mesure" },
           ].map(({ icon: Icon, text }) => (
             <span key={text} className="inline-flex items-center gap-2">
