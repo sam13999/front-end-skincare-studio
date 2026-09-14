@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import AdminPage from "./Admin";
 
@@ -78,7 +78,7 @@ describe("AdminPage", () => {
       return { ok: true, status: 200, json: async () => ({ ...listResponse, items: [detail.summary] }) } as Response;
     });
 
-    render(<MemoryRouter initialEntries={[`/admin/session/${sessionId}`]}><AdminPage /></MemoryRouter>);
+    render(<MemoryRouter initialEntries={[`/admin/session/${sessionId}`]}><Routes><Route path="/admin/session/:sessionId" element={<AdminPage />} /></Routes></MemoryRouter>);
     fireEvent.change(screen.getByLabelText("Token admin"), { target: { value: "test-token" } });
     fireEvent.submit(screen.getByRole("button", { name: "Se connecter" }).closest("form")!);
 
