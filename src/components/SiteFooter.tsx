@@ -1,58 +1,50 @@
 import { Link } from "react-router-dom";
 
 const reportLinks = [
-  { to: "/rapport-skincare-personnalise", label: "Ce que contient le rapport" },
-  { to: "/exemple-rapport", label: "Voir un exemple de rapport" },
+  { to: "/rapport-skincare-personnalise", label: "Le contenu du rapport" },
+  { to: "/exemple-rapport", label: "Voir un exemple" },
   { to: "/tarif", label: "Tarif" },
-  { to: "/notre-combat", label: "Notre combat" },
 ];
 
-const adviceLinks = [
+const guideLinks = [
+  { to: "/notre-combat", label: "Notre combat" },
+  { to: "/faq", label: "Questions fréquentes" },
   { to: "/comprendre-sa-peau", label: "Comprendre sa peau" },
   { to: "/ordre-routine-skincare", label: "Ordre d’une routine" },
-  { to: "/acheter-moins-de-skincare", label: "Acheter moins de skincare" },
-  { to: "/peau-sensible-actifs-a-eviter", label: "Peau sensible : actifs à éviter" },
 ];
 
-const FooterLinks = ({ title, links }: { title: string; links: typeof reportLinks }) => (
-  <nav aria-label={title}>
-    <h2 className="mb-3 font-sans text-[9px] uppercase tracking-[0.24em] text-white/50">{title}</h2>
-    <ul className="space-y-1.5">
-      {links.map((link) => (
-        <li key={link.to}>
-          <Link className="font-sans text-[10.5px] leading-tight text-white/75 transition-colors hover:text-white" to={link.to}>
-            {link.label}
-          </Link>
-        </li>
-      ))}
-    </ul>
-  </nav>
-);
-
 const SiteFooter = () => (
-  <footer className="bg-[#173f36] text-[#f8f4ed]">
-    <div className="mx-auto max-w-[1120px] px-5 py-9 sm:px-6 sm:py-12 lg:px-8">
-      <div className="grid grid-cols-2 gap-x-5 gap-y-7 md:grid-cols-[1.2fr_1fr_1fr] md:gap-10">
-        <div className="col-span-2 md:col-span-1">
-          <div className="font-serif text-[1.8rem] leading-none tracking-[-0.035em]">SkinView</div>
-          <p className="mt-2 max-w-[300px] font-sans text-[10.5px] leading-[1.45] text-white/60">
-            Comprendre votre peau et construire une routine skincare réellement sur mesure.
+  <footer className="bg-[#183e34] text-[#f8f6f1]">
+    <div className="site-container py-12 sm:py-16">
+      <div className="grid gap-10 md:grid-cols-[1.4fr_1fr_1fr] md:gap-16">
+        <div>
+          <Link to="/" className="inline-flex font-serif text-3xl tracking-[-0.04em] text-[#f8f6f1]">SkinView</Link>
+          <p className="mt-4 max-w-[310px] font-sans text-sm leading-[1.65] text-white/65">
+            Comprends ta peau avant d’acheter. Une analyse indépendante pour construire une routine cohérente.
           </p>
+          <p className="mt-6 font-sans text-[10px] uppercase tracking-[0.2em] text-[#e0b8a9]">Une peau comprise, une vie plus belle.</p>
         </div>
-        <FooterLinks title="Le rapport" links={reportLinks} />
-        <FooterLinks title="Comprendre votre peau" links={adviceLinks} />
+        <nav aria-label="Le rapport">
+          <h2 className="font-sans text-[10px] font-semibold uppercase tracking-[0.22em] text-white/45">Le rapport</h2>
+          <ul className="mt-4 space-y-3">
+            {reportLinks.map((link) => <li key={link.to}><Link to={link.to} className="font-sans text-sm text-white/75 transition hover:text-white">{link.label}</Link></li>)}
+          </ul>
+        </nav>
+        <nav aria-label="Ressources">
+          <h2 className="font-sans text-[10px] font-semibold uppercase tracking-[0.22em] text-white/45">Ressources</h2>
+          <ul className="mt-4 space-y-3">
+            {guideLinks.map((link) => <li key={link.to}><Link to={link.to} className="font-sans text-sm text-white/75 transition hover:text-white">{link.label}</Link></li>)}
+          </ul>
+        </nav>
       </div>
 
-      <div className="mt-7 border-t border-white/12 pt-5">
-        <p className="font-sans text-[9px] leading-[1.5] text-white/45">
-          Les photos servent uniquement à générer votre rapport. SkinView est un service de conseil cosmétique et ne remplace pas un avis médical. Sans affiliation à une marque.
+      <div className="mt-12 border-t border-white/15 pt-5">
+        <p className="max-w-4xl font-sans text-[11px] leading-[1.6] text-white/50">
+          Les photos servent uniquement à générer votre rapport. SkinView est un service de conseil cosmétique et ne constitue pas un diagnostic médical. Sans affiliation à une marque.
         </p>
-        <p className="mt-3 text-center font-sans text-[9px] tracking-wide text-white/35">
-          © {new Date().getFullYear()} SkinView — L’analyse au service de votre routine
-        </p>
+        <p className="mt-4 font-sans text-[11px] text-white/35">© {new Date().getFullYear()} SkinView — Comprendre aujourd’hui. Choisir avec plus de sens demain.</p>
       </div>
     </div>
   </footer>
 );
-
 export default SiteFooter;

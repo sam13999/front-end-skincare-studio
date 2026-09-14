@@ -9,13 +9,7 @@ interface QuestionStepProps {
   canNext: boolean;
 }
 
-export const QuestionStep = ({
-  question,
-  value,
-  onChange,
-  onNext,
-  canNext,
-}: QuestionStepProps) => {
+export const QuestionStep = ({ question, value, onChange, onNext, canNext }: QuestionStepProps) => {
   const current = Array.isArray(value) ? value : [];
   const exclusiveValues = new Set(question.exclusiveValues ?? []);
   const maxSelections = question.maxSelections ?? Number.POSITIVE_INFINITY;
@@ -40,17 +34,17 @@ export const QuestionStep = ({
     onChange([...withoutExclusive, optionValue]);
   };
 
-  const isSelected = (optionValue: string) =>
-    question.type === "single" ? value === optionValue : current.includes(optionValue);
+  const isSelected = (optionValue: string) => question.type === "single" ? value === optionValue : current.includes(optionValue);
 
   return (
     <div className="flex flex-col">
-      <div className="text-center mb-8">
-        <h2 className="font-serif text-foreground text-2xl md:text-3xl mb-2">{question.title}</h2>
-        {question.subtitle && <p className="font-sans text-warm text-sm font-light">{question.subtitle}</p>}
+      <div className="mb-8">
+        <p className="eyebrow">Question {question.id}</p>
+        <h2 className="mt-4 font-serif text-3xl leading-[1.03] tracking-[-0.03em] text-[#183e34] sm:text-4xl">{question.title}</h2>
+        {question.subtitle && <p className="mt-3 text-[15px] leading-[1.65] text-[#69766f]">{question.subtitle}</p>}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 mb-8">
+      <div className="mb-8 grid gap-2.5">
         {question.options.map((option) => {
           const selected = isSelected(option.value);
           const isExclusive = exclusiveValues.has(option.value);
@@ -62,22 +56,16 @@ export const QuestionStep = ({
               onClick={() => handleSelect(option.value)}
               disabled={maxReached}
               aria-pressed={selected}
-              className={`p-4 rounded-lg border text-center transition-all duration-200 font-sans text-sm ${
-                selected
-                  ? "border-green-deep bg-green-deep/5 text-foreground font-medium shadow-sm"
-                  : "border-border bg-ivory-light text-warm hover:border-accent hover:bg-accent/5"
-              } ${isExclusive ? "col-span-2" : ""}`}
+              className={"flex min-h-14 items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left font-sans text-[15px] leading-[1.35] transition " + (selected ? "border-[#a95c4d] bg-[#a95c4d]/8 font-semibold text-[#183e34]" : "border-[#183e34]/15 bg-white text-[#52625e] hover:border-[#a95c4d]/60 hover:bg-[#a95c4d]/5") + (maxReached ? " cursor-not-allowed opacity-45" : "")}
             >
-              {option.label}
+              <span>{option.label}</span>
+              <span className={"flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-xs " + (selected ? "border-[#a95c4d] bg-[#a95c4d] text-white" : "border-[#183e34]/20 text-transparent")} aria-hidden="true">✓</span>
             </button>
           );
         })}
       </div>
 
-      <Button variant="premium" size="xl" className="w-full" disabled={!canNext} onClick={onNext}>
-        Continuer
-      </Button>
+      <Button variant="premium" size="xl" className="w-full" disabled={!canNext} onClick={onNext}>Continuer</Button>
     </div>
   );
 };
-

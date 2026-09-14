@@ -18,38 +18,34 @@ export const reportPreviewPages: ReportPreviewPage[] = [
   {
     id: "diagnostic",
     label: "Chapitre 01",
-    title: "Votre diagnostic",
+    title: "Votre peau en un coup d’œil",
     image: diagnosticImage,
-    alt: "Page Votre diagnostic du rapport SkinView présentant le type de peau, les observations et les objectifs retenus",
-    description:
-      "Le type de peau, les signes visibles et les objectifs prioritaires sont regroupés dans une lecture immédiatement compréhensible.",
+    alt: "Extrait réel et anonymisé du rapport SkinView présentant le profil, les observations et les objectifs retenus",
+    description: "Le profil, les observations visibles et les objectifs prioritaires sont regroupés dans une lecture immédiatement compréhensible.",
   },
   {
     id: "understand",
     label: "Chapitre 02",
     title: "Comprendre votre peau",
     image: understandImage,
-    alt: "Page Comprendre votre peau du rapport SkinView expliquant la lecture globale et les besoins observés",
-    description:
-      "Une explication structurée relie les observations aux besoins de la peau et aux résultats recherchés.",
+    alt: "Extrait réel et anonymisé du rapport SkinView expliquant la lecture globale et les besoins observés",
+    description: "Une explication structurée relie les observations aux besoins de la peau et aux résultats recherchés.",
   },
   {
     id: "strategy",
     label: "Chapitre 03",
     title: "La stratégie SkinView",
     image: strategyImage,
-    alt: "Page La stratégie SkinView présentant les priorités, le suivi et les éléments à éviter",
-    description:
-      "La logique de recommandation, les priorités et les points de vigilance sont exposés avant le choix des soins.",
+    alt: "Extrait réel et anonymisé du rapport SkinView présentant les priorités et les points de vigilance",
+    description: "La logique de recommandation, les priorités et les points de vigilance sont exposés avant le choix des soins.",
   },
   {
     id: "routine",
     label: "Chapitre 04",
     title: "Votre routine conseillée",
     image: routineImage,
-    alt: "Page Votre routine conseillée du rapport SkinView présentant les étapes et leur complémentarité",
-    description:
-      "Les étapes retenues, leur ordre et leur rôle dans l’ensemble de la routine sont présentés clairement.",
+    alt: "Extrait réel et anonymisé du rapport SkinView présentant les étapes et leur complémentarité",
+    description: "Les étapes retenues, leur ordre et leur rôle dans l’ensemble de la routine sont présentés clairement.",
   },
 ];
 

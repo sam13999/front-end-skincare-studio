@@ -8,44 +8,26 @@ interface ReportMockupProps {
   imageAlt: string;
 }
 
-export const ReportMockup = ({
-  label,
-  title,
-  children,
-  image,
-  imageAlt,
-}: ReportMockupProps) => {
+export const ReportMockup = ({ label, title, children, image, imageAlt }: ReportMockupProps) => {
   return (
-    <div className="group relative">
-      <div className="absolute -inset-2 bg-gold/5 blur-2xl rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-      <div
-        className="relative aspect-[0.705] overflow-hidden rounded-md border border-border bg-ivory-light shadow-[0_10px_40px_-15px_hsl(var(--foreground)/0.18)]"
-      >
-        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-gold/40 to-transparent z-10" />
+    <figure className="group">
+      <div className="report-frame relative aspect-[0.705]">
+        <div className="pointer-events-none absolute inset-x-6 top-0 z-10 h-px bg-gradient-to-r from-transparent via-[#a95c4d]/60 to-transparent" />
         <img
           src={image}
           alt={imageAlt}
           loading="lazy"
           width={800}
           height={1135}
-          className="absolute inset-0 h-full w-full object-cover object-top"
+          className="h-full w-full object-cover object-top transition duration-700 group-hover:scale-[1.012]"
         />
       </div>
-
-      <div className="mt-4 px-1">
-        <span className="font-sans text-[10px] tracking-[0.3em] uppercase text-gold">
-          {label}
-        </span>
-        <h4 className="font-serif text-foreground text-lg md:text-xl leading-snug mt-1">
-          {title}
-        </h4>
-        {children && (
-          <p className="font-sans text-warm text-sm leading-relaxed font-light mt-2">
-            {children}
-          </p>
-        )}
-      </div>
-    </div>
+      <figcaption className="mt-5 px-1">
+        <span className="font-sans text-[10px] font-semibold uppercase tracking-[0.22em] text-[#a95c4d]">{label}</span>
+        <h3 className="mt-2 font-serif text-xl leading-tight tracking-[-0.02em] text-[#183e34] sm:text-2xl">{title}</h3>
+        {children && <p className="mt-2 max-w-[440px] font-sans text-sm leading-[1.65] text-[#69766f]">{children}</p>}
+      </figcaption>
+    </figure>
   );
 };
 

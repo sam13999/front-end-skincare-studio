@@ -1,7 +1,7 @@
-import { DiagnosticData, questions } from "./types";
-import { Button } from "@/components/ui/button";
-import { Pencil } from "lucide-react";
 import { API_BASE_URL, type RunPipelineResponse } from "@/lib/api";
+import { Pencil } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { DiagnosticData, questions } from "./types";
 
 interface SummaryStepProps {
   data: DiagnosticData;
@@ -13,119 +13,71 @@ interface SummaryStepProps {
   identityStep: number;
 }
 
-export const SummaryStep = ({
-  data,
-  onGoToStep,
-  onLaunch,
-  firstQuestionStep,
-  identityStep,
-  launching = false,
-  pipelineResult = null,
-}: SummaryStepProps) => {
+export const SummaryStep = ({ data, onGoToStep, onLaunch, firstQuestionStep, identityStep, launching = false, pipelineResult = null }: SummaryStepProps) => {
   const renderAnswer = (key: string) => {
-    const v = data.answers[key];
-    if (!v) return "—";
-    return Array.isArray(v) ? v.join(", ") : v;
+    const value = data.answers[key];
+    if (!value) return "—";
+    return Array.isArray(value) ? value.join(", ") : value;
   };
 
   return (
     <div className="flex flex-col">
-      <div className="text-center mb-8">
-        <h2 className="font-serif text-foreground text-2xl md:text-3xl mb-2">
-          Récapitulatif
-        </h2>
-        <p className="font-sans text-warm text-sm font-light">
-          Vérifiez vos informations avant de lancer l’analyse.
-        </p>
+      <div className="mb-8">
+        <p className="eyebrow">Dernière étape</p>
+        <h2 className="mt-4 font-serif text-3xl leading-none tracking-[-0.03em] text-[#183e34] sm:text-4xl">Votre récapitulatif.</h2>
+        <p className="mt-3 text-[15px] leading-[1.65] text-[#69766f]">Vérifiez vos informations avant de lancer l’analyse.</p>
       </div>
 
-      {/* Photos */}
-      <div className="flex gap-4 mb-8">
+      <div className="mb-8 grid grid-cols-2 gap-3">
         {[
           { label: "Face", photo: data.photoFace, step: 1 },
           { label: "Vue 3/4", photo: data.photoProfile, step: 2 },
         ].map((item) => (
-          <div key={item.label} className="flex-1">
-            <div className="relative rounded-lg overflow-hidden border border-border aspect-[3/4] bg-ivory-light mb-2">
-              {item.photo && (
-                <img
-                  src={item.photo}
-                  alt={item.label}
-                  className="w-full h-full object-cover"
-                />
-              )}
-              <button
-                onClick={() => onGoToStep(item.step)}
-                className="absolute top-2 right-2 w-7 h-7 rounded-full bg-background/80 flex items-center justify-center text-foreground/70 hover:text-foreground transition-colors"
-              >
-                <Pencil className="w-3.5 h-3.5" />
-              </button>
+          <div key={item.label}>
+            <div className="relative aspect-[3/4] overflow-hidden rounded-xl border border-[#183e34]/15 bg-white">
+              {item.photo ? <img src={item.photo} alt={"Aperçu " + item.label.toLowerCase()} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-xs text-[#a2ada7]">Non transmise</div>}
+              <button type="button" onClick={() => onGoToStep(item.step)} className="absolute right-2 top-2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#f8f6f1]/90 text-[#183e34] shadow-sm" aria-label={"Modifier la photo " + item.label}><Pencil className="h-4 w-4" /></button>
             </div>
-            <span className="font-sans text-xs text-warm">{item.label}</span>
+            <span className="mt-2 block font-sans text-xs font-semibold text-[#69766f]">{item.label}</span>
           </div>
         ))}
       </div>
 
-      {/* Identity */}
-      <div className="mb-4 p-4 rounded-lg bg-ivory-light border border-border flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <p className="font-sans text-xs text-warm mb-1">Coordonnées</p>
-          <p className="font-sans text-sm text-foreground font-medium truncate">
-            {data.prenom || "—"} · {data.email || "—"}
-          </p>
+      <div className="mb-3 flex items-start justify-between gap-3 rounded-xl border border-[#183e34]/12 bg-white p-4">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#a95c4d]">Coordonnées</p>
+          <p className="mt-2 truncate text-sm font-medium text-[#183e34]">{data.prenom || "—"} · {data.email || "—"}</p>
         </div>
-        <button
-          onClick={() => onGoToStep(identityStep)}
-          className="shrink-0 p-1.5 text-warm hover:text-foreground transition-colors"
-        >
-          <Pencil className="w-3.5 h-3.5" />
-        </button>
+        <button type="button" onClick={() => onGoToStep(identityStep)} className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-full text-[#69766f] hover:bg-[#183e34]/8" aria-label="Modifier les coordonnées"><Pencil className="h-4 w-4" /></button>
       </div>
 
-      {/* Answers */}
-      <div className="space-y-4 mb-10">
-        {questions.map((q, i) => (
-          <div
-            key={q.id}
-            className="flex items-start justify-between gap-3 p-4 rounded-lg bg-ivory-light border border-border"
-          >
-            <div className="flex-1 min-w-0">
-              <p className="font-sans text-xs text-warm mb-1 truncate">
-                {q.title}
-              </p>
-              <p className="font-sans text-sm text-foreground font-medium">
-                {renderAnswer(q.key)}
-              </p>
+      <div className="mb-10 divide-y divide-[#183e34]/10 border-y border-[#183e34]/10">
+        {questions.map((question, index) => (
+          <div key={question.id} className="flex items-start justify-between gap-3 py-4">
+            <div className="min-w-0">
+              <p className="text-xs leading-[1.4] text-[#69766f]">{question.title}</p>
+              <p className="mt-1 text-sm font-semibold leading-[1.45] text-[#183e34]">{renderAnswer(question.key)}</p>
             </div>
-            <button
-              onClick={() => onGoToStep(i + firstQuestionStep)}
-              className="shrink-0 p-1.5 text-warm hover:text-foreground transition-colors"
-            >
-              <Pencil className="w-3.5 h-3.5" />
-            </button>
+            <button type="button" onClick={() => onGoToStep(index + firstQuestionStep)} className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-full text-[#69766f] hover:bg-[#183e34]/8" aria-label={"Modifier " + question.title}><Pencil className="h-4 w-4" /></button>
           </div>
         ))}
       </div>
 
       {pipelineResult ? (
-        <div className="space-y-3">
-          <p className="font-sans text-sm text-foreground" role="status">
+        <div className="space-y-4">
+          <p className="rounded-xl bg-[#e8f0e8] p-4 text-sm leading-[1.6] text-[#183e34]" role="status">
             {pipelineResult.email_status?.sent === true
-              ? `Email envoyé à ${data.email}.`
+              ? "Votre rapport a été envoyé à " + data.email + "."
               : pipelineResult.email_status?.reason
-                ? `Email non envoyé : ${pipelineResult.email_status.reason}`
-                : "Email non envoyé."}
+                ? "Email non envoyé : " + pipelineResult.email_status.reason
+                : "Votre rapport est disponible ci-dessous."}
           </p>
-          <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Button asChild variant="premium" size="xl" className="w-full">
-              <a href={`${API_BASE_URL}/v1/session/${encodeURIComponent(pipelineResult.session_id)}/html`} target="_blank" rel="noreferrer">
-                Voir mon rapport HTML
-              </a>
+              <a href={API_BASE_URL + "/v1/session/" + encodeURIComponent(pipelineResult.session_id) + "/html"} target="_blank" rel="noreferrer">Voir mon rapport HTML</a>
             </Button>
             <Button asChild variant="premium-outline" size="xl" className="w-full">
-              <a href={`${API_BASE_URL}/v1/session/${encodeURIComponent(pipelineResult.session_id)}/pdf`} target="_blank" rel="noreferrer">
-                Télécharger mon rapport PDF
-              </a>
+              <a href={API_BASE_URL + "/v1/session/" + encodeURIComponent(pipelineResult.session_id) + "/pdf"} target="_blank" rel="noreferrer">Télécharger mon rapport PDF</a>
             </Button>
           </div>
         </div>

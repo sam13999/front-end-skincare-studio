@@ -14,6 +14,7 @@ const PageShell = ({ children, title, description }: PageShellProps) => {
 
   useEffect(() => {
     if (title) document.title = title;
+
     const setMeta = (selector: string, attribute: "name" | "property", key: string, content?: string) => {
       if (!content) return;
       let meta = document.querySelector<HTMLMetaElement>(selector);
@@ -44,9 +45,9 @@ const PageShell = ({ children, title, description }: PageShellProps) => {
   }, [title, description, pathname]);
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="site-shell flex min-h-screen flex-col bg-[#f8f6f1]">
       <SiteHeader />
-      <main className="flex-1">{children}</main>
+      <main className="min-w-0 flex-1">{children}</main>
       <SiteFooter />
     </div>
   );

@@ -1,14 +1,17 @@
+import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { DiagnosticProvider } from "./context/DiagnosticContext.tsx";
 import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import ExempleRapport from "./pages/ExempleRapport.tsx";
 import NotreCombat from "./pages/NotreCombat.tsx";
 import RapportPersonnalise from "./pages/RapportPersonnalise.tsx";
 import Tarif from "./pages/Tarif.tsx";
+import Faq from "./pages/Faq.tsx";
 import AdminPage from "./pages/Admin.tsx";
 import RoutineTiktok from "./pages/seo/RoutineTiktok.tsx";
 import TropDeProduits from "./pages/seo/TropDeProduits.tsx";
@@ -18,17 +21,16 @@ import AcheterMoins from "./pages/seo/AcheterMoins.tsx";
 import PeauSensible from "./pages/seo/PeauSensible.tsx";
 import OrdreRoutine from "./pages/seo/OrdreRoutine.tsx";
 import Actifs from "./pages/seo/Actifs.tsx";
-import { DiagnosticProvider } from "./context/DiagnosticContext.tsx";
-import { useEffect } from "react";
-import { useLocation } from "react-router-dom";
 
 const queryClient = new QueryClient();
 
 const ScrollToTop = () => {
   const { pathname } = useLocation();
+
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
   }, [pathname]);
+
   return null;
 };
 
@@ -48,6 +50,7 @@ const App = () => (
             <Route path="/notre-combat" element={<NotreCombat />} />
             <Route path="/rapport-skincare-personnalise" element={<RapportPersonnalise />} />
             <Route path="/tarif" element={<Tarif />} />
+            <Route path="/faq" element={<Faq />} />
             <Route path="/routine-skincare-tiktok" element={<RoutineTiktok />} />
             <Route path="/trop-de-produits-skincare" element={<TropDeProduits />} />
             <Route path="/routine-skincare-ne-fonctionne-pas" element={<RoutineNeFonctionnePas />} />
@@ -56,7 +59,6 @@ const App = () => (
             <Route path="/peau-sensible-actifs-a-eviter" element={<PeauSensible />} />
             <Route path="/ordre-routine-skincare" element={<OrdreRoutine />} />
             <Route path="/niacinamide-vitamine-c-retinol-bha" element={<Actifs />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </DiagnosticProvider>

@@ -12,21 +12,22 @@ interface ReportCtaProps {
 }
 
 export const ReportCta = ({
-  label = "Obtenir ma routine sur mesure",
+  label = "Commencer mon analyse",
   size = "xl",
   variant = "premium",
   showNote = false,
-  showArrow = false,
+  showArrow = true,
   className = "",
 }: ReportCtaProps) => {
   const { open } = useDiagnostic();
+
   return (
-    <div className={`flex w-full flex-col items-center gap-2.5 ${className}`}>
+    <div className={"flex w-full flex-col items-center gap-2.5 " + className}>
       <Button
         variant={variant}
         size={size}
         onClick={open}
-        className="group relative h-14 min-h-14 w-full whitespace-normal px-5 py-3 text-center text-[14px] leading-tight"
+        className="group relative h-auto min-h-12 w-full rounded-full bg-[#a95c4d] px-6 py-3 font-sans text-[14px] font-semibold text-white shadow-[0_12px_28px_-16px_rgba(169,92,77,0.9)] transition hover:bg-[#8f493e] disabled:pointer-events-none"
       >
         <span>{label}</span>
         {showArrow && (
@@ -34,8 +35,8 @@ export const ReportCta = ({
         )}
       </Button>
       {showNote && (
-        <p className="text-warm font-sans text-[11px] text-center max-w-xs leading-relaxed">
-          Vos photos restent confidentielles.
+        <p className="max-w-xs text-center font-sans text-[11px] leading-relaxed text-[#69766f]">
+          Vos photos servent uniquement à générer votre rapport.
         </p>
       )}
     </div>

@@ -1,14 +1,14 @@
-import { useState, useEffect, useCallback } from "react";
-import { DiagnosticData, questions, buildAndValidatePayload, QUESTIONNAIRE_VERSION, restoreStoredDiagnosticData } from "./types";
+import { useCallback, useEffect, useState } from "react";
+import { ArrowLeft, X } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { toast } from "@/hooks/use-toast";
+import { createSession, runPipeline, uploadPhotos, type RunPipelineResponse } from "@/lib/api";
+import { DiagnosticData, QUESTIONNAIRE_VERSION, buildAndValidatePayload, questions, restoreStoredDiagnosticData } from "./types";
+import { hasUsablePhotoForLaunch } from "./photoLaunch";
+import { IdentityStep } from "./IdentityStep";
 import { PhotoStep } from "./PhotoStep";
 import { QuestionStep } from "./QuestionStep";
 import { SummaryStep } from "./SummaryStep";
-import { IdentityStep } from "./IdentityStep";
-import { hasUsablePhotoForLaunch } from "./photoLaunch";
-import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, X } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
-import { createSession, runPipeline, uploadPhotos, type RunPipelineResponse } from "@/lib/api";
 
 const IDENTITY_STEP = 3;
 const FIRST_QUESTION_STEP = IDENTITY_STEP + 1;
@@ -82,6 +82,7 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
       toast({ variant: "destructive", title: "Photos manquantes", description: "Ajoutez au moins une photo exploitable avant de lancer l’analyse." });
       return;
     }
+
     setLaunching(true);
     try {
       const session = await createSession(result.payload);
@@ -109,22 +110,25 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
     : null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-background flex flex-col">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <button type="button" onClick={step > 1 ? goPrev : onClose} className="p-2 -ml-2 text-foreground/70 hover:text-foreground transition-colors" aria-label="Retour">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div className="text-center">
-          <span className="font-sans text-[10px] tracking-[0.3em] uppercase text-warm">Diagnostic</span>
-          <span className="font-sans text-[10px] text-warm ml-2">{step}/{TOTAL_STEPS}</span>
+    <div className="fixed inset-0 z-50 flex flex-col bg-[#f8f6f1]">
+      <header className="border-b border-[#183e34]/12 bg-[#f8f6f1]/95 px-4 backdrop-blur-xl">
+        <div className="mx-auto flex h-[68px] max-w-3xl items-center justify-between">
+          <button type="button" onClick={step > 1 ? goPrev : onClose} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-[#183e34] transition hover:bg-[#183e34]/8" aria-label="Retour">
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+          <div className="text-center">
+            <span className="block font-sans text-[10px] font-semibold uppercase tracking-[0.24em] text-[#a95c4d]">Analyse de peau</span>
+            <span className="mt-1 block font-sans text-[11px] text-[#69766f]">{step} / {TOTAL_STEPS}</span>
+          </div>
+          <button type="button" onClick={onClose} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-[#183e34] transition hover:bg-[#183e34]/8" aria-label="Fermer">
+            <X className="h-5 w-5" />
+          </button>
         </div>
-        <button type="button" onClick={onClose} className="p-2 -mr-2 text-foreground/70 hover:text-foreground transition-colors" aria-label="Fermer">
-          <X className="w-5 h-5" />
-        </button>
-      </div>
-      <div className="px-4 pt-2"><Progress value={progress} className="h-1" /></div>
+      </header>
+
+      <div className="mx-auto w-full max-w-3xl px-4 pt-3"><Progress value={progress} className="h-1 bg-[#183e34]/10" /></div>
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-lg mx-auto px-5 py-6">
+        <div className="mx-auto max-w-xl px-5 py-8 sm:py-12">
           {step === 1 && <PhotoStep type="face" photo={data.photoFace} onPhotoChange={(value) => setPhoto("photoFace", value)} onNext={goNext} />}
           {step === 2 && <PhotoStep type="profile" photo={data.photoProfile} onPhotoChange={(value) => setPhoto("photoProfile", value)} onNext={goNext} />}
           {step === IDENTITY_STEP && <IdentityStep prenom={data.prenom ?? ""} email={data.email ?? ""} onPrenomChange={(value) => setData((previous) => ({ ...previous, prenom: value }))} onEmailChange={(value) => setData((previous) => ({ ...previous, email: value }))} onNext={goNext} canNext={canNext()} />}

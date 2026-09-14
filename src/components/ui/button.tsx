@@ -1,7 +1,6 @@
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
-
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
@@ -15,14 +14,14 @@ const buttonVariants = cva(
         secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
-        premium: "bg-primary text-primary-foreground hover:bg-green-secondary font-sans font-semibold text-sm rounded-[18px] border border-primary hover:border-green-secondary active:scale-[0.98]",
-        "premium-outline": "bg-transparent text-primary border border-primary hover:bg-primary hover:text-primary-foreground font-sans font-semibold text-sm rounded-[18px] active:scale-[0.98]",
+        premium: "bg-[#a95c4d] text-white hover:bg-[#8f493e] font-sans font-semibold text-sm rounded-full border border-[#a95c4d] active:scale-[0.99]",
+        "premium-outline": "bg-transparent text-[#183e34] border border-[#183e34]/35 hover:bg-[#183e34] hover:text-white font-sans font-semibold text-sm rounded-full active:scale-[0.99]",
       },
       size: {
         default: "h-10 px-4 py-2",
-        sm: "h-9 rounded-md px-3",
-        lg: "h-11 rounded-md px-8",
-        xl: "h-14 px-10 py-4",
+        sm: "h-10 rounded-full px-4 py-2",
+        lg: "h-12 rounded-full px-6",
+        xl: "h-14 rounded-full px-8 py-4",
         icon: "h-10 w-10",
       },
     },
@@ -33,9 +32,7 @@ const buttonVariants = cva(
   },
 );
 
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
   asChild?: boolean;
 }
 
