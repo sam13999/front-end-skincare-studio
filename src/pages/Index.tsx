@@ -89,18 +89,21 @@ const Index = () => (
       </div>
 
       <div className="border-y border-[#183e34]/10 bg-white/35">
-        <div className="site-container grid grid-cols-2 gap-y-3 py-5 text-[12px] font-medium text-[#52625e] sm:grid-cols-4 sm:gap-6">
+        <div className="site-container grid grid-cols-3 gap-2 py-5 text-center text-[11px] font-medium text-[#52625e] sm:gap-6 sm:text-left">
           {[
             { icon: ShieldCheck, text: "Analyse personnalisée" },
             { icon: LockKeyhole, text: "Photos confidentielles" },
             { icon: Check, text: "Routine sur mesure" },
           ].map(({ icon: Icon, text }) => (
-            <span key={text} className="inline-flex items-center gap-2">
+            <span key={text} className="inline-flex flex-col items-center gap-2 sm:flex-row">
               <Icon className="h-4 w-4 text-[#a95c4d]" aria-hidden="true" />
               {text}
             </span>
           ))}
         </div>
+        <p className="pb-5 text-center font-serif text-lg italic text-[#a95c4d] sm:text-xl">
+          Une peau comprise, une vie plus belle.
+        </p>
       </div>
     </section>
 
