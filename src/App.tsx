@@ -9,6 +9,7 @@ import ExempleRapport from "./pages/ExempleRapport.tsx";
 import NotreCombat from "./pages/NotreCombat.tsx";
 import RapportPersonnalise from "./pages/RapportPersonnalise.tsx";
 import Tarif from "./pages/Tarif.tsx";
+import AdminPage from "./pages/Admin.tsx";
 import RoutineTiktok from "./pages/seo/RoutineTiktok.tsx";
 import TropDeProduits from "./pages/seo/TropDeProduits.tsx";
 import RoutineNeFonctionnePas from "./pages/seo/RoutineNeFonctionnePas.tsx";
@@ -41,6 +42,8 @@ const App = () => (
         <DiagnosticProvider>
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/admin" element={<AdminPage />} />
+            <Route path="/admin/session/:sessionId" element={<AdminPage />} />
             <Route path="/exemple-rapport" element={<ExempleRapport />} />
             <Route path="/notre-combat" element={<NotreCombat />} />
             <Route path="/rapport-skincare-personnalise" element={<RapportPersonnalise />} />
