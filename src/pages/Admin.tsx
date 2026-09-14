@@ -4,15 +4,15 @@ import {
   AlertTriangle,
   ArrowLeft,
   Ban,
-  Check,
+
   CheckCircle2,
   ChevronRight,
-  CircleDot,
+
   Copy,
   Download,
   ExternalLink,
   FileJson,
-  Image as ImageIcon,
+
   KeyRound,
   LogOut,
   Mail,
@@ -534,10 +534,3 @@ function AdminPage() {
 }
 
 export default AdminPage;
-
-declare global {
-  interface String {
-    replaceAll(searchValue: string, replaceValue: string): string;
-  }
-}
-
