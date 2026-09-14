@@ -1,0 +1,33 @@
+name: Validate SkinView redesign
+
+on:
+  push:
+    branches:
+      - codex/skinview-mobile-first-redesign
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Test
+        run: npm test
+      - name: Production build
+        env:
+          GITHUB_PAGES: "true"
+          VITE_API_BASE_URL: "https://skincoach-backend-production.up.railway.app"
+        run: npm run build
