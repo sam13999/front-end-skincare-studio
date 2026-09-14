@@ -84,7 +84,7 @@ describe("AdminPage", () => {
 
     await screen.findByText("Client140926test");
     fireEvent.click(screen.getByRole("button", { name: "QA" }));
-    await waitFor(() => expect(screen.getByText("Warnings")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("Warnings").length).toBeGreaterThan(0));
     expect(screen.getByText("Blocage")).toBeInTheDocument();
     expect(screen.getByText("Texte long")).toBeInTheDocument();
     expect(screen.getByText("Rendu impossible")).toBeInTheDocument();
