@@ -58,6 +58,13 @@ function formatDate(value?: string | number | null) {
     : new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
+function isToday(value?: string | null) {
+  if (!value) return false;
+  const date = new Date(value);
+  const today = new Date();
+  return !Number.isNaN(date.getTime()) && date.toDateString() === today.toDateString();
+}
+
 function formatAmount(amount: unknown, currency = "EUR") {
   if (typeof amount !== "number" && typeof amount !== "string") return "—";
   const numeric = Number(amount);
@@ -499,7 +506,8 @@ function AdminPage() {
     const query = search.trim().toLowerCase();
     return sessions.filter((item) => {
       const matchesQuery = !query || [item.display_name, item.first_name, item.email, item.session_id].join(" ").toLowerCase().includes(query);
-      const matchesFilter = !filter || item.status === filter || item.payment.payment_status === filter;
+      const matchesFilter = !filter
+        || (filter === "today" ? isToday(item.created_at) : item.status === filter || item.payment.payment_status === filter);
       return matchesQuery && matchesFilter;
     });
   }, [sessions, search, filter]);
@@ -508,7 +516,7 @@ function AdminPage() {
   if (!token) return <Login onAuthenticated={setToken} />;
   if (detail) return <main className="min-h-screen bg-[#f5f7f9]"><header className="border-b border-slate-200 bg-white"><div className="mx-auto flex max-w-[1440px] items-center justify-between px-5 py-4 sm:px-8"><span className="font-semibold tracking-tight text-slate-950">SkinView <span className="text-slate-400">Admin</span></span><button type="button" className="action-button" onClick={logout}><LogOut className="h-3.5 w-3.5" /> Déconnexion</button></div></header><div className="mx-auto max-w-[1440px] px-5 py-6 sm:px-8"><DetailView token={token} detail={detail} onBack={() => { setDetail(null); navigate("/admin"); }} onRefresh={() => loadDetail(detail.summary.session_id)} /></div></main>;
 
-  const filters = [["", "Toutes"], ["completed", "Complètes"], ["in_progress", "En cours"], ["failed", "Échouées"], ["paid", "Payées"], ["unpaid", "Non payées"]];
+  const filters = [["", "Toutes"], ["today", "Aujourd’hui"], ["completed", "Complètes"], ["in_progress", "En cours"], ["failed", "Échouées"], ["paid", "Payées"], ["unpaid", "Non payées"]];
   return (
     <main className="min-h-screen bg-[#f5f7f9]">
       <header className="border-b border-slate-200 bg-white"><div className="mx-auto flex max-w-[1440px] items-center justify-between px-5 py-4 sm:px-8"><div className="flex items-center gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-950 text-white"><ShieldCheck className="h-4 w-4" /></div><div><p className="font-semibold tracking-tight text-slate-950">SkinView <span className="text-slate-400">Admin</span></p><p className="text-[11px] text-slate-400">Suivi des sessions privées</p></div></div><button type="button" className="action-button" onClick={logout}><LogOut className="h-3.5 w-3.5" /> Déconnexion</button></div></header>
