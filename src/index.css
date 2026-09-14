@@ -111,7 +111,7 @@
   }
 
   .premium-button {
-    @apply inline-flex min-h-12 items-center justify-center gap-3 rounded-full bg-[#a95c4d] px-6 py-3 font-sans text-sm font-semibold text-white shadow-[0_12px_28px_-16px_rgba(169,92,77,0.9)] transition duration-300 hover:bg-[#8f493e] hover:shadow-[0_16px_32px_-15px_rgba(169,92,77,0.9)] active:scale-[0.99] disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex min-h-12 items-center justify-center gap-3 rounded-md bg-[#a95c4d] px-6 py-3 font-sans text-sm font-semibold text-white shadow-[0_12px_28px_-16px_rgba(169,92,77,0.9)] transition duration-300 hover:bg-[#8f493e] hover:shadow-[0_16px_32px_-15px_rgba(169,92,77,0.9)] active:scale-[0.99] disabled:pointer-events-none disabled:opacity-50;
   }
 
   .quiet-link {
