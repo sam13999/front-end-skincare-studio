@@ -1,7 +1,7 @@
 import { DiagnosticData, questions } from "./types";
 import { Button } from "@/components/ui/button";
 import { Pencil } from "lucide-react";
-import { API_BASE_URL, type RunPipelineResponse } from "@/lib/api";
+import { clientReportUrl, type RunPipelineResponse } from "@/lib/api";
 
 interface SummaryStepProps {
   data: DiagnosticData;
@@ -118,12 +118,12 @@ export const SummaryStep = ({
           </p>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Button asChild variant="premium" size="xl" className="w-full">
-              <a href={`${API_BASE_URL}/v1/session/${encodeURIComponent(pipelineResult.session_id)}/html`} target="_blank" rel="noreferrer">
+              <a href={clientReportUrl(pipelineResult.session_id, "html")} target="_blank" rel="noreferrer">
                 Voir mon rapport HTML
               </a>
             </Button>
             <Button asChild variant="premium-outline" size="xl" className="w-full">
-              <a href={`${API_BASE_URL}/v1/session/${encodeURIComponent(pipelineResult.session_id)}/pdf`} target="_blank" rel="noreferrer">
+              <a href={clientReportUrl(pipelineResult.session_id, "pdf")} target="_blank" rel="noreferrer">
                 Télécharger mon rapport PDF
               </a>
             </Button>
