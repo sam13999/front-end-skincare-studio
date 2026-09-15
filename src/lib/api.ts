@@ -4,6 +4,12 @@ export const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL
 ).replace(/\/$/, "");
 
+export type ClientReportKind = "html" | "pdf";
+
+export function clientReportUrl(sessionId: string, kind: ClientReportKind): string {
+  return `${API_BASE_URL}/v1/session/${encodeURIComponent(sessionId)}/client/${kind}`;
+}
+
 export interface CreateSessionResponse {
   session_id: string;
   status: string;
