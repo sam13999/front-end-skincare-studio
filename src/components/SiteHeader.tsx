@@ -5,7 +5,7 @@ import Logo from "@/components/Logo";
 import { ReportCta } from "@/components/ReportCta";
 
 const navItems = [
-  { to: "/#comment-ca-marche", label: "Comment ça marche", anchor: true },
+  { to: "/comment-ca-marche", label: "Comment ça marche", anchor: false },
   { to: "/exemple-rapport", label: "Exemple de rapport", anchor: false },
   { to: "/notre-combat", label: "Notre combat", anchor: false },
   { to: "/faq", label: "FAQ", anchor: false },
