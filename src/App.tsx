@@ -3,7 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import Index from "./pages/Index.tsx";
+import SkinViewLanding from "./pages/SkinViewLanding.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import ExempleRapport from "./pages/ExempleRapport.tsx";
 import NotreCombat from "./pages/NotreCombat.tsx";
@@ -41,7 +41,7 @@ const App = () => (
         <ScrollToTop />
         <DiagnosticProvider>
           <Routes>
-            <Route path="/" element={<Index />} />
+            <Route path="/" element={<SkinViewLanding />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/admin/session/:sessionId" element={<AdminPage />} />
             <Route path="/exemple-rapport" element={<ExempleRapport />} />

@@ -384,7 +384,7 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
 
       {tab === "user" && <div className="space-y-4">
         <InfoCard title="Questionnaire complet"><JsonPanel value={detail.user.questionnaire} /></InfoCard>
-        <div className="grid gap-4 md:grid-cols-2">{detail.user.photos.map((photo) => <ProtectedImage key={photo.kind} token={token} sessionId={summary.session_id} kind={photo.kind} label={photo.kind.replaceAll("_", " ")} />)}</div>
+        <div className="grid gap-4 md:grid-cols-2">{detail.user.photos.map((photo) => <ProtectedImage key={photo.kind} token={token} sessionId={summary.session_id} kind={photo.kind} label={photo.kind.split("_").join(" ")} />)}</div>
         {!detail.user.photos.length && <Empty text="Aucune photo disponible." />}
       </div>}
 
