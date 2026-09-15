@@ -60,7 +60,7 @@ export interface AdminDetailResponse {
   analysis: Record<string, unknown>;
   prompts: Record<string, PromptRun[]>;
   qa: {
-    stages: Record<string, { status: "OK" | "Warnings" | "Blocage"; issues: Array<{ code?: string; severity?: string; message?: string; stage?: string }> }>;
+    stages: Record<string, { status: "OK" | "Warnings" | "Blocage"; issues: Array<{ code?: string; severity?: string; message?: string; stage?: string; metadata?: Record<string, unknown> }> }>;
     issues: Array<{ code?: string; severity?: string; message?: string; detail?: string; stage?: string; metadata?: Record<string, unknown> }>;
     totals: { ok: number; warnings: number; blocking: number };
     raw?: unknown;

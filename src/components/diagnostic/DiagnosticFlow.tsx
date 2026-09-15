@@ -24,6 +24,11 @@ interface DiagnosticFlowProps {
 const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
   const [step, setStep] = useState(1);
   const [launching, setLaunching] = useState(false);
+  const [launchStage, setLaunchStage] = useState<"session" | "photos" | "analysis" | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [photosUploaded, setPhotosUploaded] = useState(false);
+  const [sessionPayloadKey, setSessionPayloadKey] = useState<string | null>(null);
+  const [uploadedPhotoKey, setUploadedPhotoKey] = useState<string | null>(null);
   const [pipelineResult, setPipelineResult] = useState<RunPipelineResponse | null>(null);
   const [data, setData] = useState<DiagnosticData>(() => {
     const stored = restoreStoredDiagnosticData(localStorage.getItem(STORAGE_KEY));
@@ -84,9 +89,26 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
     }
     setLaunching(true);
     try {
-      const session = await createSession(result.payload);
-      await uploadPhotos(session.session_id, { face: data.photoFace, profil: data.photoProfile });
-      const pipeline = await runPipeline(session.session_id, result.payload.questionnaire.email);
+      const payloadKey = JSON.stringify(result.payload);
+      const photoKey = [data.photoFace, data.photoProfile].map((value) => value ? `${value.length}:${value.slice(-32)}` : "").join("|");
+      let currentSessionId = sessionId;
+      if (!currentSessionId || sessionPayloadKey !== payloadKey) {
+        setLaunchStage("session");
+        const session = await createSession(result.payload);
+        currentSessionId = session.session_id;
+        setSessionId(currentSessionId);
+        setSessionPayloadKey(payloadKey);
+        setPhotosUploaded(false);
+        setUploadedPhotoKey(null);
+      }
+      if (!photosUploaded || uploadedPhotoKey !== photoKey) {
+        setLaunchStage("photos");
+        await uploadPhotos(currentSessionId, { face: data.photoFace, profil: data.photoProfile });
+        setPhotosUploaded(true);
+        setUploadedPhotoKey(photoKey);
+      }
+      setLaunchStage("analysis");
+      const pipeline = await runPipeline(currentSessionId, result.payload.questionnaire.email);
       setPipelineResult(pipeline);
       toast({
         title: "Analyse terminée",
@@ -101,6 +123,7 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
       });
     } finally {
       setLaunching(false);
+      setLaunchStage(null);
     }
   };
 
@@ -129,7 +152,7 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
           {step === 2 && <PhotoStep type="profile" photo={data.photoProfile} onPhotoChange={(value) => setPhoto("photoProfile", value)} onNext={goNext} />}
           {step === IDENTITY_STEP && <IdentityStep prenom={data.prenom ?? ""} email={data.email ?? ""} onPrenomChange={(value) => setData((previous) => ({ ...previous, prenom: value }))} onEmailChange={(value) => setData((previous) => ({ ...previous, email: value }))} onNext={goNext} canNext={canNext()} />}
           {activeQuestion && <QuestionStep question={activeQuestion} value={data.answers[activeQuestion.key]} onChange={(value) => setAnswer(activeQuestion.key, value)} onNext={goNext} canNext={canNext()} />}
-          {step === SUMMARY_STEP && <SummaryStep data={data} onGoToStep={goToStep} onLaunch={handleLaunch} launching={launching} pipelineResult={pipelineResult} firstQuestionStep={FIRST_QUESTION_STEP} identityStep={IDENTITY_STEP} />}
+          {step === SUMMARY_STEP && <SummaryStep data={data} onGoToStep={goToStep} onLaunch={handleLaunch} launching={launching} launchStage={launchStage} pipelineResult={pipelineResult} firstQuestionStep={FIRST_QUESTION_STEP} identityStep={IDENTITY_STEP} />}
         </div>
       </div>
     </div>

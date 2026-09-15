@@ -1,13 +1,15 @@
+import { useState } from "react";
 import { DiagnosticData, questions } from "./types";
 import { Button } from "@/components/ui/button";
-import { Pencil } from "lucide-react";
-import { clientReportUrl, type RunPipelineResponse } from "@/lib/api";
+import { Loader2, Pencil } from "lucide-react";
+import { clientReportUrl, downloadClientReport, type RunPipelineResponse } from "@/lib/api";
 
 interface SummaryStepProps {
   data: DiagnosticData;
   onGoToStep: (step: number) => void;
   onLaunch: () => void;
   launching?: boolean;
+  launchStage?: "session" | "photos" | "analysis" | null;
   pipelineResult?: RunPipelineResponse | null;
   firstQuestionStep: number;
   identityStep: number;
@@ -20,8 +22,11 @@ export const SummaryStep = ({
   firstQuestionStep,
   identityStep,
   launching = false,
+  launchStage = null,
   pipelineResult = null,
 }: SummaryStepProps) => {
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const renderAnswer = (key: string) => {
     const v = data.answers[key];
     if (!v) return "—";
@@ -122,16 +127,40 @@ export const SummaryStep = ({
                 Voir mon rapport HTML
               </a>
             </Button>
-            <Button asChild variant="premium-outline" size="xl" className="w-full">
-              <a href={clientReportUrl(pipelineResult.session_id, "pdf")} target="_blank" rel="noreferrer">
-                Télécharger mon rapport PDF
-              </a>
+            <Button
+              variant="premium-outline"
+              size="xl"
+              className="w-full"
+              disabled={downloadingPdf}
+              onClick={async () => {
+                setPdfError(null);
+                setDownloadingPdf(true);
+                try {
+                  const blob = await downloadClientReport(pipelineResult.session_id);
+                  const url = URL.createObjectURL(blob);
+                  const anchor = document.createElement("a");
+                  anchor.href = url;
+                  anchor.download = "rapport-skinview.pdf";
+                  anchor.rel = "noopener";
+                  document.body.appendChild(anchor);
+                  anchor.click();
+                  anchor.remove();
+                  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+                } catch (error) {
+                  setPdfError(error instanceof Error ? error.message : "Le rapport PDF n’est pas disponible pour le moment.");
+                } finally {
+                  setDownloadingPdf(false);
+                }
+              }}
+            >
+              {downloadingPdf ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Préparation du PDF…</> : pdfError ? "Réessayer le téléchargement PDF" : "Télécharger mon rapport PDF"}
             </Button>
           </div>
+          {pdfError && <p className="font-sans text-xs text-red-600" role="alert">{pdfError}</p>}
         </div>
       ) : (
         <Button variant="premium" size="xl" className="w-full" onClick={onLaunch} disabled={launching}>
-          {launching ? "Analyse en cours…" : "Lancer mon analyse"}
+          {launching ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> {launchStage === "session" ? "Préparation…" : launchStage === "photos" ? "Envoi des photos…" : "Analyse en cours…"}</> : "Lancer mon analyse"}
         </Button>
       )}
     </div>
