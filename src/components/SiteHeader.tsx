@@ -9,7 +9,6 @@ const navItems = [
   { to: "/exemple-rapport", label: "Exemple de rapport", anchor: false },
   { to: "/notre-combat", label: "Notre combat", anchor: false },
   { to: "/faq", label: "FAQ", anchor: false },
-  { to: "/tarif", label: "Tarif", anchor: false },
 ];
 
 const SiteHeader = () => {
