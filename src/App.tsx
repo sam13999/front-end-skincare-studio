@@ -12,6 +12,7 @@ import NotreCombat from "./pages/NotreCombat.tsx";
 import RapportPersonnalise from "./pages/RapportPersonnalise.tsx";
 import Tarif from "./pages/Tarif.tsx";
 import Faq from "./pages/Faq.tsx";
+import CommentCaMarche from "./pages/CommentCaMarche.tsx";
 import AdminPage from "./pages/Admin.tsx";
 import RoutineTiktok from "./pages/seo/RoutineTiktok.tsx";
 import TropDeProduits from "./pages/seo/TropDeProduits.tsx";
@@ -47,6 +48,7 @@ const App = () => (
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/admin/session/:sessionId" element={<AdminPage />} />
             <Route path="/exemple-rapport" element={<ExempleRapport />} />
+            <Route path="/comment-ca-marche" element={<CommentCaMarche />} />
             <Route path="/notre-combat" element={<NotreCombat />} />
             <Route path="/rapport-skincare-personnalise" element={<RapportPersonnalise />} />
             <Route path="/tarif" element={<Tarif />} />
