@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { DiagnosticData, questions } from "./types";
-import { Button } from "@/components/ui/button";
 import { Loader2, Pencil } from "lucide-react";
 import { clientReportUrl, downloadClientReport, type RunPipelineResponse } from "@/lib/api";
 
@@ -27,110 +26,98 @@ export const SummaryStep = ({
 }: SummaryStepProps) => {
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+
   const renderAnswer = (key: string) => {
-    const v = data.answers[key];
-    if (!v) return "—";
-    return Array.isArray(v) ? v.join(", ") : v;
+    const value = data.answers[key];
+    if (!value) return "—";
+    return Array.isArray(value) ? value.join(", ") : value;
   };
 
   return (
-    <div className="flex flex-col">
-      <div className="text-center mb-8">
-        <h2 className="font-serif text-foreground text-2xl md:text-3xl mb-2">
-          Récapitulatif
-        </h2>
-        <p className="font-sans text-warm text-sm font-light">
-          Vérifiez vos informations avant de lancer l’analyse.
-        </p>
+    <section className="svd-step svd-summary" aria-labelledby="summary-title">
+      <div className="svd-step-intro">
+        <p className="svd-eyebrow">Vérification</p>
+        <h2 id="summary-title">Récapitulatif</h2>
+        <p>Vérifiez vos informations avant de lancer l’analyse.</p>
       </div>
 
-      {/* Photos */}
-      <div className="flex gap-4 mb-8">
+      <div className="svd-summary-photos">
         {[
           { label: "Face", photo: data.photoFace, step: 1 },
           { label: "Vue 3/4", photo: data.photoProfile, step: 2 },
         ].map((item) => (
-          <div key={item.label} className="flex-1">
-            <div className="relative rounded-lg overflow-hidden border border-border aspect-[3/4] bg-ivory-light mb-2">
-              {item.photo && (
-                <img
-                  src={item.photo}
-                  alt={item.label}
-                  className="w-full h-full object-cover"
-                />
-              )}
+          <div key={item.label} className="svd-summary-photo-wrap">
+            <div className="svd-summary-photo">
+              {item.photo && <img src={item.photo} alt={item.label} />}
               <button
+                type="button"
                 onClick={() => onGoToStep(item.step)}
-                className="absolute top-2 right-2 w-7 h-7 rounded-full bg-background/80 flex items-center justify-center text-foreground/70 hover:text-foreground transition-colors"
+                className="svd-icon-button"
+                aria-label={`Modifier la photo ${item.label}`}
               >
-                <Pencil className="w-3.5 h-3.5" />
+                <Pencil aria-hidden="true" />
               </button>
             </div>
-            <span className="font-sans text-xs text-warm">{item.label}</span>
+            <span>{item.label}</span>
           </div>
         ))}
       </div>
 
-      {/* Identity */}
-      <div className="mb-4 p-4 rounded-lg bg-ivory-light border border-border flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <p className="font-sans text-xs text-warm mb-1">Coordonnées</p>
-          <p className="font-sans text-sm text-foreground font-medium truncate">
-            {data.prenom || "—"} · {data.email || "—"}
-          </p>
+      <div className="svd-summary-card">
+        <div>
+          <p className="svd-summary-label">Coordonnées</p>
+          <p className="svd-summary-value">{data.prenom || "—"} · {data.email || "—"}</p>
         </div>
         <button
+          type="button"
           onClick={() => onGoToStep(identityStep)}
-          className="shrink-0 p-1.5 text-warm hover:text-foreground transition-colors"
+          className="svd-text-button"
+          aria-label="Modifier les coordonnées"
         >
-          <Pencil className="w-3.5 h-3.5" />
+          <Pencil aria-hidden="true" />
         </button>
       </div>
 
-      {/* Answers */}
-      <div className="space-y-4 mb-10">
-        {questions.map((q, i) => (
-          <div
-            key={q.id}
-            className="flex items-start justify-between gap-3 p-4 rounded-lg bg-ivory-light border border-border"
-          >
-            <div className="flex-1 min-w-0">
-              <p className="font-sans text-xs text-warm mb-1 truncate">
-                {q.title}
-              </p>
-              <p className="font-sans text-sm text-foreground font-medium">
-                {renderAnswer(q.key)}
-              </p>
+      <div className="svd-summary-answers">
+        {questions.map((question, index) => (
+          <div key={question.id} className="svd-summary-card">
+            <div>
+              <p className="svd-summary-label">{question.title}</p>
+              <p className="svd-summary-value">{renderAnswer(question.key)}</p>
             </div>
             <button
-              onClick={() => onGoToStep(i + firstQuestionStep)}
-              className="shrink-0 p-1.5 text-warm hover:text-foreground transition-colors"
+              type="button"
+              onClick={() => onGoToStep(index + firstQuestionStep)}
+              className="svd-text-button"
+              aria-label={`Modifier : ${question.title}`}
             >
-              <Pencil className="w-3.5 h-3.5" />
+              <Pencil aria-hidden="true" />
             </button>
           </div>
         ))}
       </div>
 
       {pipelineResult ? (
-        <div className="space-y-3">
-          <p className="font-sans text-sm text-foreground" role="status">
+        <div className="svd-result" role="status">
+          <p>
             {pipelineResult.email_status?.sent === true
               ? `Email envoyé à ${data.email}.`
               : pipelineResult.email_status?.reason
                 ? `Email non envoyé : ${pipelineResult.email_status.reason}`
                 : "Email non envoyé."}
           </p>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <Button asChild variant="premium" size="xl" className="w-full">
-              <a href={clientReportUrl(pipelineResult.session_id, "html")} target="_blank" rel="noreferrer">
-                Voir mon rapport HTML
-              </a>
-            </Button>
-            <Button
-              variant="premium-outline"
-              size="xl"
-              className="w-full"
+          <div className="svd-result-actions">
+            <a
+              className="svd-primary svd-full"
+              href={clientReportUrl(pipelineResult.session_id, "html")}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Voir mon rapport HTML
+            </a>
+            <button
+              type="button"
+              className="svd-secondary svd-full"
               disabled={downloadingPdf}
               onClick={async () => {
                 setPdfError(null);
@@ -153,16 +140,26 @@ export const SummaryStep = ({
                 }
               }}
             >
-              {downloadingPdf ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Préparation du PDF…</> : pdfError ? "Réessayer le téléchargement PDF" : "Télécharger mon rapport PDF"}
-            </Button>
+              {downloadingPdf ? (
+                <><Loader2 className="svd-spinner" aria-hidden="true" /> Préparation du PDF…</>
+              ) : pdfError ? (
+                "Réessayer le téléchargement PDF"
+              ) : (
+                "Télécharger mon rapport PDF"
+              )}
+            </button>
           </div>
-          {pdfError && <p className="font-sans text-xs text-red-600" role="alert">{pdfError}</p>}
+          {pdfError && <p className="svd-error" role="alert">{pdfError}</p>}
         </div>
       ) : (
-        <Button variant="premium" size="xl" className="w-full" onClick={onLaunch} disabled={launching}>
-          {launching ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> {launchStage === "session" ? "Préparation…" : launchStage === "photos" ? "Envoi des photos…" : "Analyse en cours…"}</> : "Lancer mon analyse"}
-        </Button>
+        <button type="button" className="svd-primary svd-full" onClick={onLaunch} disabled={launching}>
+          {launching ? (
+            <><Loader2 className="svd-spinner" aria-hidden="true" /> {launchStage === "session" ? "Préparation…" : launchStage === "photos" ? "Envoi des photos…" : "Analyse en cours…"}</>
+          ) : (
+            "Lancer mon analyse"
+          )}
+        </button>
       )}
-    </div>
+    </section>
   );
 };

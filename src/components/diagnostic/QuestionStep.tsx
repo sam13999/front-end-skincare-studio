@@ -1,5 +1,4 @@
 import { Question } from "./types";
-import { Button } from "@/components/ui/button";
 
 interface QuestionStepProps {
   question: Question;
@@ -9,13 +8,7 @@ interface QuestionStepProps {
   canNext: boolean;
 }
 
-export const QuestionStep = ({
-  question,
-  value,
-  onChange,
-  onNext,
-  canNext,
-}: QuestionStepProps) => {
+export const QuestionStep = ({ question, value, onChange, onNext, canNext }: QuestionStepProps) => {
   const current = Array.isArray(value) ? value : [];
   const exclusiveValues = new Set(question.exclusiveValues ?? []);
   const maxSelections = question.maxSelections ?? Number.POSITIVE_INFINITY;
@@ -25,12 +18,10 @@ export const QuestionStep = ({
       onChange(optionValue);
       return;
     }
-
     if (exclusiveValues.has(optionValue)) {
       onChange(current.length === 1 && current[0] === optionValue ? [] : [optionValue]);
       return;
     }
-
     const withoutExclusive = current.filter((item) => !exclusiveValues.has(item));
     if (withoutExclusive.includes(optionValue)) {
       onChange(withoutExclusive.filter((item) => item !== optionValue));
@@ -44,17 +35,20 @@ export const QuestionStep = ({
     question.type === "single" ? value === optionValue : current.includes(optionValue);
 
   return (
-    <div className="flex flex-col">
-      <div className="text-center mb-8">
-        <h2 className="font-serif text-foreground text-2xl md:text-3xl mb-2">{question.title}</h2>
-        {question.subtitle && <p className="font-sans text-warm text-sm font-light">{question.subtitle}</p>}
+    <section className="svd-step" aria-labelledby={`question-title-${question.id}`}>
+      <div className="svd-intro">
+        <p className="svd-eyebrow">Votre peau, en quelques réponses</p>
+        <h2 id={`question-title-${question.id}`}>{question.title}</h2>
+        {question.subtitle && <p>{question.subtitle}</p>}
       </div>
-
-      <div className="grid grid-cols-2 gap-3 mb-8">
+      <div className="svd-question-options" role={question.type === "multiple" ? "group" : "radiogroup"}>
         {question.options.map((option) => {
           const selected = isSelected(option.value);
           const isExclusive = exclusiveValues.has(option.value);
-          const maxReached = question.type === "multiple" && !selected && !isExclusive && current.length >= maxSelections;
+          const maxReached = question.type === "multiple"
+            && !selected
+            && !isExclusive
+            && current.length >= maxSelections;
           return (
             <button
               type="button"
@@ -62,22 +56,16 @@ export const QuestionStep = ({
               onClick={() => handleSelect(option.value)}
               disabled={maxReached}
               aria-pressed={selected}
-              className={`p-4 rounded-lg border text-center transition-all duration-200 font-sans text-sm ${
-                selected
-                  ? "border-green-deep bg-green-deep/5 text-foreground font-medium shadow-sm"
-                  : "border-border bg-ivory-light text-warm hover:border-accent hover:bg-accent/5"
-              } ${isExclusive ? "col-span-2" : ""}`}
+              className={`svd-choice${isExclusive ? " svd-choice--exclusive" : ""}`}
             >
               {option.label}
             </button>
           );
         })}
       </div>
-
-      <Button variant="premium" size="xl" className="w-full" disabled={!canNext} onClick={onNext}>
+      <button type="button" className="svd-primary svd-full" disabled={!canNext} onClick={onNext}>
         Continuer
-      </Button>
-    </div>
+      </button>
+    </section>
   );
 };
-

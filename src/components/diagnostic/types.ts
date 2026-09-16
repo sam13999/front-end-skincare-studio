@@ -1,4 +1,4 @@
-export const QUESTIONNAIRE_VERSION = "v2" as const;
+export const QUESTIONNAIRE_VERSION = "v3" as const;
 
 export interface DiagnosticData {
   photoFace: string | null;
@@ -25,132 +25,55 @@ export interface Question {
 }
 
 export type BackendKey =
+  | "age_range"
+  | "genre"
+  | "grossesse_allaitement"
   | "objectif_principal"
-  | "signes_remarques"
-  | "zones_preoccupantes"
-  | "ressenti_peau"
-  | "frequence_routine"
+  | "zone_preoccupation"
+  | "profil_peau_declare"
+  | "couleur_peau_declaree"
+  | "niveau_routine_actuelle"
   | "produits_utilises_regulierement"
-  | "reactivite_nouveaux_soins"
-  | "experience_actifs_forts"
-  | "produits_portes_journee"
-  | "textures_preferees"
-  | "preferences_a_eviter";
+  | "preferences_a_eviter"
+  | "attentes_routine";
 
 export const ALLOWED_VALUES: Record<BackendKey, readonly string[]> = {
+  age_range: ["Moins de 18 ans", "18–24 ans", "25–34 ans", "35–44 ans", "45–54 ans", "55 ans et +"],
+  genre: ["Femme", "Homme", "Autre", "Je préfère ne pas répondre"],
+  grossesse_allaitement: ["Non", "Enceinte", "Allaitement", "Je préfère ne pas répondre"],
   objectif_principal: [
-    "Réduire les boutons et imperfections",
-    "Réduire les points noirs et l’apparence des pores",
-    "Atténuer les marques ou taches",
-    "Lisser le grain de peau",
-    "Retrouver plus d’éclat",
-    "Apaiser les rougeurs ou l’inconfort",
-    "Améliorer l’hydratation et le confort",
-    "Prévenir les premiers signes de l’âge",
-    "Je ne sais pas",
+    "Boutons / imperfections", "Points noirs", "Pores dilatés", "Taches / hyperpigmentation",
+    "Rougeurs", "Sécheresse / déshydratation", "Brillance / excès de sébum", "Rides / ridules",
+    "Cernes / poches", "Teint terne", "Rien de particulier",
   ],
-  signes_remarques: [
-    "Boutons ou imperfections",
-    "Points noirs / pores visibles",
-    "Marques ou taches après boutons",
-    "Grain de peau irrégulier",
-    "Brillance fréquente",
-    "Sécheresse / tiraillements",
-    "Rougeurs / picotements",
-    "Teint terne",
-    "Ridules / perte de fermeté",
-    "Aucun en particulier",
-    "Je ne sais pas",
+  zone_preoccupation: ["Front", "Nez", "Joues", "Menton", "Contour des yeux", "Plusieurs zones", "Ensemble du visage"],
+  profil_peau_declare: [
+    "Elle tiraille souvent et manque de confort",
+    "Elle est globalement confortable et réagit rarement",
+    "Elle brille surtout sur la zone T",
+    "Elle brille sur l’ensemble du visage",
+    "Elle réagit facilement, avec rougeurs ou picotements",
+    "Son comportement varie beaucoup selon les zones ou les périodes",
   ],
-  zones_preoccupantes: [
-    "Front",
-    "Nez",
-    "Menton",
-    "Joues",
-    "Contour des yeux",
-    "Contour de la bouche",
-    "Ensemble du visage",
-    "Aucune zone en particulier",
-    "Je ne sais pas",
-  ],
-  ressenti_peau: [
-    "Elle tiraille facilement",
-    "Elle devient brillante rapidement",
-    "Certaines zones brillent et d’autres tiraillent",
-    "Elle rougit ou picote facilement",
-    "Elle est généralement confortable",
-    "Elle change beaucoup selon les périodes",
-    "Je ne sais pas",
-  ],
-  frequence_routine: [
-    "Matin et soir presque tous les jours",
-    "Une fois par jour presque tous les jours",
-    "Quelques jours par semaine",
-    "De façon irrégulière",
-    "Je n’ai pas vraiment de routine",
+  couleur_peau_declaree: ["Très claire", "Claire", "Médium", "Mate", "Brune", "Brun foncé"],
+  niveau_routine_actuelle: [
+    "Je n’utilise pratiquement aucun soin",
+    "Routine très simple, 1 à 2 produits",
+    "Routine régulière, 3 à 4 produits",
+    "Routine complète, 5 produits ou plus",
   ],
   produits_utilises_regulierement: [
-    "Aucun",
-    "Démaquillant / eau micellaire",
-    "Huile ou baume nettoyant",
-    "Nettoyant visage",
-    "Lotion / toner / essence",
-    "Sérum ou soin hydratant / apaisant",
-    "Sérum ou soin anti-imperfections",
-    "Sérum ou soin anti-taches / marques",
-    "Sérum ou soin éclat",
-    "Sérum ou soin anti-âge",
-    "Exfoliant / peeling",
-    "Rétinol / rétinoïde",
-    "Crème hydratante légère",
-    "Crème hydratante riche / réparatrice",
-    "Huile visage",
-    "Soin contour des yeux",
-    "Masque / soin ponctuel",
-    "Protection solaire",
-    "Protection solaire teintée",
-    "Autre soin ciblé",
-    "Je ne sais pas exactement",
-  ],
-  reactivite_nouveaux_soins: [
-    "Elle tolère généralement bien les nouveaux soins",
-    "Elle peut parfois picoter ou rougir légèrement",
-    "Elle réagit assez facilement avec rougeurs, picotements ou inconfort",
-    "Elle est actuellement irritée ou très inconfortable",
-    "Je ne sais pas",
-  ],
-  experience_actifs_forts: [
-    "Je n’ai jamais utilisé d’exfoliant ni de rétinol",
-    "J’ai déjà utilisé un exfoliant et je le tolère bien",
-    "J’utilise ou j’ai utilisé du rétinol / rétinoïde et je le tolère bien",
-    "J’ai déjà mal toléré un exfoliant",
-    "J’ai déjà mal toléré du rétinol / rétinoïde",
-    "Je ne sais pas",
-  ],
-  produits_portes_journee: [
-    "Rien de particulier",
-    "Protection solaire",
-    "Protection solaire teintée",
-    "Fond de teint / BB crème / CC crème",
-    "Maquillage léger sans produit teinté couvrant",
-    "Produits longue tenue ou résistants à l’eau",
-  ],
-  textures_preferees: [
-    "Textures très légères / fluides",
-    "Gel / gel-crème",
-    "Crèmes légères",
-    "Crèmes riches / enveloppantes",
-    "Je n’ai pas de préférence",
-    "Je ne sais pas",
+    "Nettoyant", "Démaquillant / huile nettoyante", "Sérum", "Crème hydratante", "Protection solaire",
+    "Exfoliant", "Rétinol / rétinoïde", "Traitement anti-imperfections", "Masque", "Autre", "Aucun",
   ],
   preferences_a_eviter: [
-    "Trop d’étapes",
-    "Sensation grasse ou lourde",
-    "Fini collant",
-    "Parfum ou odeur marquée",
-    "Soins qui picotent ou irritent facilement",
-    "Rien en particulier",
-    "Je ne sais pas",
+    "Trop d’étapes", "Sensation grasse ou lourde", "Fini collant", "Parfum ou odeur marquée",
+    "Soins qui picotent ou irritent facilement", "Rien en particulier", "Je ne sais pas",
+  ],
+  attentes_routine: [
+    "Une routine très simple", "Les résultats les plus efficaces possibles", "Des produits doux",
+    "Une routine adaptée aux peaux sensibles", "Peu de produits", "Des textures légères",
+    "Des produits sans parfum", "Autre",
   ],
 };
 
@@ -162,48 +85,41 @@ const multi = (
   title: string,
   subtitle: string,
   maxSelections: number,
-  exclusiveValues: readonly string[],
-): Question => ({
-  id: 0,
-  key,
-  title,
-  subtitle,
-  type: "multiple",
-  maxSelections,
-  exclusiveValues,
-  options: opts(key),
+  exclusiveValues: readonly string[] = [],
+): Omit<Question, "id"> => ({
+  key, title, subtitle, type: "multiple", maxSelections, exclusiveValues, options: opts(key),
 });
 
 const questionDefinitions: Omit<Question, "id">[] = [
+  { key: "age_range", title: "Quel âge avez-vous ?", type: "single", options: opts("age_range") },
+  { key: "genre", title: "Comment vous définissez-vous ?", type: "single", options: opts("genre") },
+  {
+    key: "grossesse_allaitement",
+    title: "Êtes-vous enceinte ou allaitez-vous ?",
+    subtitle: "Cette information nous aide à écarter certains actifs incompatibles.",
+    type: "single",
+    options: opts("grossesse_allaitement"),
+  },
   {
     key: "objectif_principal",
-    title: "Quel est votre objectif principal pour votre peau ?",
-    subtitle: "Choisissez la priorité qui compte le plus pour vous.",
+    title: "Quelle est votre principale préoccupation ?",
+    subtitle: "Choisissez une seule priorité.",
     type: "single",
     options: opts("objectif_principal"),
   },
-  multi("signes_remarques", "Quels signes remarquez-vous régulièrement sur votre peau ?", "Sélectionnez jusqu’à 2 réponses.", 2, ["Aucun en particulier", "Je ne sais pas"]),
-  multi("zones_preoccupantes", "Quelles zones vous préoccupent le plus ?", "Sélectionnez jusqu’à 2 zones.", 2, ["Ensemble du visage", "Aucune zone en particulier", "Je ne sais pas"]),
-  multi("ressenti_peau", "Comment décririez-vous votre peau au quotidien ?", "Sélectionnez jusqu’à 2 réponses.", 2, ["Je ne sais pas"]),
+  { key: "zone_preoccupation", title: "Où se situe principalement cette préoccupation ?", type: "single", options: opts("zone_preoccupation") },
+  { key: "profil_peau_declare", title: "Comment décririez-vous votre peau au quotidien ?", type: "single", options: opts("profil_peau_declare") },
   {
-    key: "frequence_routine",
-    title: "À quelle fréquence suivez-vous réellement une routine visage ?",
-    subtitle: "Pensez à vos habitudes habituelles, pas à votre routine idéale.",
+    key: "couleur_peau_declaree",
+    title: "Quelle est votre couleur de peau naturelle, sans bronzage ?",
+    subtitle: "Votre réponse complète l’observation des photos, sans la remplacer.",
     type: "single",
-    options: opts("frequence_routine"),
+    options: opts("couleur_peau_declaree"),
   },
-  multi("produits_utilises_regulierement", "Quels produits utilisez-vous actuellement de façon régulière ?", "Sélectionnez tout ce que vous utilisez, même si ce n’est pas tous les jours.", 8, ["Aucun", "Je ne sais pas exactement"]),
-  {
-    key: "reactivite_nouveaux_soins",
-    title: "Comment votre peau réagit-elle généralement quand vous introduisez un nouveau soin ?",
-    subtitle: "Pensez aux rougeurs, picotements ou sensations d’inconfort.",
-    type: "single",
-    options: opts("reactivite_nouveaux_soins"),
-  },
-  multi("experience_actifs_forts", "Quelle expérience avez-vous avec les exfoliants ou le rétinol ?", "Sélectionnez jusqu’à 2 réponses si nécessaire.", 2, ["Je n’ai jamais utilisé d’exfoliant ni de rétinol", "Je ne sais pas"]),
-  multi("produits_portes_journee", "Que portez-vous généralement sur votre visage pendant la journée ?", "Cela nous aide notamment à adapter le nettoyage du soir.", 3, ["Rien de particulier"]),
-  multi("textures_preferees", "Quelles textures préférez-vous sur votre visage ?", "Sélectionnez jusqu’à 2 réponses.", 2, ["Je n’ai pas de préférence", "Je ne sais pas"]),
+  { key: "niveau_routine_actuelle", title: "À quoi ressemble actuellement votre routine ?", type: "single", options: opts("niveau_routine_actuelle") },
+  multi("produits_utilises_regulierement", "Quels produits utilisez-vous régulièrement ?", "Sélectionnez jusqu’à 4 réponses.", 4, ["Aucun"]),
   multi("preferences_a_eviter", "Qu’aimeriez-vous particulièrement éviter dans votre future routine ?", "Sélectionnez jusqu’à 2 réponses.", 2, ["Rien en particulier", "Je ne sais pas"]),
+  multi("attentes_routine", "Qu’attendez-vous principalement de votre future routine ?", "Sélectionnez jusqu’à 2 réponses.", 2),
 ];
 
 export const questions: Question[] = questionDefinitions.map((question, index) => ({ ...question, id: index + 1 }));
@@ -221,12 +137,28 @@ export interface ValidationError {
   invalidValue?: unknown;
 }
 
+function isAnswerValue(value: unknown): value is string | string[] {
+  return typeof value === "string" || (Array.isArray(value) && value.every((item) => typeof item === "string"));
+}
+
 export function restoreStoredDiagnosticData(raw: string | null): Pick<DiagnosticData, "answers" | "prenom" | "email"> {
   try {
-    const parsed = JSON.parse(raw || "{}");
-    const currentVersion = parsed.questionnaire_version === QUESTIONNAIRE_VERSION;
+    const parsed = JSON.parse(raw || "{}") as Record<string, unknown>;
+    if (parsed.questionnaire_version !== QUESTIONNAIRE_VERSION) {
+      return {
+        answers: {},
+        prenom: typeof parsed.prenom === "string" ? parsed.prenom : "",
+        email: typeof parsed.email === "string" ? parsed.email : "",
+      };
+    }
+    const answers: Record<string, string | string[]> = {};
+    if (parsed.answers && typeof parsed.answers === "object") {
+      for (const [key, value] of Object.entries(parsed.answers)) {
+        if (isAnswerValue(value)) answers[key] = value;
+      }
+    }
     return {
-      answers: currentVersion && parsed.answers && typeof parsed.answers === "object" ? parsed.answers : {},
+      answers,
       prenom: typeof parsed.prenom === "string" ? parsed.prenom : "",
       email: typeof parsed.email === "string" ? parsed.email : "",
     };
@@ -239,19 +171,15 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function buildAndValidatePayload(
   data: DiagnosticData,
-): { ok: true; payload: { questionnaire_version: typeof QUESTIONNAIRE_VERSION; questionnaire: QuestionnairePayload } } | { ok: false; errors: ValidationError[] } {
+): { ok: true; payload: { questionnaire_version: typeof QUESTIONNAIRE_VERSION; questionnaire: QuestionnairePayload } }
+  | { ok: false; errors: ValidationError[] } {
   const errors: ValidationError[] = [];
   const prenom = (data.prenom ?? "").trim();
   const email = (data.email ?? "").trim();
   if (!prenom) errors.push({ field: "prenom", message: "Le prénom est requis." });
   if (!email || !EMAIL_RE.test(email)) errors.push({ field: "email", message: "Email invalide." });
 
-  const questionnaire: Record<string, unknown> = {
-    questionnaire_version: QUESTIONNAIRE_VERSION,
-    prenom,
-    email,
-  };
-
+  const questionnaire: Record<string, unknown> = { questionnaire_version: QUESTIONNAIRE_VERSION, prenom, email };
   for (const question of questions) {
     const value = data.answers[question.key];
     if (question.type === "single") {
@@ -271,7 +199,7 @@ export function buildAndValidatePayload(
       continue;
     }
     if (selected.length > (question.maxSelections ?? Number.POSITIVE_INFINITY)) {
-      errors.push({ field: question.key, message: `Sélectionnez au maximum ${question.maxSelections} réponses.` });
+      errors.push({ field: question.key, message: "Sélectionnez au maximum " + question.maxSelections + " réponses." });
     }
     for (const selectedValue of selected) {
       if (!ALLOWED_VALUES[question.key].includes(selectedValue)) {
