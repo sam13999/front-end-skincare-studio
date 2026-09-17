@@ -10,6 +10,7 @@ import {
   getFaceRoi,
   getVideoFaceLandmarker,
   getVideoGuidanceResult,
+  isTolerableSharpnessDrop,
   readRegionFromSource,
   type CameraGuidanceState,
   type CameraStep,
@@ -46,6 +47,8 @@ export const GuidedCamera = ({ step, onCapture, onClose, onFallback }: GuidedCam
   const frameRef = useRef<number | null>(null);
   const processingRef = useRef(false);
   const lastAnalysisRef = useRef(0);
+  const stableFramesRef = useRef(0);
+  const transientSharpnessDropsRef = useRef(0);
   const streamRef = useRef<MediaStream | null>(null);
   const [state, setState] = useState<CameraGuidanceState>(() => ({ ...EMPTY_STATE }));
   const [cameraReady, setCameraReady] = useState(false);
@@ -144,7 +147,24 @@ export const GuidedCamera = ({ step, onCapture, onClose, onFallback }: GuidedCam
               },
             });
             setState(nextState);
-            setStableFrames((current) => nextState.isRawValid ? current + 1 : 0);
+            if (nextState.isRawValid) {
+              stableFramesRef.current = Math.min(
+                stableFramesRef.current + 1,
+                CAMERA_GUIDANCE_THRESHOLDS.stableFramesRequired,
+              );
+              transientSharpnessDropsRef.current = 0;
+            } else if (
+              isTolerableSharpnessDrop(nextState, step)
+              && transientSharpnessDropsRef.current < CAMERA_GUIDANCE_THRESHOLDS.maxTransientSharpnessDrops
+            ) {
+              // Keep the short valid streak through a minor focus/motion dip.
+              // A persistent blur still resets it on the next failed frame.
+              transientSharpnessDropsRef.current += 1;
+            } else {
+              stableFramesRef.current = 0;
+              transientSharpnessDropsRef.current = 0;
+            }
+            setStableFrames(stableFramesRef.current);
           } catch {
             setError("La détection du visage n’a pas pu démarrer. Vous pouvez importer une photo.");
           } finally {
@@ -169,7 +189,10 @@ export const GuidedCamera = ({ step, onCapture, onClose, onFallback }: GuidedCam
     };
   }, [step]);
 
-  const isStable = state.isRawValid && stableFrames >= CAMERA_GUIDANCE_THRESHOLDS.stableFramesRequired;
+  const transientSharpnessDrop = isTolerableSharpnessDrop(state, step)
+    && transientSharpnessDropsRef.current <= CAMERA_GUIDANCE_THRESHOLDS.maxTransientSharpnessDrops;
+  const isStable = (state.isRawValid || transientSharpnessDrop)
+    && stableFrames >= CAMERA_GUIDANCE_THRESHOLDS.stableFramesRequired;
   const positionStatus = state.faceDetected && state.faceCount === 1 ? state.facePositionOk : false;
   const orientationStatus = state.faceDetected ? state.poseOk : false;
 
@@ -178,6 +201,8 @@ export const GuidedCamera = ({ step, onCapture, onClose, onFallback }: GuidedCam
     // Do not use a stale green frame if analysis was paused while the device
     // was moving or the tab was backgrounded.
     if (performance.now() - lastAnalysisRef.current > CAMERA_GUIDANCE_THRESHOLDS.analysisIntervalMs * 2) {
+      stableFramesRef.current = 0;
+      transientSharpnessDropsRef.current = 0;
       setStableFrames(0);
       return;
     }

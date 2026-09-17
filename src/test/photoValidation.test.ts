@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   evaluateFaceObservations,
   faceConfig,
+  profileConfig,
   validatePhotoFile,
   type FaceObservation,
 } from "@/components/diagnostic/photoValidation";
@@ -12,6 +13,7 @@ import {
   calculateCoverCrop,
   getFaceBox,
   getFaceRoi,
+  isTolerableSharpnessDrop,
   mapFaceBoxToVisibleViewport,
   validateFacePosition,
   validateRightPose10to29,
@@ -125,6 +127,20 @@ const makeImageData = (width: number, height: number, fill = 0): ImageData => ({
 });
 
 describe("real-time camera guidance", () => {
+  it("uses relaxed sharpness thresholds while preserving a real-blur floor", () => {
+    expect(faceConfig.minSharpness).toBe(4);
+    expect(profileConfig.minSharpness).toBe(3.5);
+
+    const mildlySoftFace = liveState("face", 100, 0.5, 0, 3);
+    const mildlySoftProfile = liveState("profile", 100, 0.5 - 15 / 350, 0, 2.75);
+    const genuinelyBlurryFace = liveState("face", 100, 0.5, 0, 1.5);
+
+    expect(mildlySoftFace.isRawValid).toBe(false);
+    expect(isTolerableSharpnessDrop(mildlySoftFace, "face")).toBe(true);
+    expect(isTolerableSharpnessDrop(mildlySoftProfile, "profile")).toBe(true);
+    expect(isTolerableSharpnessDrop(genuinelyBlurryFace, "face")).toBe(false);
+  });
+
   it("calculates the same centered cover crop as the camera preview", () => {
     const portraitCrop = calculateCoverCrop(1080, 1920, 390, 844);
     const tallCrop = calculateCoverCrop(400, 1200, 390, 844);

@@ -30,7 +30,7 @@ export interface PhotoValidationConfig {
 export const faceConfig: PhotoValidationConfig = {
   minBrightness: 45,
   maxBrightness: 240,
-  minSharpness: 6,
+  minSharpness: 4,
   minResolution: 201,
   maxResolution: 4095,
   minFileSizeKB: 100,
@@ -44,7 +44,7 @@ export const faceConfig: PhotoValidationConfig = {
 
 export const profileConfig: PhotoValidationConfig = {
   ...faceConfig,
-  minSharpness: 5,
+  minSharpness: 3.5,
 };
 
 export const ALLOWED_MIME = ["image/jpeg", "image/jpg"];

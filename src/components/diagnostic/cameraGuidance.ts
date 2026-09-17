@@ -57,8 +57,11 @@ export const CAMERA_GUIDANCE_THRESHOLDS = {
   // Luma is measured on the 0–255 scale from a small video frame.
   minBrightness: 45,
   maxBrightness: 240,
-  minSharpness: 6,
-  minSharpnessProfile: 5,
+  // Lowered to accept a normal handheld selfie while retaining the existing
+  // hard-rejection floor at 50% of the relevant threshold.
+  minSharpness: 4,
+  minSharpnessProfile: 3.5,
+  maxTransientSharpnessDrops: 2,
   // A readable face is enough for the guided capture. The previous 400 px
   // projection was too demanding on portrait camera streams.
   centerToleranceX: 0.18,
@@ -370,6 +373,23 @@ export function validateRightPose10to29(pose: HeadPose | null): boolean {
   return pose.yawDegrees >= CAMERA_GUIDANCE_THRESHOLDS.rightYawMinInclusive
     && pose.yawDegrees < CAMERA_GUIDANCE_THRESHOLDS.rightYawMaxExclusive
     && Math.abs(pose.rollDegrees) <= CAMERA_GUIDANCE_THRESHOLDS.frontRollMax;
+}
+
+export function isTolerableSharpnessDrop(
+  state: Pick<CameraGuidanceState, "faceCount" | "brightnessOk" | "sharpnessOk" | "sharpness" | "facePositionOk" | "poseOk">,
+  step: CameraStep,
+): boolean {
+  const sharpnessThreshold = step === "face"
+    ? CAMERA_GUIDANCE_THRESHOLDS.minSharpness
+    : CAMERA_GUIDANCE_THRESHOLDS.minSharpnessProfile;
+
+  return state.sharpnessOk === false
+    && state.sharpness !== null
+    && state.sharpness >= sharpnessThreshold * 0.5
+    && state.faceCount === 1
+    && state.brightnessOk === true
+    && state.facePositionOk
+    && state.poseOk;
 }
 
 export function buildCameraGuidanceState(input: {
