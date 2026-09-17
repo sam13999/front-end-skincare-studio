@@ -14,7 +14,7 @@ import {
   getFaceRoi,
   mapFaceBoxToVisibleViewport,
   validateFacePosition,
-  validateRightPose20to30,
+  validateRightPose10to29,
   type HeadPose,
 } from "@/components/diagnostic/cameraGuidance";
 
@@ -201,28 +201,27 @@ describe("real-time camera guidance", () => {
     expect(state.guidanceMessage).toContain("floue");
   });
 
-  it("accepts the right-turn target only inside 20°–30°", () => {
-    const state = liveState("profile", 100, 0.43);
+  it("uses the same 10°–29° doctrine for every profile boundary", () => {
+    const cases = [
+      { yaw: 5, valid: false, message: "Tournez légèrement" },
+      { yaw: 9, valid: false, message: "Tournez légèrement" },
+      { yaw: 10, valid: true, message: "Parfait" },
+      { yaw: 15, valid: true, message: "Parfait" },
+      { yaw: 20, valid: true, message: "Parfait" },
+      { yaw: 26, valid: true, message: "Parfait" },
+      { yaw: 29, valid: true, message: "Parfait" },
+      { yaw: 30, valid: false, message: "Revenez" },
+      { yaw: 35, valid: false, message: "Revenez" },
+    ];
 
-    expect(state.poseAngle).toBeCloseTo(24.5);
-    expect(state.poseOk).toBe(true);
-    expect(state.isRawValid).toBe(true);
-  });
-
-  it("rejects a right turn below 20°", () => {
-    const state = liveState("profile", 100, 0.45);
-
-    expect(state.poseAngle).toBeCloseTo(17.5);
-    expect(state.poseOk).toBe(false);
-    expect(state.guidanceMessage).toContain("encore");
-  });
-
-  it("rejects a right turn above 30°", () => {
-    const state = liveState("profile", 100, 0.4);
-
-    expect(state.poseAngle).toBeCloseTo(35);
-    expect(state.poseOk).toBe(false);
-    expect(state.guidanceMessage).toContain("trop tourné");
+    cases.forEach(({ yaw, valid, message }) => {
+      const state = liveState("profile", 100, 0.5 - yaw / 350);
+      expect(state.poseAngle).toBeCloseTo(yaw);
+      expect(state.poseOk).toBe(valid);
+      expect(state.isRawValid).toBe(valid);
+      expect(state.guidanceMessage).toContain(message);
+      expect(validateRightPose10to29(state.pose)).toBe(valid);
+    });
   });
 
   it("rejects a left turn even when its magnitude is in range", () => {
@@ -263,11 +262,12 @@ describe("real-time camera guidance", () => {
     expect(state.guidanceMessage).toContain("visage");
   });
 
-  it("keeps the right-turn boundaries exclusive", () => {
+  it("keeps the 10° lower boundary inclusive and 30° upper boundary exclusive", () => {
     const pose = (yawDegrees: number): HeadPose => ({ yawDegrees, pitchDegrees: 0, rollDegrees: 0 });
 
-    expect(validateRightPose20to30(pose(20))).toBe(false);
-    expect(validateRightPose20to30(pose(25))).toBe(true);
-    expect(validateRightPose20to30(pose(30))).toBe(false);
+    expect(validateRightPose10to29(pose(9))).toBe(false);
+    expect(validateRightPose10to29(pose(10))).toBe(true);
+    expect(validateRightPose10to29(pose(29))).toBe(true);
+    expect(validateRightPose10to29(pose(30))).toBe(false);
   });
 });

@@ -28,7 +28,7 @@ const faceChecklist = [
 const profileChecklist = [
   "Un côté de votre visage est bien visible",
   "La photo est nette et bien éclairée",
-  "Votre visage est légèrement tourné (20–30°), avec ses principaux traits visibles",
+  "Votre visage est légèrement tourné vers la droite, avec ses principaux traits visibles",
   "Aucun élément ne cache votre visage",
   "Format JPG ou JPEG, 5 Mo maximum",
 ];
@@ -46,7 +46,7 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
   const title = type === "face" ? "Photo de face" : "Vue 3/4";
   const subtitle = type === "face"
     ? "Prenez ou importez une photo de votre visage de face."
-    : "Prenez ou importez une vue 3/4, le visage légèrement tourné (20–30°).";
+    : "Prenez ou importez une vue 3/4, le visage légèrement tourné vers la droite.";
 
   const rejectUnexpectedError = useCallback(() => {
     const result = createRejectedResult([{

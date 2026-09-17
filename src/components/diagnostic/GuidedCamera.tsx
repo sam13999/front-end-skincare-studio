@@ -244,9 +244,6 @@ export const GuidedCamera = ({ step, onCapture, onClose, onFallback }: GuidedCam
         <p className="svd-camera-message" role="status" aria-live="polite">
           {!cameraReady && !error ? "Activation de la caméra…" : !modelReady && !error ? "Préparation de la détection…" : error || state.guidanceMessage}
         </p>
-        {state.poseAngle !== null && step === "profile" && !error && (
-          <p className="svd-camera-angle" aria-live="off">Orientation détectée : {Math.round(Math.abs(state.poseAngle))}°</p>
-        )}
         {error ? (
           <button type="button" className="svd-primary svd-camera-fallback" onClick={onFallback}>Importer une photo</button>
         ) : (

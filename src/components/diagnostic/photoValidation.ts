@@ -10,7 +10,7 @@ import {
   readRegionFromSource,
   validateFacePosition,
   validateFrontPose,
-  validateRightPose20to30,
+  validateRightPose10to29,
 } from "./cameraGuidance";
 
 export interface PhotoValidationConfig {
@@ -317,7 +317,7 @@ export async function validatePhoto(
     issues.push(...evaluateFaceObservations(faceObservations, img.naturalWidth, img.naturalHeight, config));
 
     // Imported images use the same landmark and pose gates as live captures;
-    // otherwise a file picker could bypass the 20–30° requirement.
+    // otherwise a file picker could bypass the 10–29° requirement.
     const landmarker = await getImageFaceLandmarker();
     const landmarkResult = landmarker.detect(img);
     if (landmarkResult.faceLandmarks.length !== 1) {
@@ -347,16 +347,16 @@ export async function validatePhoto(
         });
       }
       const pose = estimateHeadPose(landmarks, landmarkResult.facialTransformationMatrixes?.[0]);
-      const poseOk = type === "face" ? validateFrontPose(pose) : validateRightPose20to30(pose);
+      const poseOk = type === "face" ? validateFrontPose(pose) : validateRightPose10to29(pose);
       if (!poseOk) {
         const angle = pose?.yawDegrees ?? 0;
         issues.push({
-          code: type === "face" ? "not_frontal" : angle <= 20 ? "profile_angle_too_low" : "profile_angle_too_high",
+          code: type === "face" ? "not_frontal" : angle < 10 ? "profile_angle_too_low" : "profile_angle_too_high",
           message: type === "face"
             ? "Regardez tout droit vers la caméra."
-            : angle <= 20
-              ? "Tournez le visage à droite entre 20° et 30°."
-              : "Vous avez trop tourné le visage. Revenez légèrement vers la gauche.",
+            : angle < 10
+              ? "Tournez légèrement le visage à droite."
+              : "Revenez légèrement vers la gauche.",
           severity: "critical",
         });
       }

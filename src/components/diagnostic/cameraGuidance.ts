@@ -69,7 +69,7 @@ export const CAMERA_GUIDANCE_THRESHOLDS = {
   maxFaceHeight: 0.88,
   frontYawMax: 12,
   frontRollMax: 15,
-  rightYawMinExclusive: 20,
+  rightYawMinInclusive: 10,
   rightYawMaxExclusive: 30,
   stableFramesRequired: 4,
   analysisIntervalMs: 120,
@@ -363,12 +363,11 @@ export function validateFrontPose(pose: HeadPose | null): boolean {
   );
 }
 
-export function validateRightPose20to30(pose: HeadPose | null): boolean {
+export function validateRightPose10to29(pose: HeadPose | null): boolean {
   if (!pose) return false;
-  // Deliberately exclusive: 20° and 30° are boundary guidance states, not a
-  // valid capture. The visible angle is rounded for the user but the check is
-  // performed on the underlying number.
-  return pose.yawDegrees > CAMERA_GUIDANCE_THRESHOLDS.rightYawMinExclusive
+  // The lower bound is inclusive for the product rule: 10°–29° is valid,
+  // while 30° is already too far. The underlying angle remains unrounded.
+  return pose.yawDegrees >= CAMERA_GUIDANCE_THRESHOLDS.rightYawMinInclusive
     && pose.yawDegrees < CAMERA_GUIDANCE_THRESHOLDS.rightYawMaxExclusive
     && Math.abs(pose.rollDegrees) <= CAMERA_GUIDANCE_THRESHOLDS.frontRollMax;
 }
@@ -413,7 +412,7 @@ export function buildCameraGuidanceState(input: {
     : brightness >= CAMERA_GUIDANCE_THRESHOLDS.minBrightness && brightness <= CAMERA_GUIDANCE_THRESHOLDS.maxBrightness;
   const sharpnessThreshold = step === "face" ? CAMERA_GUIDANCE_THRESHOLDS.minSharpness : CAMERA_GUIDANCE_THRESHOLDS.minSharpnessProfile;
   const sharpnessOk = sharpness === null ? null : sharpness >= sharpnessThreshold;
-  const poseOk = step === "face" ? validateFrontPose(pose) : validateRightPose20to30(pose);
+  const poseOk = step === "face" ? validateFrontPose(pose) : validateRightPose10to29(pose);
 
   let guidanceMessage = "Préparez-vous pour la photo.";
   if (!cameraReady) guidanceMessage = "Activation de la caméra…";
@@ -425,12 +424,11 @@ export function buildCameraGuidanceState(input: {
   else if (!position.ok && position.reason === "too_large") guidanceMessage = "Éloignez-vous légèrement";
   else if (!position.ok) guidanceMessage = "Placez votre visage dans le cadre";
   else if (step === "face" && !poseOk) guidanceMessage = "Regardez tout droit";
-  else if (step === "profile" && !pose) guidanceMessage = "Regardez la caméra puis tournez à droite";
-  else if (step === "profile" && (pose?.yawDegrees ?? 0) <= 0) guidanceMessage = "Tournez le visage à droite";
-  else if (step === "profile" && (pose?.yawDegrees ?? 0) <= CAMERA_GUIDANCE_THRESHOLDS.rightYawMinExclusive) guidanceMessage = "Tournez encore un peu le visage à droite";
-  else if (step === "profile" && (pose?.yawDegrees ?? 0) >= CAMERA_GUIDANCE_THRESHOLDS.rightYawMaxExclusive) guidanceMessage = "Vous avez trop tourné le visage — revenez légèrement vers la gauche";
+  else if (step === "profile" && !pose) guidanceMessage = "Tournez légèrement le visage à droite";
+  else if (step === "profile" && (pose?.yawDegrees ?? 0) < CAMERA_GUIDANCE_THRESHOLDS.rightYawMinInclusive) guidanceMessage = "Tournez légèrement le visage à droite";
+  else if (step === "profile" && (pose?.yawDegrees ?? 0) >= CAMERA_GUIDANCE_THRESHOLDS.rightYawMaxExclusive) guidanceMessage = "Revenez légèrement vers la gauche";
   else if (brightnessOk === null) guidanceMessage = "Analyse de la lumière en cours…";
-  else if (step === "profile" && poseOk) guidanceMessage = "Position correcte";
+  else if (step === "profile" && poseOk) guidanceMessage = "Parfait, gardez cette position";
   else if (poseOk) guidanceMessage = "C’est bon, vous pouvez prendre la photo";
 
   return {
