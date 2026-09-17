@@ -1,4 +1,12 @@
 import type { Detection, FaceDetector as MediaPipeFaceDetector } from "@mediapipe/tasks-vision";
+import {
+  estimateHeadPose,
+  getFaceBox,
+  getImageFaceLandmarker,
+  validateFacePosition,
+  validateFrontPose,
+  validateRightPose20to30,
+} from "./cameraGuidance";
 
 export interface PhotoValidationConfig {
   minBrightness: number;
@@ -334,6 +342,48 @@ export async function validatePhoto(
     const detector = await getFaceDetector();
     faceObservations = toFaceObservations(detector.detect(img).detections);
     issues.push(...evaluateFaceObservations(faceObservations, img.naturalWidth, img.naturalHeight, config));
+
+    // Imported images use the same landmark and pose gates as live captures;
+    // otherwise a file picker could bypass the 20–30° requirement.
+    const landmarker = await getImageFaceLandmarker();
+    const landmarkResult = landmarker.detect(img);
+    if (landmarkResult.faceLandmarks.length !== 1) {
+      issues.push({
+        code: landmarkResult.faceLandmarks.length > 1 ? "multiple_faces" : "no_face",
+        message: landmarkResult.faceLandmarks.length > 1
+          ? "Plusieurs visages sont visibles. Utilisez une photo où vous êtes seul(e)."
+          : NO_FACE_MESSAGE,
+        severity: "critical",
+      });
+    } else {
+      const landmarks = landmarkResult.faceLandmarks[0];
+      const position = validateFacePosition(getFaceBox(landmarks));
+      if (!position.ok) {
+        issues.push({
+          code: "face_outside_guide",
+          message: position.reason === "too_small"
+            ? "Votre visage est trop éloigné. Rapprochez-vous pour qu’il soit clairement visible."
+            : position.reason === "too_large"
+              ? "Votre visage est trop proche. Éloignez-vous légèrement."
+              : "Placez votre visage au centre de la photo.",
+          severity: "critical",
+        });
+      }
+      const pose = estimateHeadPose(landmarks, landmarkResult.facialTransformationMatrixes?.[0]);
+      const poseOk = type === "face" ? validateFrontPose(pose) : validateRightPose20to30(pose);
+      if (!poseOk) {
+        const angle = pose?.yawDegrees ?? 0;
+        issues.push({
+          code: type === "face" ? "not_frontal" : angle <= 20 ? "profile_angle_too_low" : "profile_angle_too_high",
+          message: type === "face"
+            ? "Regardez tout droit vers la caméra."
+            : angle <= 20
+              ? "Tournez le visage à droite entre 20° et 30°."
+              : "Vous avez trop tourné le visage. Revenez légèrement vers la gauche.",
+          severity: "critical",
+        });
+      }
+    }
   } catch {
     issues.push({
       code: "face_validation_unavailable",

@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { AlertCircle, Camera, Check, CheckCircle2, Loader2, Upload } from "lucide-react";
+import { GuidedCamera } from "./GuidedCamera";
 import {
   ACCEPTED_FILE_TYPES,
   createRejectedResult,
@@ -34,12 +35,12 @@ const profileChecklist = [
 
 export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const validationIdRef = useRef(0);
   const [preview, setPreview] = useState<string | null>(photo);
   const [quality, setQuality] = useState<PhotoQuality>(photo ? "good" : "none");
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   const checklist = type === "face" ? faceChecklist : profileChecklist;
   const title = type === "face" ? "Photo de face" : "Vue 3/4";
@@ -115,6 +116,25 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
     setAnalyzing(false);
   };
 
+  const handleGuidedCapture = useCallback((dataUrl: string, fileSize: number) => {
+    setCameraOpen(false);
+    void processPhoto(dataUrl, fileSize);
+  }, [processPhoto]);
+
+  if (cameraOpen) {
+    return (
+      <GuidedCamera
+        step={type}
+        onCapture={handleGuidedCapture}
+        onClose={() => setCameraOpen(false)}
+        onFallback={() => {
+          setCameraOpen(false);
+          fileInputRef.current?.click();
+        }}
+      />
+    );
+  }
+
   const isUsable = quality === "acceptable" || quality === "good";
   const hasFeedback = quality !== "none" && !analyzing;
 
@@ -161,7 +181,7 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
 
       {!preview ? (
         <div className="svd-photo-tools">
-          <button type="button" className="svd-primary" disabled={analyzing} onClick={() => cameraInputRef.current?.click()}>
+          <button type="button" className="svd-primary" disabled={analyzing} onClick={() => setCameraOpen(true)}>
             <Camera aria-hidden="true" /> Prendre
           </button>
           <button type="button" className="svd-secondary" disabled={analyzing} onClick={() => fileInputRef.current?.click()}>
@@ -181,7 +201,6 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
         </button>
       )}
 
-      <input ref={cameraInputRef} type="file" accept={ACCEPTED_FILE_TYPES} capture="user" className="svd-hidden-input" onChange={handleInputChange} />
       <input ref={fileInputRef} type="file" accept={ACCEPTED_FILE_TYPES} className="svd-hidden-input" onChange={handleInputChange} />
 
       <div className="svd-checklist">
