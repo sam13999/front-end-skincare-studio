@@ -24,6 +24,9 @@ describe("SkinView landing", () => {
     expect(prices[0].textContent).toContain("39");
     expect(prices[1].textContent).toContain("59");
     expect(screen.getByRole("heading", { name: "Voyez exactement ce que vous recevez" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Une analyse ne suffit pas. Il faut savoir quoi en faire." })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Pas de conclusions forcées" })).toBeInTheDocument();
+    expect(screen.getAllByRole("tab")).toHaveLength(4);
   });
 
   it("ouvre le menu et le diagnostic depuis le nouveau CTA", () => {

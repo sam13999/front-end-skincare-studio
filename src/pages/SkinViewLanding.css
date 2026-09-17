@@ -85,18 +85,18 @@
 .sv-report { padding-top: 36px; }
 .sv-tour { margin-top: 22px; }
 .sv-frame { position: relative; aspect-ratio: 1 / 1; overflow: hidden; border-radius: 12px; background: #e9e3da; box-shadow: 0 14px 34px rgba(44, 37, 33, .14); }
-.sv-frame img { position: absolute; top: -2%; left: 0; width: 100%; max-width: none; height: auto; transform: scale(1.7) translate(-12%, -14%); transform-origin: 0 0; transition: transform .55s cubic-bezier(.22, .61, .36, 1), opacity .28s ease; }
-.sv-focus { position: absolute; z-index: 1; border: 2px solid var(--sv-terra); border-radius: 8px; box-shadow: 0 0 0 999px rgba(44, 37, 33, .1); pointer-events: none; transition: opacity .25s ease; }
+.sv-frame img { position: absolute; top: 0; left: 0; width: 100%; max-width: none; height: auto; transform: none; transform-origin: 0 0; transition: width .55s cubic-bezier(.22, .61, .36, 1), left .55s cubic-bezier(.22, .61, .36, 1), top .55s cubic-bezier(.22, .61, .36, 1), opacity .28s ease; }
+.sv-focus { position: absolute; z-index: 1; border: 2px solid var(--sv-terra); border-radius: 8px; box-shadow: 0 0 0 999px rgba(44, 37, 33, .12); pointer-events: none; transition: left .55s cubic-bezier(.22, .61, .36, 1), top .55s cubic-bezier(.22, .61, .36, 1), width .55s cubic-bezier(.22, .61, .36, 1), height .55s cubic-bezier(.22, .61, .36, 1); }
 .sv-page-no { position: absolute; right: 10px; bottom: 10px; padding: 4px 10px; border-radius: 20px; background: rgba(255, 255, 255, .92); color: var(--sv-body); font-size: 11.5px; }
 .sv-tour-caption { min-height: 84px; padding: 16px 2px 4px; }
 .sv-tour-caption h3 { font-size: 22px; line-height: 1.15; }
 .sv-tour-caption p { margin-top: 6px; color: var(--sv-body); font-size: 14.5px; line-height: 1.45; }
-.sv-tour-nav { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 8px; }
+.sv-tour-nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; }
 .sv-tour-nav button { border: 0; padding: 8px 0 0; background: none; color: var(--sv-muted); text-align: left; font: 400 11px/1.25 var(--sv-sans); cursor: pointer; }
 .sv-tour-nav button i { display: block; height: 3px; margin-bottom: 6px; overflow: hidden; border-radius: 3px; background: var(--sv-tint); }
 .sv-tour-nav button i b { display: block; height: 100%; background: var(--sv-terra); transition: width .2s; }
 .sv-tour-nav button[aria-selected="true"] { color: var(--sv-ink); }
-.sv-tour:not(.is-paused) .sv-tour-nav button[aria-selected="true"] i b { width: 100%; animation: sv-fill 3.8s linear; }
+.sv-tour:not(.is-paused) .sv-tour-nav button[aria-selected="true"] i b { width: 100%; animation: sv-fill 2.4s linear; }
 @keyframes sv-fill { from { width: 0; } to { width: 100%; } }
 .sv-leaf-head { margin-top: 34px; }
 .sv-leaf-head h3 { font-size: 20px; }
@@ -115,16 +115,11 @@
 .sv-lightbox-scroll img { width: 100%; max-width: 700px; margin: 0 auto 12px; border-radius: 3px; }
 .sv-lightbox-current { outline: 2px solid var(--sv-terra); outline-offset: 4px; }
 
-.sv-steps3 { margin: 22px 0 0; padding: 0; list-style: none; }
-.sv-steps3 li { display: grid; grid-template-columns: 44px 1fr; gap: 14px; padding: 16px 0; border-top: 1px solid var(--sv-line); }
-.sv-steps3 li:last-child { border-bottom: 1px solid var(--sv-line); }
-.sv-steps3 i { padding-top: 2px; color: var(--sv-terra); font: italic 400 26px/1 var(--sv-serif); }
-.sv-steps3 h3 { font-size: 20px; line-height: 1.2; }
-.sv-steps3 p { margin-top: 3px; color: var(--sv-body); font-size: 14.5px; line-height: 1.45; }
 .sv-trust { display: grid; grid-template-columns: 34px 1fr; gap: 12px; margin-top: 20px; padding: 14px 16px; border-radius: 8px; background: var(--sv-tint); }
 .sv-trust > svg { width: 26px; height: 26px; margin-top: 2px; color: var(--sv-terra); stroke-width: 1.4; }
 .sv-trust h3 { font-size: 16px; }
 .sv-trust p { margin-top: 3px; color: var(--sv-body); font-size: 13.5px; line-height: 1.45; }
+.sv-report-trust { margin-top: 26px; }
 
 .sv-combat h2 { font-size: 34px; }
 .sv-sub { margin-top: 6px; color: var(--sv-body); font-size: 21px; line-height: 1.3; }

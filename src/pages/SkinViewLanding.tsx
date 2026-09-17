@@ -41,12 +41,49 @@ const reportNames = [
   "Routine du soir",
   "Routine du soir (suite)",
 ];
-const reportStops = [
-  { page: 1, rect: [0.03, 0.275, 0.62, 0.115], title: "Photos", text: "Des observations localisées sur les zones pertinentes." },
-  { page: 2, rect: [0.29, 0.4, 0.68, 0.135], title: "Profil", text: "Votre peau expliquée sans transformer chaque imperfection en problème." },
-  { page: 3, rect: [0.03, 0.37, 0.68, 0.115], title: "Stratégie", text: "Ce qu’on retient, ce qu’on écarte et ce qu’il faut prioriser." },
-  { page: 4, rect: [0.37, 0.16, 0.34, 0.25], title: "Routine", text: "Quoi utiliser, quand et à quelle fréquence." },
-  { page: 6, rect: [0.23, 0.245, 0.73, 0.1], title: "Produits", text: "Des références sélectionnées pour leur rôle dans votre routine." },
+type ReportStop = {
+  page: number;
+  center: [number, number];
+  focus: [number, number, number, number];
+  scale: number;
+  title: string;
+  text: string;
+};
+
+const REPORT_WIDTH = 1100;
+const reportStops: ReportStop[] = [
+  {
+    page: 1,
+    center: [470, 530],
+    focus: [45, 460, 850, 140],
+    scale: 1.2,
+    title: "Photos",
+    text: "Observations localisées sur les zones utiles.",
+  },
+  {
+    page: 2,
+    center: [690, 540],
+    focus: [315, 260, 735, 560],
+    scale: 1.35,
+    title: "Profil",
+    text: "Votre type et votre profil de peau expliqués clairement.",
+  },
+  {
+    page: 3,
+    center: [405, 410],
+    focus: [45, 315, 720, 150],
+    scale: 1.3,
+    title: "Objectif",
+    text: "Votre priorité déclarée est réellement prise en compte.",
+  },
+  {
+    page: 6,
+    center: [560, 570],
+    focus: [45, 270, 1010, 600],
+    scale: 1.2,
+    title: "Produits",
+    text: "Produits sélectionnés avec rôle et conseil d’utilisation.",
+  },
 ];
 
 const faq = [
@@ -70,7 +107,7 @@ function Cta({ children, onClick }: { children: React.ReactNode; onClick: () => 
 
 function Header({ onStart }: { onStart: () => void }) {
   const [open, setOpen] = useState(false);
-  const links = [["fonctionnement", "Comment ça marche"], ["rapport", "Le rapport"], ["methode", "La méthode"], ["tarifs", "Tarifs"], ["faq", "FAQ"]];
+  const links = [["fonctionnement", "Comment ça marche"], ["rapport", "Le rapport"], ["conseil", "Le conseil"], ["tarifs", "Tarifs"], ["faq", "FAQ"]];
   const go = (id: string) => {
     setOpen(false);
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
@@ -110,7 +147,7 @@ function ReportTour() {
 
   useEffect(() => {
     if (!visible || paused) return undefined;
-    const timer = window.setTimeout(() => setCurrent((value) => (value + 1) % reportStops.length), 3800);
+    const timer = window.setTimeout(() => setCurrent((value) => (value + 1) % reportStops.length), 2400);
     return () => window.clearTimeout(timer);
   }, [current, paused, visible]);
 
@@ -123,15 +160,35 @@ function ReportTour() {
   }, [lightbox]);
 
   const stop = reportStops[current];
+  const [centerX, centerY] = stop.center;
+  const [focusX, focusY, focusWidth, focusHeight] = stop.focus;
+  const imageLeft = 50 - (stop.scale * centerX / REPORT_WIDTH) * 100;
+  const imageTop = 50 - (stop.scale * centerY / REPORT_WIDTH) * 100;
+  const focusLeft = imageLeft + (stop.scale * focusX / REPORT_WIDTH) * 100;
+  const focusTop = imageTop + (stop.scale * focusY / REPORT_WIDTH) * 100;
+  const focusRight = focusLeft + (stop.scale * focusWidth / REPORT_WIDTH) * 100;
+  const focusBottom = focusTop + (stop.scale * focusHeight / REPORT_WIDTH) * 100;
+  const clamp = (value: number) => Math.min(98, Math.max(2, value));
+  const focusStyle = {
+    left: `${clamp(focusLeft)}%`,
+    top: `${clamp(focusTop)}%`,
+    width: `${Math.max(10, clamp(focusRight) - clamp(focusLeft))}%`,
+    height: `${Math.max(10, clamp(focusBottom) - clamp(focusTop))}%`,
+  };
+
   return <>
     <div className={`sv-tour ${paused ? "is-paused" : ""}`}>
       <div className="sv-frame" ref={frameRef} aria-live="polite">
-        <img src={reportPages[stop.page]} alt={`Extrait d’un rapport SkinView : ${stop.title}`} />
-        <span className="sv-focus" style={{ left: `${stop.rect[0] * 100}%`, top: `${stop.rect[1] * 100}%`, width: `${stop.rect[2] * 100}%`, height: `${stop.rect[3] * 100}%` }} />
+        <img
+          src={reportPages[stop.page]}
+          alt={`Extrait d’un rapport SkinView : ${stop.title}`}
+          style={{ width: `${stop.scale * 100}%`, left: `${imageLeft}%`, top: `${imageTop}%` }}
+        />
+        <span className="sv-focus" style={focusStyle} />
         <span className="sv-page-no">Page {stop.page} / 7</span>
       </div>
       <div className="sv-tour-caption"><h3>{stop.title}</h3><p>{stop.text}</p></div>
-      <div className="sv-tour-nav" role="tablist" aria-label="Parties du rapport">
+      <div className="sv-tour-nav" role="tablist" aria-label="Preuves du rapport">
         {reportStops.map((item, index) => <button type="button" role="tab" aria-selected={index === current} key={item.title} onClick={() => { setPaused(true); setCurrent(index); }}><i><b style={{ width: index < current ? "100%" : undefined }} /></i>{item.title}</button>)}
       </div>
     </div>
@@ -161,9 +218,7 @@ export default function SkinViewLanding() {
 
       <section className="sv-section" id="fonctionnement"><h2>Comment ça marche&nbsp;?</h2><p className="sv-lead">Quelques minutes pour nous aider à comprendre votre peau, vos habitudes et vos objectifs.</p><ol className="sv-steps"><li><div className="sv-step-photo"><img src={stepPhotos} alt="" /><b>1</b></div><div><h3>Vous partagez vos photos</h3><p>Quelques photos permettent d’observer votre peau sous différents angles.</p></div></li><li><div className="sv-step-photo"><img src={stepQuestionnaire} alt="" /><b>2</b></div><div><h3>Vous répondez à un questionnaire</h3><p>Vos habitudes, vos objectifs, votre routine actuelle et votre ressenti donnent le contexte nécessaire à l’analyse.</p></div></li><li><div className="sv-step-photo"><img src={stepReport} alt="" /><b>3</b></div><div><h3>Vous recevez votre analyse complète</h3><p>Découvrez vos priorités, votre stratégie, votre routine et les produits retenus pour votre peau.</p></div></li></ol><Cta onClick={start}>Commencer mon analyse</Cta><p className="sv-script">Simple aujourd’hui,<span>une peau plus sereine demain.</span></p></section>
 
-      <section className="sv-section sv-report" id="rapport"><h2>Voyez exactement ce que vous recevez</h2><p className="sv-lead">De vrais exemples SkinView : votre peau, vos priorités, votre stratégie, votre routine et les produits retenus.</p><ReportTour /></section>
-
-      <section className="sv-section" id="methode"><h2>Une analyse ne suffit pas. Il faut savoir quoi en faire.</h2><ol className="sv-steps3"><li><i>01</i><div><h3>Observer</h3><p>Ce que montrent réellement vos photos.</p></div></li><li><i>02</i><div><h3>Comprendre</h3><p>Vos objectifs, vos habitudes et votre tolérance.</p></div></li><li><i>03</i><div><h3>Construire</h3><p>La stratégie et la routine les plus cohérentes pour votre peau.</p></div></li></ol><div className="sv-trust"><Search aria-hidden="true" /><div><h3>Pas de conclusions forcées</h3><p>Si un élément n’est pas suffisamment visible sur vos photos, il n’est pas présenté comme une certitude.</p></div></div></section>
+      <section className="sv-section sv-report" id="rapport"><h2>Voyez exactement ce que vous recevez</h2><p className="sv-lead">De vrais exemples SkinView : votre peau, vos priorités, votre stratégie, votre routine et les produits retenus.</p><ReportTour /><div className="sv-trust sv-report-trust"><Search aria-hidden="true" /><div><h3>Pas de conclusions forcées</h3><p>Si un élément n’est pas suffisamment visible sur vos photos, il n’est pas présenté comme une certitude.</p></div></div></section>
 
       <section className="sv-section sv-combat" id="conseil"><h2>Le conseil avant le produit.</h2><p className="sv-sub">Un bon conseil ne commence pas par un catalogue. Il commence par votre peau.</p><p className="sv-body">SkinView ne vend aucun produit. Nos recommandations sont multimarques et chaque produit doit avoir une fonction précise dans votre routine.</p><div className="sv-values"><Value image={valueSkin} title="Votre peau avant les tendances" text="Nous partons de vos besoins, pas du produit dont tout le monde parle." /><Value image={valueBrands} title="Des recommandations multimarques" text="Les références sont retenues pour leur pertinence dans votre routine." /><Value image={valuePlace} title="Chaque produit doit mériter sa place" text="Une étape inutile n’est pas ajoutée simplement pour rendre la routine plus complète." /><Value image={valueBuy} title="Moins acheter. Mieux choisir." text="L’objectif n’est pas de multiplier les produits mais de construire une routine cohérente." /></div></section>
 
