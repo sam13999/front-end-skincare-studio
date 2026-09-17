@@ -70,8 +70,8 @@ const reportStops: ReportStop[] = [
   },
   {
     page: 3,
-    center: [405, 410],
-    focus: [45, 315, 720, 150],
+    center: [405, 365],
+    focus: [45, 315, 720, 110],
     scale: 1.3,
     title: "Objectif",
     text: "Votre priorité déclarée est réellement prise en compte.",
