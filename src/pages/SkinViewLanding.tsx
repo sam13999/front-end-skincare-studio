@@ -135,6 +135,13 @@ function ReportTour() {
   const frameRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    reportPages.forEach((source) => {
+      const image = new Image();
+      image.src = source;
+    });
+  }, []);
+
+  useEffect(() => {
     const element = frameRef.current;
     if (!element || !("IntersectionObserver" in window)) {
       setVisible(true);
