@@ -21,6 +21,15 @@ export interface GuideOval {
   radiusY: number;
 }
 
+export interface CoverCrop {
+  sourceX: number;
+  sourceY: number;
+  sourceWidth: number;
+  sourceHeight: number;
+  sourceAspectRatio: number;
+  displayAspectRatio: number;
+}
+
 export interface HeadPose {
   /** Signed angle in degrees. Positive means the user's right. */
   yawDegrees: number;
@@ -32,12 +41,14 @@ export interface CameraGuidanceState {
   faceDetected: boolean;
   faceCount: number;
   brightnessOk: boolean | null;
+  sharpnessOk: boolean | null;
   facePositionOk: boolean;
   poseOk: boolean;
   isRawValid: boolean;
   poseAngle: number | null;
   guidanceMessage: string;
   brightness: number | null;
+  sharpness: number | null;
   faceBox: FaceBox | null;
   pose: HeadPose | null;
 }
@@ -46,6 +57,10 @@ export const CAMERA_GUIDANCE_THRESHOLDS = {
   // Luma is measured on the 0–255 scale from a small video frame.
   minBrightness: 45,
   maxBrightness: 240,
+  minSharpness: 6,
+  minSharpnessProfile: 5,
+  // Same pixel criterion used by the post-capture skin-analysis validator.
+  minFacePixelSize: 400,
   centerToleranceX: 0.12,
   centerToleranceY: 0.12,
   minFaceWidth: 0.28,
@@ -79,21 +94,126 @@ export const GUIDE_OVAL: GuideOval = {
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+type FaceSizeThresholds = {
+  minFaceWidth?: number;
+  maxFaceWidth?: number;
+  minFaceHeight?: number;
+  maxFaceHeight?: number;
+};
+
+export function calculateCoverCrop(
+  sourceWidth: number,
+  sourceHeight: number,
+  displayWidth: number,
+  displayHeight: number,
+): CoverCrop {
+  if (![sourceWidth, sourceHeight, displayWidth, displayHeight].every((value) => value > 0 && Number.isFinite(value))) {
+    throw new Error("invalid_cover_crop_dimensions");
+  }
+  const sourceAspectRatio = sourceWidth / sourceHeight;
+  const displayAspectRatio = displayWidth / displayHeight;
+  if (sourceAspectRatio > displayAspectRatio) {
+    const sourceHeightVisible = sourceHeight;
+    const sourceWidthVisible = sourceHeight * displayAspectRatio;
+    return {
+      sourceX: (sourceWidth - sourceWidthVisible) / 2,
+      sourceY: 0,
+      sourceWidth: sourceWidthVisible,
+      sourceHeight: sourceHeightVisible,
+      sourceAspectRatio,
+      displayAspectRatio,
+    };
+  }
+  const sourceWidthVisible = sourceWidth;
+  const sourceHeightVisible = sourceWidth / displayAspectRatio;
+  return {
+    sourceX: 0,
+    sourceY: (sourceHeight - sourceHeightVisible) / 2,
+    sourceWidth: sourceWidthVisible,
+    sourceHeight: sourceHeightVisible,
+    sourceAspectRatio,
+    displayAspectRatio,
+  };
+}
+
+export function getGuideOvalForViewport(displayWidth: number, displayHeight: number): GuideOval {
+  const guideWidth = Math.min(displayWidth * 0.76, 360);
+  const guideHeight = guideWidth / 0.72;
+  return {
+    centerX: 0.5,
+    centerY: 0.5,
+    radiusX: guideWidth / displayWidth / 2,
+    radiusY: guideHeight / displayHeight / 2,
+  };
+}
+
+export function getGuideOvalForAspect(displayAspectRatio: number, guideWidthRatio = 0.78): GuideOval {
+  const safeAspectRatio = Math.max(0.1, displayAspectRatio);
+  const guideHeightRatio = guideWidthRatio * safeAspectRatio / 0.72;
+  return {
+    centerX: 0.5,
+    centerY: 0.5,
+    radiusX: guideWidthRatio / 2,
+    radiusY: guideHeightRatio / 2,
+  };
+}
 
 export function analyzeBrightness(data: ImageData): number {
+  return analyzeLuma(data).mean;
+}
+
+export function analyzeLuma(data: ImageData): { mean: number; stdDev: number } {
   const pixels = data.data;
-  if (!pixels.length) return 0;
+  if (!pixels.length) return { mean: 0, stdDev: 0 };
 
   // Sampling keeps the live loop inexpensive on mobile without changing the
   // meaning of the luma measurement.
   const stride = Math.max(4, Math.floor(pixels.length / 4000) * 4);
   let total = 0;
+  const luminances: number[] = [];
   let count = 0;
   for (let index = 0; index < pixels.length; index += stride) {
-    total += 0.299 * pixels[index] + 0.587 * pixels[index + 1] + 0.114 * pixels[index + 2];
+    const luminance = 0.299 * pixels[index] + 0.587 * pixels[index + 1] + 0.114 * pixels[index + 2];
+    total += luminance;
+    luminances.push(luminance);
     count += 1;
   }
-  return count ? total / count : 0;
+  const mean = count ? total / count : 0;
+  const variance = count
+    ? luminances.reduce((sum, luminance) => sum + (luminance - mean) ** 2, 0) / count
+    : 0;
+  return { mean, stdDev: Math.sqrt(variance) };
+}
+
+export function analyzeSharpness(data: ImageData): number {
+  const { width, height } = data;
+  if (width < 3 || height < 3) return 0;
+  const gray = new Float32Array(width * height);
+  for (let index = 0; index < gray.length; index += 1) {
+    const pixelIndex = index * 4;
+    gray[index] =
+      0.299 * data.data[pixelIndex]
+      + 0.587 * data.data[pixelIndex + 1]
+      + 0.114 * data.data[pixelIndex + 2];
+  }
+  let sum = 0;
+  let sumSquares = 0;
+  let count = 0;
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      const laplacian =
+        -gray[(y - 1) * width + x]
+        - gray[y * width + x - 1]
+        + 4 * gray[y * width + x]
+        - gray[y * width + x + 1]
+        - gray[(y + 1) * width + x];
+      sum += laplacian;
+      sumSquares += laplacian * laplacian;
+      count += 1;
+    }
+  }
+  const mean = count ? sum / count : 0;
+  return Math.sqrt(Math.max(0, (count ? sumSquares / count : 0) - mean * mean));
 }
 
 export function getFaceBox(landmarks: NormalizedLandmark[]): FaceBox | null {
@@ -109,11 +229,67 @@ export function getFaceBox(landmarks: NormalizedLandmark[]): FaceBox | null {
   return { left, top, right, bottom, width, height, centerX: (left + right) / 2, centerY: (top + bottom) / 2 };
 }
 
+export function mapFaceBoxToVisibleViewport(faceBox: FaceBox, crop: CoverCrop, sourceWidth: number, sourceHeight: number): FaceBox {
+  const cropLeft = crop.sourceX / sourceWidth;
+  const cropTop = crop.sourceY / sourceHeight;
+  const cropWidth = crop.sourceWidth / sourceWidth;
+  const cropHeight = crop.sourceHeight / sourceHeight;
+  const left = (faceBox.left - cropLeft) / cropWidth;
+  const top = (faceBox.top - cropTop) / cropHeight;
+  const right = (faceBox.right - cropLeft) / cropWidth;
+  const bottom = (faceBox.bottom - cropTop) / cropHeight;
+  return { left, top, right, bottom, width: right - left, height: bottom - top, centerX: (left + right) / 2, centerY: (top + bottom) / 2 };
+}
+
+export function getFaceRoi(
+  faceBox: FaceBox,
+  sourceWidth: number,
+  sourceHeight: number,
+  crop?: CoverCrop,
+): { x: number; y: number; width: number; height: number } {
+  const cropBounds = crop ?? {
+    sourceX: 0,
+    sourceY: 0,
+    sourceWidth,
+    sourceHeight,
+    sourceAspectRatio: sourceWidth / sourceHeight,
+    displayAspectRatio: sourceWidth / sourceHeight,
+  };
+  const paddingX = faceBox.width * sourceWidth * 0.05;
+  const paddingY = faceBox.height * sourceHeight * 0.05;
+  const left = Math.max(cropBounds.sourceX, faceBox.left * sourceWidth - paddingX);
+  const top = Math.max(cropBounds.sourceY, faceBox.top * sourceHeight - paddingY);
+  const right = Math.min(cropBounds.sourceX + cropBounds.sourceWidth, faceBox.right * sourceWidth + paddingX);
+  const bottom = Math.min(cropBounds.sourceY + cropBounds.sourceHeight, faceBox.bottom * sourceHeight + paddingY);
+  return { x: left, y: top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) };
+}
+
+export function readRegionFromSource(
+  source: CanvasImageSource,
+  region: { x: number; y: number; width: number; height: number },
+  canvas: HTMLCanvasElement,
+  maxSize = 512,
+): ImageData | null {
+  const scale = Math.min(1, maxSize / Math.max(region.width, region.height));
+  canvas.width = Math.max(1, Math.round(region.width * scale));
+  canvas.height = Math.max(1, Math.round(region.height * scale));
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) return null;
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(source, region.x, region.y, region.width, region.height, 0, 0, canvas.width, canvas.height);
+  return context.getImageData(0, 0, canvas.width, canvas.height);
+}
+
 export function validateFacePosition(
   faceBox: FaceBox | null,
   guideOval: GuideOval = GUIDE_OVAL,
+  sizeThresholds: FaceSizeThresholds = {},
 ): { ok: boolean; reason: "missing" | "off_center" | "too_small" | "too_large" | "ok" } {
   if (!faceBox) return { ok: false, reason: "missing" };
+  const minFaceWidth = sizeThresholds.minFaceWidth ?? CAMERA_GUIDANCE_THRESHOLDS.minFaceWidth;
+  const maxFaceWidth = sizeThresholds.maxFaceWidth ?? CAMERA_GUIDANCE_THRESHOLDS.maxFaceWidth;
+  const minFaceHeight = sizeThresholds.minFaceHeight ?? CAMERA_GUIDANCE_THRESHOLDS.minFaceHeight;
+  const maxFaceHeight = sizeThresholds.maxFaceHeight ?? CAMERA_GUIDANCE_THRESHOLDS.maxFaceHeight;
   if (
     Math.abs(faceBox.centerX - guideOval.centerX) > CAMERA_GUIDANCE_THRESHOLDS.centerToleranceX
     || Math.abs(faceBox.centerY - guideOval.centerY) > CAMERA_GUIDANCE_THRESHOLDS.centerToleranceY
@@ -121,14 +297,14 @@ export function validateFacePosition(
     return { ok: false, reason: "off_center" };
   }
   if (
-    faceBox.width < CAMERA_GUIDANCE_THRESHOLDS.minFaceWidth
-    || faceBox.height < CAMERA_GUIDANCE_THRESHOLDS.minFaceHeight
+    faceBox.width < minFaceWidth
+    || faceBox.height < minFaceHeight
   ) {
     return { ok: false, reason: "too_small" };
   }
   if (
-    faceBox.width > CAMERA_GUIDANCE_THRESHOLDS.maxFaceWidth
-    || faceBox.height > CAMERA_GUIDANCE_THRESHOLDS.maxFaceHeight
+    faceBox.width > maxFaceWidth
+    || faceBox.height > maxFaceHeight
   ) {
     return { ok: false, reason: "too_large" };
   }
@@ -207,18 +383,50 @@ export function buildCameraGuidanceState(input: {
   step: CameraStep;
   cameraReady: boolean;
   brightness: number | null;
+  sharpness: number | null;
   faces: NormalizedLandmark[][];
   transformationMatrix?: Matrix;
+  frame?: {
+    sourceWidth: number;
+    sourceHeight: number;
+    displayWidth: number;
+    displayHeight: number;
+    guideRect?: { left: number; top: number; width: number; height: number };
+  };
 }): CameraGuidanceState {
-  const { step, cameraReady, brightness, faces, transformationMatrix } = input;
+  const { step, cameraReady, faces, transformationMatrix, frame } = input;
   const faceDetected = faces.length > 0;
   const faceCount = faces.length;
-  const faceBox = faceDetected ? getFaceBox(faces[0]) : null;
-  const position = faceCount === 1 ? validateFacePosition(faceBox) : { ok: false, reason: "missing" as const };
+  const sourceFaceBox = faceDetected ? getFaceBox(faces[0]) : null;
+  const crop = frame ? calculateCoverCrop(frame.sourceWidth, frame.sourceHeight, frame.displayWidth, frame.displayHeight) : undefined;
+  const faceBox = sourceFaceBox && frame
+    ? mapFaceBoxToVisibleViewport(sourceFaceBox, crop, frame.sourceWidth, frame.sourceHeight)
+    : sourceFaceBox;
+  const guideOval = frame?.guideRect
+    ? {
+      centerX: (frame.guideRect.left + frame.guideRect.width / 2) / frame.displayWidth,
+      centerY: (frame.guideRect.top + frame.guideRect.height / 2) / frame.displayHeight,
+      radiusX: frame.guideRect.width / frame.displayWidth / 2,
+      radiusY: frame.guideRect.height / frame.displayHeight / 2,
+    }
+    : frame ? getGuideOvalForViewport(frame.displayWidth, frame.displayHeight) : GUIDE_OVAL;
+  const positionSizeThresholds = frame
+    ? {
+      // The post-capture validator requires both face dimensions to be at
+      // least minFacePixelSize. Apply that same requirement in visible-space.
+      minFaceWidth: Math.max(CAMERA_GUIDANCE_THRESHOLDS.minFaceWidth, CAMERA_GUIDANCE_THRESHOLDS.minFacePixelSize / crop.sourceWidth),
+      minFaceHeight: Math.max(CAMERA_GUIDANCE_THRESHOLDS.minFaceHeight, CAMERA_GUIDANCE_THRESHOLDS.minFacePixelSize / crop.sourceHeight),
+    }
+    : undefined;
+  const position = faceCount === 1 ? validateFacePosition(faceBox, guideOval, positionSizeThresholds) : { ok: false, reason: "missing" as const };
   const pose = faceCount === 1 ? estimateHeadPose(faces[0], transformationMatrix) : null;
+  const brightness = input.brightness ?? null;
+  const sharpness = input.sharpness ?? null;
   const brightnessOk = brightness === null
     ? null
     : brightness >= CAMERA_GUIDANCE_THRESHOLDS.minBrightness && brightness <= CAMERA_GUIDANCE_THRESHOLDS.maxBrightness;
+  const sharpnessThreshold = step === "face" ? CAMERA_GUIDANCE_THRESHOLDS.minSharpness : CAMERA_GUIDANCE_THRESHOLDS.minSharpnessProfile;
+  const sharpnessOk = sharpness === null ? null : sharpness >= sharpnessThreshold;
   const poseOk = step === "face" ? validateFrontPose(pose) : validateRightPose20to30(pose);
 
   let guidanceMessage = "Préparez-vous pour la photo.";
@@ -226,6 +434,7 @@ export function buildCameraGuidanceState(input: {
   else if (faceCount === 0) guidanceMessage = "Placez votre visage dans le cadre";
   else if (faceCount > 1) guidanceMessage = "Une seule personne doit être visible";
   else if (brightnessOk === false) guidanceMessage = "Mettez-vous dans un endroit plus lumineux";
+  else if (sharpnessOk === false) guidanceMessage = "L’image est trop floue, stabilisez le téléphone";
   else if (!position.ok && position.reason === "too_small") guidanceMessage = "Rapprochez-vous légèrement";
   else if (!position.ok && position.reason === "too_large") guidanceMessage = "Éloignez-vous légèrement";
   else if (!position.ok) guidanceMessage = "Placez votre visage dans le cadre";
@@ -242,12 +451,14 @@ export function buildCameraGuidanceState(input: {
     faceDetected,
     faceCount,
     brightnessOk,
+    sharpnessOk,
     facePositionOk: position.ok,
     poseOk,
-    isRawValid: cameraReady && faceCount === 1 && brightnessOk === true && position.ok && poseOk,
+    isRawValid: cameraReady && faceCount === 1 && brightnessOk === true && position.ok && poseOk && sharpnessOk === true,
     poseAngle: pose?.yawDegrees ?? null,
     guidanceMessage,
     brightness,
+    sharpness,
     faceBox,
     pose,
   };

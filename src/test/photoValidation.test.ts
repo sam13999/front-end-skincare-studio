@@ -6,7 +6,13 @@ import {
   type FaceObservation,
 } from "@/components/diagnostic/photoValidation";
 import {
+  analyzeBrightness,
+  analyzeSharpness,
   buildCameraGuidanceState,
+  calculateCoverCrop,
+  getFaceBox,
+  getFaceRoi,
+  mapFaceBoxToVisibleViewport,
   validateRightPose20to30,
   type HeadPose,
 } from "@/components/diagnostic/cameraGuidance";
@@ -68,15 +74,74 @@ const makeLandmarks = (noseX = 0.5, shiftX = 0) => {
   return landmarks;
 };
 
-const liveState = (step: "face" | "profile", brightness: number | null, noseX = 0.5, shiftX = 0) =>
+const liveState = (step: "face" | "profile", brightness: number | null, noseX = 0.5, shiftX = 0, sharpness = 100) =>
   buildCameraGuidanceState({
     step,
     cameraReady: true,
     brightness,
+    sharpness,
     faces: [makeLandmarks(noseX, shiftX)],
   });
 
+const makeImageData = (width: number, height: number, fill = 0): ImageData => ({
+  width,
+  height,
+  data: new Uint8ClampedArray(width * height * 4).fill(fill),
+  colorSpace: "srgb",
+});
+
 describe("real-time camera guidance", () => {
+  it("calculates the same centered cover crop as the camera preview", () => {
+    const portraitCrop = calculateCoverCrop(1080, 1920, 390, 844);
+    const tallCrop = calculateCoverCrop(400, 1200, 390, 844);
+
+    expect(portraitCrop.sourceX).toBeGreaterThan(0);
+    expect(portraitCrop.sourceY).toBe(0);
+    expect(portraitCrop.sourceWidth / portraitCrop.sourceHeight).toBeCloseTo(390 / 844, 5);
+    expect(tallCrop.sourceX).toBe(0);
+    expect(tallCrop.sourceY).toBeGreaterThan(0);
+    expect(tallCrop.sourceWidth / tallCrop.sourceHeight).toBeCloseTo(390 / 844, 5);
+  });
+
+  it("maps a native face box into the visible cropped viewport", () => {
+    const crop = calculateCoverCrop(1080, 1920, 390, 844);
+    const sourceBox = getFaceBox([
+      { x: 0.36, y: 0.1, z: 0, visibility: 1 },
+      { x: 0.64, y: 0.9, z: 0, visibility: 1 },
+    ]);
+    const visibleBox = mapFaceBoxToVisibleViewport(sourceBox!, crop, 1080, 1920);
+
+    expect(visibleBox.centerX).toBeCloseTo(0.5, 5);
+    expect(visibleBox.width).toBeCloseTo(0.28 / (crop.sourceWidth / 1080), 5);
+    expect(getFaceRoi(sourceBox!, 1080, 1920, crop).x).toBeGreaterThanOrEqual(crop.sourceX);
+  });
+
+  it("measures face brightness instead of accepting a bright background", () => {
+    const brightBackground = makeImageData(4, 4);
+    brightBackground.data.fill(240);
+    const darkFace = makeImageData(4, 4);
+    darkFace.data.fill(20);
+
+    expect(analyzeBrightness(brightBackground)).toBeGreaterThan(45);
+    expect(analyzeBrightness(darkFace)).toBeLessThan(45);
+  });
+
+  it("rejects a flat image and accepts a high-frequency sharp image", () => {
+    const flat = makeImageData(8, 8);
+    flat.data.fill(120);
+    const sharp = makeImageData(8, 8);
+    for (let index = 0; index < sharp.data.length; index += 4) {
+      const pixel = (index / 4) % 2 ? 0 : 255;
+      sharp.data[index] = pixel;
+      sharp.data[index + 1] = pixel;
+      sharp.data[index + 2] = pixel;
+      sharp.data[index + 3] = 255;
+    }
+
+    expect(analyzeSharpness(flat)).toBe(0);
+    expect(analyzeSharpness(sharp)).toBeGreaterThan(6);
+  });
+
   it("validates a frontal face in good light", () => {
     const state = liveState("face", 100);
 
@@ -92,6 +157,14 @@ describe("real-time camera guidance", () => {
     expect(state.brightnessOk).toBe(false);
     expect(state.isRawValid).toBe(false);
     expect(state.guidanceMessage).toContain("plus lumineux");
+  });
+
+  it("keeps a blurry frame invalid even when the other badges pass", () => {
+    const state = liveState("face", 100, 0.5, 0, 0);
+
+    expect(state.sharpnessOk).toBe(false);
+    expect(state.isRawValid).toBe(false);
+    expect(state.guidanceMessage).toContain("floue");
   });
 
   it("accepts the right-turn target only inside 20°–30°", () => {
@@ -134,7 +207,7 @@ describe("real-time camera guidance", () => {
   });
 
   it("rejects the absence of a face", () => {
-    const state = buildCameraGuidanceState({ step: "face", cameraReady: true, brightness: 100, faces: [] });
+    const state = buildCameraGuidanceState({ step: "face", cameraReady: true, brightness: 100, sharpness: 100, faces: [] });
 
     expect(state.faceDetected).toBe(false);
     expect(state.isRawValid).toBe(false);

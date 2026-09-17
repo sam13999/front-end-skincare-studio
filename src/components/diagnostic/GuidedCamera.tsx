@@ -2,10 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { Check, CheckCircle2, Loader2, X, XCircle } from "lucide-react";
 import {
   CAMERA_GUIDANCE_THRESHOLDS,
+  analyzeSharpness,
+  calculateCoverCrop,
   buildCameraGuidanceState,
   analyzeBrightness,
+  getFaceBox,
+  getFaceRoi,
   getVideoFaceLandmarker,
   getVideoGuidanceResult,
+  readRegionFromSource,
   type CameraGuidanceState,
   type CameraStep,
 } from "./cameraGuidance";
@@ -21,6 +26,7 @@ const EMPTY_STATE: CameraGuidanceState = buildCameraGuidanceState({
   step: "face",
   cameraReady: false,
   brightness: null,
+  sharpness: null,
   faces: [],
 });
 
@@ -98,24 +104,44 @@ export const GuidedCamera = ({ step, onCapture, onClose, onFallback }: GuidedCam
           processingRef.current = true;
 
           try {
-            const brightnessCanvas = brightnessCanvasRef.current;
-            let brightness: number | null = null;
-            if (brightnessCanvas) {
-              brightnessCanvas.width = 160;
-              brightnessCanvas.height = 120;
-              const context = brightnessCanvas.getContext("2d", { willReadFrequently: true });
-              if (context) {
-                context.drawImage(video, 0, 0, brightnessCanvas.width, brightnessCanvas.height);
-                brightness = analyzeBrightness(context.getImageData(0, 0, brightnessCanvas.width, brightnessCanvas.height));
-              }
-            }
             const result = getVideoGuidanceResult(landmarker, video, Math.max(time, lastAnalysisRef.current));
+            const metricsCanvas = brightnessCanvasRef.current;
+            const videoRect = video.getBoundingClientRect();
+            const displayWidth = videoRect.width || video.clientWidth || window.innerWidth;
+            const displayHeight = videoRect.height || video.clientHeight || window.innerHeight;
+            const crop = calculateCoverCrop(video.videoWidth, video.videoHeight, displayWidth, displayHeight);
+            const sourceFaceBox = result.faceLandmarks.length === 1 ? getFaceBox(result.faceLandmarks[0]) : null;
+            const qualityRegion = sourceFaceBox
+              ? getFaceRoi(sourceFaceBox, video.videoWidth, video.videoHeight, crop)
+              : {
+                x: crop.sourceX,
+                y: crop.sourceY,
+                width: crop.sourceWidth,
+                height: crop.sourceHeight,
+              };
+            const qualityData = metricsCanvas
+              ? readRegionFromSource(video, qualityRegion, metricsCanvas)
+              : null;
+            const brightness = qualityData ? analyzeBrightness(qualityData) : null;
+            const sharpness = qualityData ? analyzeSharpness(qualityData) : null;
+            const guideElement = video.parentElement?.querySelector<HTMLElement>(".svd-camera-guide");
+            const guideRect = guideElement?.getBoundingClientRect();
             const nextState = buildCameraGuidanceState({
               step,
               cameraReady: true,
               brightness,
+              sharpness,
               faces: result.faceLandmarks,
               transformationMatrix: result.facialTransformationMatrixes?.[0],
+              frame: {
+                sourceWidth: video.videoWidth,
+                sourceHeight: video.videoHeight,
+                displayWidth,
+                displayHeight,
+                guideRect: guideRect && guideRect.width > 0 && guideRect.height > 0
+                  ? { left: guideRect.left, top: guideRect.top, width: guideRect.width, height: guideRect.height }
+                  : undefined,
+              },
             });
             setState(nextState);
             setStableFrames((current) => nextState.isRawValid ? current + 1 : 0);
@@ -149,15 +175,35 @@ export const GuidedCamera = ({ step, onCapture, onClose, onFallback }: GuidedCam
 
   const capture = () => {
     if (!isStable) return;
+    // Do not use a stale green frame if analysis was paused while the device
+    // was moving or the tab was backgrounded.
+    if (performance.now() - lastAnalysisRef.current > CAMERA_GUIDANCE_THRESHOLDS.analysisIntervalMs * 2) {
+      setStableFrames(0);
+      return;
+    }
     const video = videoRef.current;
     if (!video?.videoWidth || !video.videoHeight) return;
+    const videoRect = video.getBoundingClientRect();
+    const displayWidth = videoRect.width || video.clientWidth || window.innerWidth;
+    const displayHeight = videoRect.height || video.clientHeight || window.innerHeight;
+    const crop = calculateCoverCrop(video.videoWidth, video.videoHeight, displayWidth, displayHeight);
     const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = Math.max(1, Math.round(crop.sourceWidth));
+    canvas.height = Math.max(1, Math.round(crop.sourceHeight));
     const context = canvas.getContext("2d");
     if (!context) return;
     // Keep the same unmirrored source orientation as the former file-input flow.
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    context.drawImage(
+      video,
+      crop.sourceX,
+      crop.sourceY,
+      crop.sourceWidth,
+      crop.sourceHeight,
+      0,
+      0,
+      canvas.width,
+      canvas.height,
+    );
     canvas.toBlob((blob) => {
       if (!blob) return;
       const reader = new FileReader();

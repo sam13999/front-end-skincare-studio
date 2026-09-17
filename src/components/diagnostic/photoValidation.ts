@@ -1,8 +1,13 @@
 import type { Detection, FaceDetector as MediaPipeFaceDetector } from "@mediapipe/tasks-vision";
 import {
+  analyzeLuma,
+  analyzeSharpness,
   estimateHeadPose,
   getFaceBox,
+  getFaceRoi,
+  getGuideOvalForAspect,
   getImageFaceLandmarker,
+  readRegionFromSource,
   validateFacePosition,
   validateFrontPose,
   validateRightPose20to30,
@@ -149,62 +154,15 @@ async function getFaceDetector(): Promise<MediaPipeFaceDetector> {
   return detectorPromise;
 }
 
-function getImageData(img: HTMLImageElement, maxSize = 512): ImageData {
+function getImageData(
+  img: HTMLImageElement,
+  region = { x: 0, y: 0, width: img.naturalWidth, height: img.naturalHeight },
+  maxSize = 512,
+): ImageData {
   const canvas = document.createElement("canvas");
-  const scale = Math.min(1, maxSize / Math.max(img.naturalWidth, img.naturalHeight));
-  canvas.width = Math.round(img.naturalWidth * scale);
-  canvas.height = Math.round(img.naturalHeight * scale);
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("canvas_unavailable");
-  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-  return ctx.getImageData(0, 0, canvas.width, canvas.height);
-}
-
-function analyzeBrightness(data: ImageData): { mean: number; stdDev: number } {
-  const pixels = data.data;
-  const count = pixels.length / 4;
-  let sum = 0;
-  const lums = new Float32Array(count);
-  for (let i = 0, j = 0; i < pixels.length; i += 4, j += 1) {
-    const luminance = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
-    lums[j] = luminance;
-    sum += luminance;
-  }
-  const mean = sum / count;
-  let varianceSum = 0;
-  for (let index = 0; index < count; index += 1) varianceSum += (lums[index] - mean) ** 2;
-  return { mean, stdDev: Math.sqrt(varianceSum / count) };
-}
-
-function analyzeSharpness(data: ImageData): number {
-  const { width, height } = data;
-  const gray = new Float32Array(width * height);
-  for (let index = 0; index < gray.length; index += 1) {
-    const pixelIndex = index * 4;
-    gray[index] =
-      0.299 * data.data[pixelIndex] +
-      0.587 * data.data[pixelIndex + 1] +
-      0.114 * data.data[pixelIndex + 2];
-  }
-
-  let sum = 0;
-  let sumSquares = 0;
-  let count = 0;
-  for (let y = 1; y < height - 1; y += 1) {
-    for (let x = 1; x < width - 1; x += 1) {
-      const laplacian =
-        -gray[(y - 1) * width + x] -
-        gray[y * width + (x - 1)] +
-        4 * gray[y * width + x] -
-        gray[y * width + (x + 1)] -
-        gray[(y + 1) * width + x];
-      sum += laplacian;
-      sumSquares += laplacian * laplacian;
-      count += 1;
-    }
-  }
-  const mean = sum / count;
-  return Math.sqrt(Math.max(0, sumSquares / count - mean * mean));
+  const imageData = readRegionFromSource(img, region, canvas, maxSize);
+  if (!imageData) throw new Error("canvas_unavailable");
+  return imageData;
 }
 
 function detectMimeFromDataUrl(dataUrl: string): string | null {
@@ -338,9 +296,17 @@ export async function validatePhoto(
   }
 
   let faceObservations: FaceObservation[] = [];
+  let landmarkFaceBox: ReturnType<typeof getFaceBox> = null;
   try {
     const detector = await getFaceDetector();
     faceObservations = toFaceObservations(detector.detect(img).detections);
+    const detectorBox = faceObservations[0]?.box;
+    if (detectorBox) {
+      landmarkFaceBox = getFaceBox([
+        { x: detectorBox.originX / img.naturalWidth, y: detectorBox.originY / img.naturalHeight, z: 0, visibility: 1 },
+        { x: (detectorBox.originX + detectorBox.width) / img.naturalWidth, y: (detectorBox.originY + detectorBox.height) / img.naturalHeight, z: 0, visibility: 1 },
+      ]);
+    }
     issues.push(...evaluateFaceObservations(faceObservations, img.naturalWidth, img.naturalHeight, config));
 
     // Imported images use the same landmark and pose gates as live captures;
@@ -357,7 +323,15 @@ export async function validatePhoto(
       });
     } else {
       const landmarks = landmarkResult.faceLandmarks[0];
-      const position = validateFacePosition(getFaceBox(landmarks));
+      landmarkFaceBox = getFaceBox(landmarks);
+      const position = validateFacePosition(
+        landmarkFaceBox,
+        getGuideOvalForAspect(img.naturalWidth / img.naturalHeight),
+        {
+          minFaceWidth: Math.max(0.28, faceConfig.minFacePixelSize / img.naturalWidth),
+          minFaceHeight: Math.max(0.36, faceConfig.minFacePixelSize / img.naturalHeight),
+        },
+      );
       if (!position.ok) {
         issues.push({
           code: "face_outside_guide",
@@ -395,8 +369,14 @@ export async function validatePhoto(
   let brightness = 0;
   let sharpness = 0;
   try {
-    const imageData = getImageData(img);
-    const brightnessResult = analyzeBrightness(imageData);
+    // The live loop measures the face ROI. Reuse the exact same ROI and
+    // downsampled canvas here so the capture cannot pass one quality test and
+    // fail another because the background changed the average.
+    const qualityRegion = landmarkFaceBox
+      ? getFaceRoi(landmarkFaceBox, img.naturalWidth, img.naturalHeight)
+      : { x: 0, y: 0, width: img.naturalWidth, height: img.naturalHeight };
+    const imageData = getImageData(img, qualityRegion);
+    const brightnessResult = analyzeLuma(imageData);
     brightness = brightnessResult.mean;
     sharpness = analyzeSharpness(imageData);
 
