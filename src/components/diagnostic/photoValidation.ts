@@ -21,7 +21,8 @@ export interface PhotoValidationConfig {
   maxResolution: number;
   minFileSizeKB: number;
   maxFileSizeKB: number;
-  minFacePixelSize: number;
+  minFaceWidthRatio: number;
+  minFaceHeightRatio: number;
   minVisibleFaceRatio: number;
 }
 
@@ -34,8 +35,11 @@ export const faceConfig: PhotoValidationConfig = {
   maxResolution: 4095,
   minFileSizeKB: 100,
   maxFileSizeKB: 5 * 1024,
-  minFacePixelSize: 400,
-  minVisibleFaceRatio: 0.9,
+  // Keep the post-capture geometry in the same relative coordinate system as
+  // the guided camera. Absolute pixel thresholds were device/crop dependent.
+  minFaceWidthRatio: 0.2,
+  minFaceHeightRatio: 0.28,
+  minVisibleFaceRatio: 0.8,
 };
 
 export const profileConfig: PhotoValidationConfig = {
@@ -216,7 +220,10 @@ export function evaluateFaceObservations(
       },
     ];
   }
-  if (Math.min(width, height) < config.minFacePixelSize) {
+  if (
+    width / Math.max(1, imageWidth) < config.minFaceWidthRatio
+    || height / Math.max(1, imageHeight) < config.minFaceHeightRatio
+  ) {
     return [
       {
         code: "face_too_small",
@@ -327,10 +334,6 @@ export async function validatePhoto(
       const position = validateFacePosition(
         landmarkFaceBox,
         getGuideOvalForAspect(img.naturalWidth / img.naturalHeight),
-        {
-          minFaceWidth: Math.max(0.28, faceConfig.minFacePixelSize / img.naturalWidth),
-          minFaceHeight: Math.max(0.36, faceConfig.minFacePixelSize / img.naturalHeight),
-        },
       );
       if (!position.ok) {
         issues.push({

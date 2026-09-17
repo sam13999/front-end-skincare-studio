@@ -13,6 +13,7 @@ import {
   getFaceBox,
   getFaceRoi,
   mapFaceBoxToVisibleViewport,
+  validateFacePosition,
   validateRightPose20to30,
   type HeadPose,
 } from "@/components/diagnostic/cameraGuidance";
@@ -40,7 +41,7 @@ describe("photo face validation", () => {
 
   it("refuses a face that is too small for skin analysis", () => {
     const issues = evaluateFaceObservations(
-      [{ ...validFace, box: { originX: 350, originY: 350, width: 240, height: 280 } }],
+      [{ ...validFace, box: { originX: 425, originY: 390, width: 150, height: 220 } }],
       1000,
       1000,
       faceConfig
@@ -51,6 +52,39 @@ describe("photo face validation", () => {
 
   it("accepts one sufficiently visible face", () => {
     expect(evaluateFaceObservations([validFace], 1000, 1000, faceConfig)).toEqual([]);
+  });
+
+  it("accepts a clearly visible face around the live relative thresholds", () => {
+    const issues = evaluateFaceObservations(
+      [{ ...validFace, box: { originX: 375, originY: 350, width: 230, height: 300 } }],
+      1000,
+      1000,
+      faceConfig,
+    );
+
+    expect(issues).toEqual([]);
+  });
+
+  it("accepts a slightly cropped but still exploitable face", () => {
+    const issues = evaluateFaceObservations(
+      [{ ...validFace, box: { originX: -20, originY: 250, width: 300, height: 500 } }],
+      1000,
+      1000,
+      faceConfig,
+    );
+
+    expect(issues).toEqual([]);
+  });
+
+  it("rejects a face that is substantially cut off", () => {
+    const issues = evaluateFaceObservations(
+      [{ ...validFace, box: { originX: -180, originY: 250, width: 300, height: 500 } }],
+      1000,
+      1000,
+      faceConfig,
+    );
+
+    expect(issues[0].code).toBe("face_cut_off");
   });
 
   it("accepts JPEG files and rejects unsupported image formats", () => {
@@ -204,6 +238,21 @@ describe("real-time camera guidance", () => {
 
     expect(state.facePositionOk).toBe(false);
     expect(state.isRawValid).toBe(false);
+  });
+
+  it("does not require the entire face box to fit inside the oval", () => {
+    const position = validateFacePosition({
+      left: 0.12,
+      top: 0.25,
+      right: 0.72,
+      bottom: 0.75,
+      width: 0.6,
+      height: 0.5,
+      centerX: 0.42,
+      centerY: 0.5,
+    });
+
+    expect(position.ok).toBe(true);
   });
 
   it("rejects the absence of a face", () => {
