@@ -59,14 +59,14 @@ export const CAMERA_GUIDANCE_THRESHOLDS = {
   maxBrightness: 240,
   minSharpness: 6,
   minSharpnessProfile: 5,
-  // Same pixel criterion used by the post-capture skin-analysis validator.
-  minFacePixelSize: 400,
-  centerToleranceX: 0.12,
-  centerToleranceY: 0.12,
-  minFaceWidth: 0.28,
-  maxFaceWidth: 0.68,
-  minFaceHeight: 0.36,
-  maxFaceHeight: 0.82,
+  // A readable face is enough for the guided capture. The previous 400 px
+  // projection was too demanding on portrait camera streams.
+  centerToleranceX: 0.18,
+  centerToleranceY: 0.16,
+  minFaceWidth: 0.2,
+  maxFaceWidth: 0.78,
+  minFaceHeight: 0.28,
+  maxFaceHeight: 0.88,
   frontYawMax: 12,
   frontRollMax: 15,
   rightYawMinExclusive: 20,
@@ -308,14 +308,8 @@ export function validateFacePosition(
   ) {
     return { ok: false, reason: "too_large" };
   }
-  if (
-    faceBox.left < guideOval.centerX - guideOval.radiusX
-    || faceBox.right > guideOval.centerX + guideOval.radiusX
-    || faceBox.top < guideOval.centerY - guideOval.radiusY
-    || faceBox.bottom > guideOval.centerY + guideOval.radiusY
-  ) {
-    return { ok: false, reason: "off_center" };
-  }
+  // The oval is a visual guide, not a hard pixel mask. Center and size are
+  // sufficient to keep the face analysable without forcing a rigid selfie.
   return { ok: true, reason: "ok" };
 }
 
@@ -410,15 +404,7 @@ export function buildCameraGuidanceState(input: {
       radiusY: frame.guideRect.height / frame.displayHeight / 2,
     }
     : frame ? getGuideOvalForViewport(frame.displayWidth, frame.displayHeight) : GUIDE_OVAL;
-  const positionSizeThresholds = frame
-    ? {
-      // The post-capture validator requires both face dimensions to be at
-      // least minFacePixelSize. Apply that same requirement in visible-space.
-      minFaceWidth: Math.max(CAMERA_GUIDANCE_THRESHOLDS.minFaceWidth, CAMERA_GUIDANCE_THRESHOLDS.minFacePixelSize / crop.sourceWidth),
-      minFaceHeight: Math.max(CAMERA_GUIDANCE_THRESHOLDS.minFaceHeight, CAMERA_GUIDANCE_THRESHOLDS.minFacePixelSize / crop.sourceHeight),
-    }
-    : undefined;
-  const position = faceCount === 1 ? validateFacePosition(faceBox, guideOval, positionSizeThresholds) : { ok: false, reason: "missing" as const };
+  const position = faceCount === 1 ? validateFacePosition(faceBox, guideOval) : { ok: false, reason: "missing" as const };
   const pose = faceCount === 1 ? estimateHeadPose(faces[0], transformationMatrix) : null;
   const brightness = input.brightness ?? null;
   const sharpness = input.sharpness ?? null;
