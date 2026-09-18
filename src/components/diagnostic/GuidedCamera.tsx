@@ -31,6 +31,10 @@ const EMPTY_STATE: CameraGuidanceState = buildCameraGuidanceState({
   faces: [],
 });
 
+const CAMERA_CAPTURE_MAX_DIMENSION = 4095;
+const CAMERA_CAPTURE_MAX_BYTES = 5 * 1024 * 1024;
+const CAMERA_CAPTURE_JPEG_QUALITY = 0.97;
+
 function Indicator({ label, value }: { label: string; value: boolean | null }) {
   const status = value === null ? "pending" : value ? "valid" : "invalid";
   return (
@@ -78,10 +82,14 @@ export const GuidedCamera = ({ step, onCapture, onClose, onFallback }: GuidedCam
           audio: false,
           video: {
             facingMode: { ideal: "user" },
-            width: { ideal: 720 },
-            height: { ideal: 960 },
+            width: { ideal: 1440 },
+            height: { ideal: 1920 },
           },
         });
+        const videoTrack = stream.getVideoTracks()[0];
+        if (videoTrack) {
+          void videoTrack.getSettings();
+        }
         if (!active) {
           stream.getTracks().forEach((track) => track.stop());
           return;
@@ -212,31 +220,51 @@ export const GuidedCamera = ({ step, onCapture, onClose, onFallback }: GuidedCam
     const displayWidth = videoRect.width || video.clientWidth || window.innerWidth;
     const displayHeight = videoRect.height || video.clientHeight || window.innerHeight;
     const crop = calculateCoverCrop(video.videoWidth, video.videoHeight, displayWidth, displayHeight);
+    const scale = Math.min(
+      1,
+      CAMERA_CAPTURE_MAX_DIMENSION / Math.max(crop.sourceWidth, crop.sourceHeight),
+    );
+    const initialWidth = Math.max(1, Math.round(crop.sourceWidth * scale));
+    const initialHeight = Math.max(1, Math.round(crop.sourceHeight * scale));
     const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(crop.sourceWidth));
-    canvas.height = Math.max(1, Math.round(crop.sourceHeight));
     const context = canvas.getContext("2d");
     if (!context) return;
-    // Keep the same unmirrored source orientation as the former file-input flow.
-    context.drawImage(
-      video,
-      crop.sourceX,
-      crop.sourceY,
-      crop.sourceWidth,
-      crop.sourceHeight,
-      0,
-      0,
-      canvas.width,
-      canvas.height,
-    );
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === "string") onCapture(reader.result, blob.size);
-      };
-      reader.readAsDataURL(blob);
-    }, "image/jpeg", 0.92);
+
+    const encodeCapture = (width: number, height: number) => {
+      canvas.width = width;
+      canvas.height = height;
+      // Keep the same unmirrored source orientation as the former file-input flow.
+      context.drawImage(
+        video,
+        crop.sourceX,
+        crop.sourceY,
+        crop.sourceWidth,
+        crop.sourceHeight,
+        0,
+        0,
+        width,
+        height,
+      );
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        if (blob.size > CAMERA_CAPTURE_MAX_BYTES && (width > 1 || height > 1)) {
+          const scaleToLimit = Math.sqrt(CAMERA_CAPTURE_MAX_BYTES / blob.size);
+          const nextWidth = Math.max(1, Math.min(width - 1, Math.floor(width * scaleToLimit)));
+          const nextHeight = Math.max(1, Math.min(height - 1, Math.floor(height * scaleToLimit)));
+          if (nextWidth < width || nextHeight < height) {
+            encodeCapture(nextWidth, nextHeight);
+            return;
+          }
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === "string") onCapture(reader.result, blob.size);
+        };
+        reader.readAsDataURL(blob);
+      }, "image/jpeg", CAMERA_CAPTURE_JPEG_QUALITY);
+    };
+
+    encodeCapture(initialWidth, initialHeight);
   };
 
   return (
