@@ -35,6 +35,37 @@ const CAMERA_CAPTURE_MAX_DIMENSION = 4095;
 const CAMERA_CAPTURE_MAX_BYTES = 5 * 1024 * 1024;
 const CAMERA_CAPTURE_JPEG_QUALITY = 0.97;
 
+type NativeImageCapture = {
+  takePhoto: () => Promise<Blob>;
+};
+
+type NativeImageCaptureConstructor = new (track: MediaStreamTrack) => NativeImageCapture;
+
+type NativeBitmapFactory = (
+  blob: Blob,
+  options?: { imageOrientation?: "none" | "from-image" },
+) => Promise<ImageBitmap>;
+
+function createNativeImageCapture(track: MediaStreamTrack): NativeImageCapture | null {
+  const browserWindow = window as unknown as { ImageCapture?: NativeImageCaptureConstructor };
+  const ImageCaptureConstructor = browserWindow.ImageCapture;
+  if (typeof ImageCaptureConstructor !== "function") return null;
+
+  try {
+    const imageCapture = new ImageCaptureConstructor(track);
+    return typeof imageCapture.takePhoto === "function" ? imageCapture : null;
+  } catch {
+    return null;
+  }
+}
+
+async function decodeNativePhoto(blob: Blob): Promise<ImageBitmap> {
+  const browserWindow = window as unknown as { createImageBitmap?: NativeBitmapFactory };
+  const createBitmap = browserWindow.createImageBitmap;
+  if (typeof createBitmap !== "function") throw new Error("native_photo_decode_unavailable");
+  return createBitmap(blob, { imageOrientation: "from-image" });
+}
+
 function Indicator({ label, value }: { label: string; value: boolean | null }) {
   const status = value === null ? "pending" : value ? "valid" : "invalid";
   return (
@@ -219,52 +250,108 @@ export const GuidedCamera = ({ step, onCapture, onClose, onFallback }: GuidedCam
     const videoRect = video.getBoundingClientRect();
     const displayWidth = videoRect.width || video.clientWidth || window.innerWidth;
     const displayHeight = videoRect.height || video.clientHeight || window.innerHeight;
-    const crop = calculateCoverCrop(video.videoWidth, video.videoHeight, displayWidth, displayHeight);
-    const scale = Math.min(
-      1,
-      CAMERA_CAPTURE_MAX_DIMENSION / Math.max(crop.sourceWidth, crop.sourceHeight),
-    );
-    const initialWidth = Math.max(1, Math.round(crop.sourceWidth * scale));
-    const initialHeight = Math.max(1, Math.round(crop.sourceHeight * scale));
-    const canvas = document.createElement("canvas");
-    const context = canvas.getContext("2d");
-    if (!context) return;
 
-    const encodeCapture = (width: number, height: number) => {
-      canvas.width = width;
-      canvas.height = height;
-      // Keep the same unmirrored source orientation as the former file-input flow.
-      context.drawImage(
-        video,
-        crop.sourceX,
-        crop.sourceY,
-        crop.sourceWidth,
-        crop.sourceHeight,
-        0,
-        0,
-        width,
-        height,
+    const encodeCapture = (
+      source: HTMLVideoElement | ImageBitmap,
+      sourceWidth: number,
+      sourceHeight: number,
+    ): Promise<void> => new Promise((resolve, reject) => {
+      const crop = calculateCoverCrop(sourceWidth, sourceHeight, displayWidth, displayHeight);
+      const scale = Math.min(
+        1,
+        CAMERA_CAPTURE_MAX_DIMENSION / Math.max(crop.sourceWidth, crop.sourceHeight),
       );
-      canvas.toBlob((blob) => {
-        if (!blob) return;
-        if (blob.size > CAMERA_CAPTURE_MAX_BYTES && (width > 1 || height > 1)) {
-          const scaleToLimit = Math.sqrt(CAMERA_CAPTURE_MAX_BYTES / blob.size);
-          const nextWidth = Math.max(1, Math.min(width - 1, Math.floor(width * scaleToLimit)));
-          const nextHeight = Math.max(1, Math.min(height - 1, Math.floor(height * scaleToLimit)));
-          if (nextWidth < width || nextHeight < height) {
-            encodeCapture(nextWidth, nextHeight);
+      const initialWidth = Math.max(1, Math.round(crop.sourceWidth * scale));
+      const initialHeight = Math.max(1, Math.round(crop.sourceHeight * scale));
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d");
+      if (!context) {
+        reject(new Error("capture_canvas_unavailable"));
+        return;
+      }
+
+      const encode = (width: number, height: number) => {
+        canvas.width = width;
+        canvas.height = height;
+        try {
+          // Keep the same unmirrored source orientation as the former file-input flow.
+          context.drawImage(
+            source,
+            crop.sourceX,
+            crop.sourceY,
+            crop.sourceWidth,
+            crop.sourceHeight,
+            0,
+            0,
+            width,
+            height,
+          );
+        } catch (error) {
+          reject(error);
+          return;
+        }
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error("capture_blob_unavailable"));
             return;
           }
-        }
-        const reader = new FileReader();
-        reader.onload = () => {
-          if (typeof reader.result === "string") onCapture(reader.result, blob.size);
-        };
-        reader.readAsDataURL(blob);
-      }, "image/jpeg", CAMERA_CAPTURE_JPEG_QUALITY);
+          if (blob.size > CAMERA_CAPTURE_MAX_BYTES && (width > 1 || height > 1)) {
+            const scaleToLimit = Math.sqrt(CAMERA_CAPTURE_MAX_BYTES / blob.size);
+            const nextWidth = Math.max(1, Math.min(width - 1, Math.floor(width * scaleToLimit)));
+            const nextHeight = Math.max(1, Math.min(height - 1, Math.floor(height * scaleToLimit)));
+            if (nextWidth < width || nextHeight < height) {
+              encode(nextWidth, nextHeight);
+              return;
+            }
+          }
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (typeof reader.result !== "string") {
+              reject(new Error("capture_data_url_unavailable"));
+              return;
+            }
+            onCapture(reader.result, blob.size);
+            resolve();
+          };
+          reader.onerror = () => reject(new Error("capture_file_read_failed"));
+          reader.readAsDataURL(blob);
+        }, "image/jpeg", CAMERA_CAPTURE_JPEG_QUALITY);
+      };
+
+      encode(initialWidth, initialHeight);
+    });
+
+    const captureFromVideo = () => {
+      void encodeCapture(video, video.videoWidth, video.videoHeight).catch(() => undefined);
     };
 
-    encodeCapture(initialWidth, initialHeight);
+    const captureNativePhoto = async () => {
+      const videoTrack = streamRef.current?.getVideoTracks()[0];
+      if (!videoTrack || videoTrack.readyState !== "live") {
+        captureFromVideo();
+        return;
+      }
+      const imageCapture = createNativeImageCapture(videoTrack);
+      if (!imageCapture) {
+        captureFromVideo();
+        return;
+      }
+
+      try {
+        const photoBlob = await imageCapture.takePhoto();
+        if (!photoBlob.size) throw new Error("native_photo_empty");
+        const bitmap = await decodeNativePhoto(photoBlob);
+        try {
+          await encodeCapture(bitmap, bitmap.width, bitmap.height);
+        } finally {
+          bitmap.close();
+        }
+      } catch {
+        captureFromVideo();
+      }
+    };
+
+    void captureNativePhoto();
   };
 
   return (
