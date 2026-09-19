@@ -22,12 +22,15 @@ export interface Question {
   maxSelections?: number;
   exclusiveValues?: readonly string[];
   options: QuestionOption[];
+  showWhen?: (answers: Record<string, string | string[]>) => boolean;
 }
 
 export type BackendKey =
   | "age_range"
   | "genre"
   | "grossesse_allaitement"
+  | "maquillage_frequence"
+  | "types_maquillage"
   | "objectif_principal"
   | "zone_preoccupation"
   | "profil_peau_declare"
@@ -41,6 +44,13 @@ export const ALLOWED_VALUES: Record<BackendKey, readonly string[]> = {
   age_range: ["Moins de 18 ans", "18–24 ans", "25–34 ans", "35–44 ans", "45–54 ans", "55 ans et +"],
   genre: ["Femme", "Homme", "Autre", "Je préfère ne pas répondre"],
   grossesse_allaitement: ["Non", "Enceinte", "Allaitement", "Je préfère ne pas répondre"],
+  maquillage_frequence: ["Jamais", "Occasionnellement", "Plusieurs fois par semaine", "Tous les jours"],
+  types_maquillage: [
+    "Maquillage du teint (fond de teint, BB/CC crème, correcteur)",
+    "Maquillage des yeux (mascara, eyeliner, fard)",
+    "Maquillage longue tenue ou résistant à l’eau",
+    "Maquillage léger sans teint couvrant",
+  ],
   objectif_principal: [
     "Boutons / imperfections", "Points noirs", "Pores dilatés", "Taches / hyperpigmentation",
     "Rougeurs", "Sécheresse / déshydratation", "Brillance / excès de sébum", "Rides / ridules",
@@ -99,6 +109,7 @@ const questionDefinitions: Omit<Question, "id">[] = [
     subtitle: "Cette information nous aide à écarter certains actifs incompatibles.",
     type: "single",
     options: opts("grossesse_allaitement"),
+    showWhen: (answers) => answers.genre !== "Homme",
   },
   {
     key: "objectif_principal",
@@ -117,12 +128,31 @@ const questionDefinitions: Omit<Question, "id">[] = [
     options: opts("couleur_peau_declaree"),
   },
   { key: "niveau_routine_actuelle", title: "À quoi ressemble actuellement votre routine ?", type: "single", options: opts("niveau_routine_actuelle") },
+  {
+    key: "maquillage_frequence",
+    title: "Portez-vous du maquillage ?",
+    type: "single",
+    options: opts("maquillage_frequence"),
+  },
+  {
+    key: "types_maquillage",
+    title: "Quel type de maquillage portez-vous le plus souvent ?",
+    subtitle: "Sélectionnez jusqu’à 2 réponses.",
+    type: "multiple",
+    maxSelections: 2,
+    options: opts("types_maquillage"),
+    showWhen: (answers) => answers.maquillage_frequence !== "Jamais",
+  },
   multi("produits_utilises_regulierement", "Quels produits utilisez-vous régulièrement ?", "Sélectionnez jusqu’à 4 réponses.", 4, ["Aucun"]),
   multi("preferences_a_eviter", "Qu’aimeriez-vous particulièrement éviter dans votre future routine ?", "Sélectionnez jusqu’à 2 réponses.", 2, ["Rien en particulier", "Je ne sais pas"]),
   multi("attentes_routine", "Qu’attendez-vous principalement de votre future routine ?", "Sélectionnez jusqu’à 2 réponses.", 2),
 ];
 
 export const questions: Question[] = questionDefinitions.map((question, index) => ({ ...question, id: index + 1 }));
+
+export function getVisibleQuestions(answers: Record<string, string | string[]>): Question[] {
+  return questions.filter((question) => !question.showWhen || question.showWhen(answers));
+}
 
 export interface QuestionnairePayload {
   questionnaire_version: typeof QUESTIONNAIRE_VERSION;
@@ -180,7 +210,7 @@ export function buildAndValidatePayload(
   if (!email || !EMAIL_RE.test(email)) errors.push({ field: "email", message: "Email invalide." });
 
   const questionnaire: Record<string, unknown> = { questionnaire_version: QUESTIONNAIRE_VERSION, prenom, email };
-  for (const question of questions) {
+  for (const question of getVisibleQuestions(data.answers)) {
     const value = data.answers[question.key];
     if (question.type === "single") {
       if (typeof value !== "string" || !value) {
