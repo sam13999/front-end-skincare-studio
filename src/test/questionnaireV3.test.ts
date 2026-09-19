@@ -26,7 +26,7 @@ const validData = () => ({
 });
 
 describe("questionnaire SkinView v3", () => {
-  it("contains exactly the 11 questions in the required order", () => {
+  it("contains exactly the 13 questions in the required order", () => {
     expect(questions.map((question) => question.key)).toEqual([
       "age_range",
       "genre",
