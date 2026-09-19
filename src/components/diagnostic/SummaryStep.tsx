@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { DiagnosticData, questions } from "./types";
+import { DiagnosticData, getVisibleQuestions } from "./types";
 import { Loader2, Pencil } from "lucide-react";
 import { clientReportUrl, downloadClientReport, type RunPipelineResponse } from "@/lib/api";
 
@@ -79,7 +79,7 @@ export const SummaryStep = ({
       </div>
 
       <div className="svd-summary-answers">
-        {questions.map((question, index) => (
+        {getVisibleQuestions(data.answers).map((question, index) => (
           <div key={question.id} className="svd-summary-card">
             <div>
               <p className="svd-summary-label">{question.title}</p>
