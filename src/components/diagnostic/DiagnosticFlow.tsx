@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   DiagnosticData,
-  questions,
+  getVisibleQuestions,
   buildAndValidatePayload,
   QUESTIONNAIRE_VERSION,
   restoreStoredDiagnosticData,
@@ -17,10 +17,6 @@ import { createSession, runPipeline, uploadPhotos, type RunPipelineResponse } fr
 import "./DiagnosticFlow.css";
 
 const FIRST_QUESTION_STEP = 3;
-const LAST_QUESTION_STEP = FIRST_QUESTION_STEP + questions.length - 1;
-const IDENTITY_STEP = LAST_QUESTION_STEP + 1;
-const SUMMARY_STEP = IDENTITY_STEP + 1;
-const TOTAL_STEPS = SUMMARY_STEP;
 const STORAGE_KEY = "diagnostic_answers_v3";
 
 interface DiagnosticFlowProps {
@@ -54,7 +50,11 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
     }
   }, [data.answers, data.prenom, data.email]);
 
-  const progress = (step / TOTAL_STEPS) * 100;
+  const activeQuestions = getVisibleQuestions(data.answers);
+  const identityStep = FIRST_QUESTION_STEP + activeQuestions.length;
+  const summaryStep = identityStep + 1;
+  const totalSteps = summaryStep;
+  const progress = (step / totalSteps) * 100;
 
   const setPhoto = useCallback((key: "photoFace" | "photoProfile", value: string | null) => {
     setData((previous) => ({ ...previous, [key]: value }));
@@ -67,13 +67,13 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
   const canNext = () => {
     if (step === 1) return !!data.photoFace;
     if (step === 2) return !!data.photoProfile;
-    if (step === IDENTITY_STEP) {
+    if (step === identityStep) {
       return !!data.prenom?.trim()
         && !!data.email
         && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email.trim());
     }
-    if (step >= FIRST_QUESTION_STEP && step <= LAST_QUESTION_STEP) {
-      const question = questions[step - FIRST_QUESTION_STEP];
+    if (step >= FIRST_QUESTION_STEP && step < identityStep) {
+      const question = activeQuestions[step - FIRST_QUESTION_STEP];
       const answer = data.answers[question.key];
       return Array.isArray(answer) ? answer.length > 0 : typeof answer === "string" && answer.length > 0;
     }
@@ -81,7 +81,7 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
   };
 
   const goNext = () => {
-    if (step < TOTAL_STEPS) setStep((current) => current + 1);
+    if (step < totalSteps) setStep((current) => current + 1);
   };
   const goPrev = () => {
     if (step > 1) setStep((current) => current - 1);
@@ -151,8 +151,8 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
     }
   };
 
-  const activeQuestion = step >= FIRST_QUESTION_STEP && step <= LAST_QUESTION_STEP
-    ? questions[step - FIRST_QUESTION_STEP]
+  const activeQuestion = step >= FIRST_QUESTION_STEP && step < identityStep
+    ? activeQuestions[step - FIRST_QUESTION_STEP]
     : null;
 
   return (
@@ -168,13 +168,13 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
         </button>
         <div className="svd-header-center">
           <span className="svd-kicker">Diagnostic</span>
-          <span className="svd-counter">{step} / {TOTAL_STEPS}</span>
+          <span className="svd-counter">{step} / {totalSteps}</span>
         </div>
         <button type="button" onClick={onClose} className="svd-icon-button" aria-label="Fermer">
           <X aria-hidden="true" />
         </button>
       </header>
-      <div className="svd-progress-wrap" aria-label={`Progression : étape ${step} sur ${TOTAL_STEPS}`}>
+      <div className="svd-progress-wrap" aria-label={`Progression : étape ${step} sur ${totalSteps}`}>
         <div className="svd-progress"><span style={{ width: `${progress}%` }} /></div>
       </div>
       <main className="svd-scroll">
@@ -204,7 +204,7 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
               canNext={canNext()}
             />
           )}
-          {step === IDENTITY_STEP && (
+          {step === identityStep && (
             <IdentityStep
               prenom={data.prenom ?? ""}
               email={data.email ?? ""}
@@ -214,7 +214,7 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
               canNext={canNext()}
             />
           )}
-          {step === SUMMARY_STEP && (
+          {step === summaryStep && (
             <SummaryStep
               data={data}
               onGoToStep={goToStep}
@@ -223,7 +223,7 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
               launchStage={launchStage}
               pipelineResult={pipelineResult}
               firstQuestionStep={FIRST_QUESTION_STEP}
-              identityStep={IDENTITY_STEP}
+              identityStep={identityStep}
             />
           )}
         </div>
