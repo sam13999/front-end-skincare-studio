@@ -11,6 +11,7 @@ import {
   analyzeSharpness,
   buildCameraGuidanceState,
   CAMERA_GUIDANCE_THRESHOLDS,
+  calculateFaceFocusedCrop,
   calculateCoverCrop,
   FACE_FRAMING_THRESHOLDS,
   getFaceBox,
@@ -181,6 +182,21 @@ describe("real-time camera guidance", () => {
     expect(position).toEqual({ ok: false, reason: "too_large" });
   });
 
+  it("rejects a face that is actually outside the visible crop", () => {
+    const position = validateFacePosition({
+      left: -0.3,
+      top: 0.2,
+      right: 1.3,
+      bottom: 0.8,
+      width: 1.6,
+      height: 0.6,
+      centerX: 0.5,
+      centerY: 0.5,
+    });
+
+    expect(position).toEqual({ ok: false, reason: "cut_off" });
+  });
+
   it("does not reject a live-valid closer face as face_too_small post-capture", () => {
     const live = liveState("face", 100, 0.5, 0, 100, 0.82, 0.9);
     const detectorGuardIssues = evaluateFaceObservations(
@@ -218,6 +234,46 @@ describe("real-time camera guidance", () => {
     expect(tallCrop.sourceX).toBe(0);
     expect(tallCrop.sourceY).toBeGreaterThan(0);
     expect(tallCrop.sourceWidth / tallCrop.sourceHeight).toBeCloseTo(390 / 844, 5);
+  });
+
+  it("focuses the native image on the detected face without changing the preview ratio", () => {
+    const crop = calculateFaceFocusedCrop(
+      3024,
+      4032,
+      390,
+      844,
+      {
+        left: 0.35,
+        top: 0.25,
+        right: 0.65,
+        bottom: 0.65,
+        width: 0.3,
+        height: 0.4,
+        centerX: 0.5,
+        centerY: 0.45,
+      },
+    );
+
+    expect(crop.sourceWidth / crop.sourceHeight).toBeCloseTo(390 / 844, 5);
+    expect(crop.sourceHeight).toBeLessThan(4032);
+    expect(crop.sourceY).toBeGreaterThan(0);
+    const faceInCrop = mapFaceBoxToVisibleViewport(
+      {
+        left: 0.35,
+        top: 0.25,
+        right: 0.65,
+        bottom: 0.65,
+        width: 0.3,
+        height: 0.4,
+        centerX: 0.5,
+        centerY: 0.45,
+      },
+      crop,
+      3024,
+      4032,
+    );
+    expect(faceInCrop.height).toBeGreaterThan(0.6);
+    expect(faceInCrop.height).toBeLessThan(0.8);
   });
 
   it("maps a native face box into the visible cropped viewport", () => {
@@ -284,7 +340,7 @@ describe("real-time camera guidance", () => {
     expect(state.guidanceMessage).toContain("floue");
   });
 
-  it("uses the same 10°–29° doctrine for every profile boundary", () => {
+  it("uses the same symmetric 10°–29° doctrine for both profile directions", () => {
     const cases = [
       { yaw: 5, valid: false, message: "Tournez légèrement" },
       { yaw: 9, valid: false, message: "Tournez légèrement" },
@@ -298,21 +354,23 @@ describe("real-time camera guidance", () => {
     ];
 
     cases.forEach(({ yaw, valid, message }) => {
-      const state = liveState("profile", 100, 0.5 - yaw / 350);
-      expect(state.poseAngle).toBeCloseTo(yaw);
-      expect(state.poseOk).toBe(valid);
-      expect(state.isRawValid).toBe(valid);
-      expect(state.guidanceMessage).toContain(message);
-      expect(validateRightPose10to29(state.pose)).toBe(valid);
+      [-1, 1].forEach((direction) => {
+        const state = liveState("profile", 100, 0.5 + direction * yaw / 350);
+        expect(Math.abs(state.poseAngle ?? 0)).toBeCloseTo(yaw);
+        expect(state.poseOk).toBe(valid);
+        expect(state.isRawValid).toBe(valid);
+        expect(state.guidanceMessage).toContain(message);
+        expect(validateRightPose10to29(state.pose)).toBe(valid);
+      });
     });
   });
 
-  it("rejects a left turn even when its magnitude is in range", () => {
+  it("accepts a left turn with the same magnitude as a right turn", () => {
     const state = liveState("profile", 100, 0.57);
 
     expect(state.poseAngle).toBeCloseTo(-24.5);
-    expect(state.poseOk).toBe(false);
-    expect(state.guidanceMessage).toContain("à droite");
+    expect(state.poseOk).toBe(true);
+    expect(state.guidanceMessage).toContain("Parfait");
   });
 
   it("rejects a face that is not centered", () => {
@@ -352,5 +410,9 @@ describe("real-time camera guidance", () => {
     expect(validateRightPose10to29(pose(10))).toBe(true);
     expect(validateRightPose10to29(pose(29))).toBe(true);
     expect(validateRightPose10to29(pose(30))).toBe(false);
+    expect(validateRightPose10to29(pose(-9))).toBe(false);
+    expect(validateRightPose10to29(pose(-10))).toBe(true);
+    expect(validateRightPose10to29(pose(-29))).toBe(true);
+    expect(validateRightPose10to29(pose(-30))).toBe(false);
   });
 });

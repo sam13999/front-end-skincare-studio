@@ -2,6 +2,7 @@ import type { Detection, FaceDetector as MediaPipeFaceDetector } from "@mediapip
 import {
   analyzeLuma,
   analyzeSharpness,
+  FACE_FRAMING_THRESHOLDS,
   estimateHeadPose,
   getFaceBox,
   getFaceRoi,
@@ -33,7 +34,7 @@ export const faceConfig: PhotoValidationConfig = {
   maxResolution: 4095,
   minFileSizeKB: 100,
   maxFileSizeKB: 5 * 1024,
-  minVisibleFaceRatio: 0.8,
+  minVisibleFaceRatio: FACE_FRAMING_THRESHOLDS.minVisibleFaceRatio,
 };
 
 export const profileConfig: PhotoValidationConfig = {
@@ -323,6 +324,8 @@ export async function validatePhoto(
             ? "Votre visage est trop éloigné. Rapprochez-vous pour qu’il soit clairement visible."
             : position.reason === "too_large"
               ? "Votre visage est trop proche. Éloignez-vous légèrement."
+              : position.reason === "cut_off"
+                ? "Votre visage est partiellement hors cadre. Replacez-le entièrement dans la photo."
               : "Placez votre visage au centre de la photo.",
           severity: "critical",
         });
@@ -330,14 +333,14 @@ export async function validatePhoto(
       const pose = estimateHeadPose(landmarks, landmarkResult.facialTransformationMatrixes?.[0]);
       const poseOk = type === "face" ? validateFrontPose(pose) : validateRightPose10to29(pose);
       if (!poseOk) {
-        const angle = pose?.yawDegrees ?? 0;
+        const angle = Math.abs(pose?.yawDegrees ?? 0);
         issues.push({
           code: type === "face" ? "not_frontal" : angle < 10 ? "profile_angle_too_low" : "profile_angle_too_high",
           message: type === "face"
             ? "Regardez tout droit vers la caméra."
             : angle < 10
-              ? "Tournez légèrement le visage à droite."
-              : "Revenez légèrement vers la gauche.",
+              ? "Tournez légèrement la tête sur le côté."
+              : "Revenez légèrement vers l’avant.",
           severity: "critical",
         });
       }

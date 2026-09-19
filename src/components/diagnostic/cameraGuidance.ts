@@ -30,6 +30,9 @@ export interface CoverCrop {
   displayAspectRatio: number;
 }
 
+export const FACE_CAPTURE_TARGET_HEIGHT_RATIO = 0.70;
+const FACE_CAPTURE_MARGIN_RATIO = 1.25;
+
 export interface HeadPose {
   /** Signed angle in degrees. Positive means the user's right. */
   yawDegrees: number;
@@ -58,6 +61,7 @@ export interface CameraGuidanceState {
 export const FACE_FRAMING_THRESHOLDS = {
   centerToleranceX: 0.18,
   centerToleranceY: 0.16,
+  minVisibleFaceRatio: 0.8,
   minFaceWidth: 0.17,
   maxFaceWidth: 0.84,
   minFaceHeight: 0.24,
@@ -138,6 +142,51 @@ export function calculateCoverCrop(
     sourceHeight: sourceHeightVisible,
     sourceAspectRatio,
     displayAspectRatio,
+  };
+}
+
+/**
+ * Keeps the preview aspect ratio while removing excess sensor field around
+ * the detected face. The crop is capped by the normal cover crop so it never
+ * invents pixels or cuts the face merely to hit a target zoom.
+ */
+export function calculateFaceFocusedCrop(
+  sourceWidth: number,
+  sourceHeight: number,
+  displayWidth: number,
+  displayHeight: number,
+  faceBox: FaceBox,
+): CoverCrop {
+  const coverCrop = calculateCoverCrop(sourceWidth, sourceHeight, displayWidth, displayHeight);
+  const targetAspectRatio = coverCrop.displayAspectRatio;
+  const faceWidth = faceBox.width * sourceWidth;
+  const faceHeight = faceBox.height * sourceHeight;
+  if (
+    ![faceWidth, faceHeight, faceBox.centerX, faceBox.centerY].every((value) => Number.isFinite(value))
+    || faceWidth <= 0
+    || faceHeight <= 0
+  ) {
+    return coverCrop;
+  }
+
+  const desiredHeight = Math.max(
+    faceHeight / FACE_CAPTURE_TARGET_HEIGHT_RATIO,
+    (faceWidth * FACE_CAPTURE_MARGIN_RATIO) / targetAspectRatio,
+  );
+  const cropHeight = Math.min(coverCrop.sourceHeight, desiredHeight);
+  const cropWidth = Math.min(coverCrop.sourceWidth, cropHeight * targetAspectRatio);
+  const adjustedCropHeight = cropWidth / targetAspectRatio;
+  const maxLeft = coverCrop.sourceX + coverCrop.sourceWidth - cropWidth;
+  const maxTop = coverCrop.sourceY + coverCrop.sourceHeight - adjustedCropHeight;
+  const faceCenterX = faceBox.centerX * sourceWidth;
+  const faceCenterY = faceBox.centerY * sourceHeight;
+
+  return {
+    ...coverCrop,
+    sourceX: clamp(faceCenterX - cropWidth / 2, coverCrop.sourceX, maxLeft),
+    sourceY: clamp(faceCenterY - adjustedCropHeight / 2, coverCrop.sourceY, maxTop),
+    sourceWidth: cropWidth,
+    sourceHeight: adjustedCropHeight,
   };
 }
 
@@ -288,13 +337,19 @@ export function readRegionFromSource(
 export function validateFacePosition(
   faceBox: FaceBox | null,
   guideOval: GuideOval = GUIDE_OVAL,
-): { ok: boolean; reason: "missing" | "off_center" | "too_small" | "too_large" | "ok" } {
+): { ok: boolean; reason: "missing" | "off_center" | "cut_off" | "too_small" | "too_large" | "ok" } {
   if (!faceBox) return { ok: false, reason: "missing" };
   if (
     Math.abs(faceBox.centerX - guideOval.centerX) > FACE_FRAMING_THRESHOLDS.centerToleranceX
     || Math.abs(faceBox.centerY - guideOval.centerY) > FACE_FRAMING_THRESHOLDS.centerToleranceY
   ) {
     return { ok: false, reason: "off_center" };
+  }
+  const visibleWidth = Math.max(0, Math.min(faceBox.right, 1) - Math.max(faceBox.left, 0));
+  const visibleHeight = Math.max(0, Math.min(faceBox.bottom, 1) - Math.max(faceBox.top, 0));
+  const visibleRatio = (visibleWidth * visibleHeight) / Math.max(1e-6, faceBox.width * faceBox.height);
+  if (visibleRatio < FACE_FRAMING_THRESHOLDS.minVisibleFaceRatio) {
+    return { ok: false, reason: "cut_off" };
   }
   if (
     faceBox.width < FACE_FRAMING_THRESHOLDS.minFaceWidth
@@ -365,10 +420,12 @@ export function validateFrontPose(pose: HeadPose | null): boolean {
 
 export function validateRightPose10to29(pose: HeadPose | null): boolean {
   if (!pose) return false;
-  // The lower bound is inclusive for the product rule: 10°–29° is valid,
-  // while 30° is already too far. The underlying angle remains unrounded.
-  return pose.yawDegrees >= CAMERA_GUIDANCE_THRESHOLDS.rightYawMinInclusive
-    && pose.yawDegrees < CAMERA_GUIDANCE_THRESHOLDS.rightYawMaxExclusive
+  // The product rule is intentionally symmetric: either side is valid.
+  // The lower bound is inclusive and the upper bound is exclusive; the
+  // underlying angle remains unrounded.
+  const yawMagnitude = Math.abs(pose.yawDegrees);
+  return yawMagnitude >= CAMERA_GUIDANCE_THRESHOLDS.rightYawMinInclusive
+    && yawMagnitude < CAMERA_GUIDANCE_THRESHOLDS.rightYawMaxExclusive
     && Math.abs(pose.rollDegrees) <= CAMERA_GUIDANCE_THRESHOLDS.frontRollMax;
 }
 
@@ -439,11 +496,12 @@ export function buildCameraGuidanceState(input: {
   else if (sharpnessOk === false) guidanceMessage = "L’image est trop floue, stabilisez le téléphone";
   else if (!position.ok && position.reason === "too_small") guidanceMessage = "Rapprochez-vous légèrement";
   else if (!position.ok && position.reason === "too_large") guidanceMessage = "Éloignez-vous légèrement";
+  else if (!position.ok && position.reason === "cut_off") guidanceMessage = "Replacez votre visage dans le cadre";
   else if (!position.ok) guidanceMessage = "Placez votre visage dans le cadre";
   else if (step === "face" && !poseOk) guidanceMessage = "Regardez tout droit";
-  else if (step === "profile" && !pose) guidanceMessage = "Tournez légèrement le visage à droite";
-  else if (step === "profile" && (pose?.yawDegrees ?? 0) < CAMERA_GUIDANCE_THRESHOLDS.rightYawMinInclusive) guidanceMessage = "Tournez légèrement le visage à droite";
-  else if (step === "profile" && (pose?.yawDegrees ?? 0) >= CAMERA_GUIDANCE_THRESHOLDS.rightYawMaxExclusive) guidanceMessage = "Revenez légèrement vers la gauche";
+  else if (step === "profile" && !pose) guidanceMessage = "Tournez légèrement la tête sur le côté";
+  else if (step === "profile" && Math.abs(pose?.yawDegrees ?? 0) < CAMERA_GUIDANCE_THRESHOLDS.rightYawMinInclusive) guidanceMessage = "Tournez légèrement la tête sur le côté";
+  else if (step === "profile" && Math.abs(pose?.yawDegrees ?? 0) >= CAMERA_GUIDANCE_THRESHOLDS.rightYawMaxExclusive) guidanceMessage = "Revenez légèrement vers l’avant";
   else if (brightnessOk === null) guidanceMessage = "Analyse de la lumière en cours…";
   else if (step === "profile" && poseOk) guidanceMessage = "Parfait, gardez cette position";
   else if (poseOk) guidanceMessage = "C’est bon, vous pouvez prendre la photo";

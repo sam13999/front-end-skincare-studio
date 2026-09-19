@@ -3,15 +3,19 @@ import { Check, CheckCircle2, Loader2, X, XCircle } from "lucide-react";
 import {
   CAMERA_GUIDANCE_THRESHOLDS,
   analyzeSharpness,
+  calculateFaceFocusedCrop,
   calculateCoverCrop,
   buildCameraGuidanceState,
   analyzeBrightness,
   getFaceBox,
   getFaceRoi,
+  getImageFaceLandmarker,
   getVideoFaceLandmarker,
   getVideoGuidanceResult,
   isTolerableSharpnessDrop,
+  mapFaceBoxToVisibleViewport,
   readRegionFromSource,
+  type FaceBox,
   type CameraGuidanceState,
   type CameraStep,
 } from "./cameraGuidance";
@@ -45,6 +49,8 @@ type NativeBitmapFactory = (
   blob: Blob,
   options?: { imageOrientation?: "none" | "from-image" },
 ) => Promise<ImageBitmap>;
+
+type CaptureMethod = "native" | "fallback-video";
 
 function createNativeImageCapture(track: MediaStreamTrack): NativeImageCapture | null {
   const browserWindow = window as unknown as { ImageCapture?: NativeImageCaptureConstructor };
@@ -255,8 +261,11 @@ export const GuidedCamera = ({ step, onCapture, onClose, onFallback }: GuidedCam
       source: HTMLVideoElement | ImageBitmap,
       sourceWidth: number,
       sourceHeight: number,
+      method: CaptureMethod,
+      cropOverride?: ReturnType<typeof calculateCoverCrop>,
+      sourceFaceBox?: FaceBox | null,
     ): Promise<void> => new Promise((resolve, reject) => {
-      const crop = calculateCoverCrop(sourceWidth, sourceHeight, displayWidth, displayHeight);
+      const crop = cropOverride ?? calculateCoverCrop(sourceWidth, sourceHeight, displayWidth, displayHeight);
       const scale = Math.min(
         1,
         CAMERA_CAPTURE_MAX_DIMENSION / Math.max(crop.sourceWidth, crop.sourceHeight),
@@ -310,6 +319,25 @@ export const GuidedCamera = ({ step, onCapture, onClose, onFallback }: GuidedCam
               reject(new Error("capture_data_url_unavailable"));
               return;
             }
+            if (import.meta.env.DEV) {
+              const faceInOutput = sourceFaceBox
+                ? mapFaceBoxToVisibleViewport(sourceFaceBox, crop, sourceWidth, sourceHeight)
+                : null;
+              console.debug("[SkinView camera] capture geometry", {
+                method,
+                sourceWidth,
+                sourceHeight,
+                crop,
+                outputWidth: width,
+                outputHeight: height,
+                sourceFaceBox: sourceFaceBox
+                  ? { left: sourceFaceBox.left, top: sourceFaceBox.top, width: sourceFaceBox.width, height: sourceFaceBox.height }
+                  : null,
+                outputFaceRatio: faceInOutput
+                  ? { width: faceInOutput.width, height: faceInOutput.height }
+                  : null,
+              });
+            }
             onCapture(reader.result, blob.size);
             resolve();
           };
@@ -322,7 +350,7 @@ export const GuidedCamera = ({ step, onCapture, onClose, onFallback }: GuidedCam
     });
 
     const captureFromVideo = () => {
-      void encodeCapture(video, video.videoWidth, video.videoHeight).catch(() => undefined);
+      void encodeCapture(video, video.videoWidth, video.videoHeight, "fallback-video").catch(() => undefined);
     };
 
     const captureNativePhoto = async () => {
@@ -342,7 +370,27 @@ export const GuidedCamera = ({ step, onCapture, onClose, onFallback }: GuidedCam
         if (!photoBlob.size) throw new Error("native_photo_empty");
         const bitmap = await decodeNativePhoto(photoBlob);
         try {
-          await encodeCapture(bitmap, bitmap.width, bitmap.height);
+          let nativeCrop = calculateCoverCrop(bitmap.width, bitmap.height, displayWidth, displayHeight);
+          let nativeFaceBox: FaceBox | null = null;
+          try {
+            const landmarker = await getImageFaceLandmarker();
+            const result = landmarker.detect(bitmap);
+            const faceBox = result.faceLandmarks.length === 1 ? getFaceBox(result.faceLandmarks[0]) : null;
+            if (faceBox) {
+              nativeFaceBox = faceBox;
+              nativeCrop = calculateFaceFocusedCrop(
+                bitmap.width,
+                bitmap.height,
+                displayWidth,
+                displayHeight,
+                faceBox,
+              );
+            }
+          } catch {
+            // Keep the native high-resolution photo and deterministic preview
+            // crop if the optional native-frame measurement is unavailable.
+          }
+          await encodeCapture(bitmap, bitmap.width, bitmap.height, "native", nativeCrop, nativeFaceBox);
         } finally {
           bitmap.close();
         }
