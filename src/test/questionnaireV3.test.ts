@@ -4,6 +4,7 @@ import {
   QUESTIONNAIRE_VERSION,
   buildAndValidatePayload,
   questions,
+  getVisibleQuestions,
   restoreStoredDiagnosticData,
 } from "@/components/diagnostic/types";
 import { hasUsablePhotoForLaunch } from "@/components/diagnostic/photoLaunch";
@@ -35,21 +36,50 @@ describe("questionnaire SkinView v3", () => {
       "profil_peau_declare",
       "couleur_peau_declaree",
       "niveau_routine_actuelle",
+      "maquillage_frequence",
+      "types_maquillage",
       "produits_utilises_regulierement",
       "preferences_a_eviter",
       "attentes_routine",
     ]);
-    expect(questions).toHaveLength(11);
+    expect(questions).toHaveLength(13);
     expect(QUESTIONNAIRE_VERSION).toBe("v3");
   });
 
   it("uses the required maxima and exact answer values", () => {
     expect(ALLOWED_VALUES.produits_utilises_regulierement).toContain("Rétinol / rétinoïde");
     expect(questions.filter((question) => question.type === "multiple").map((question) => [question.key, question.maxSelections])).toEqual([
+      ["types_maquillage", 2],
       ["produits_utilises_regulierement", 4],
       ["preferences_a_eviter", 2],
       ["attentes_routine", 2],
     ]);
+  });
+
+  it("hides pregnancy for men and omits it from the payload", () => {
+    const data = validData();
+    data.answers.genre = "Homme";
+    delete data.answers.grossesse_allaitement;
+    delete data.answers.types_maquillage;
+    expect(getVisibleQuestions(data.answers).some((question) => question.key === "grossesse_allaitement")).toBe(false);
+    const result = buildAndValidatePayload(data);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.payload.questionnaire.grossesse_allaitement).toBeUndefined();
+      expect(result.payload.questionnaire.types_maquillage).toBeUndefined();
+    }
+  });
+
+  it("requires makeup type only when makeup is worn", () => {
+    const never = validData();
+    never.answers.maquillage_frequence = "Jamais";
+    delete never.answers.types_maquillage;
+    expect(buildAndValidatePayload(never).ok).toBe(true);
+
+    const daily = validData();
+    daily.answers.maquillage_frequence = "Tous les jours";
+    daily.answers.types_maquillage = ["Maquillage du teint (fond de teint, BB/CC crème, correcteur)"];
+    expect(buildAndValidatePayload(daily).ok).toBe(true);
   });
 
   it("builds a strict v3 payload with identity at the end of the flow", () => {
