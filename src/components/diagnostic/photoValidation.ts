@@ -21,8 +21,6 @@ export interface PhotoValidationConfig {
   maxResolution: number;
   minFileSizeKB: number;
   maxFileSizeKB: number;
-  minFaceWidthRatio: number;
-  minFaceHeightRatio: number;
   minVisibleFaceRatio: number;
 }
 
@@ -35,10 +33,6 @@ export const faceConfig: PhotoValidationConfig = {
   maxResolution: 4095,
   minFileSizeKB: 100,
   maxFileSizeKB: 5 * 1024,
-  // Keep the post-capture geometry in the same relative coordinate system as
-  // the guided camera. Absolute pixel thresholds were device/crop dependent.
-  minFaceWidthRatio: 0.2,
-  minFaceHeightRatio: 0.28,
   minVisibleFaceRatio: 0.8,
 };
 
@@ -220,19 +214,6 @@ export function evaluateFaceObservations(
       },
     ];
   }
-  if (
-    width / Math.max(1, imageWidth) < config.minFaceWidthRatio
-    || height / Math.max(1, imageHeight) < config.minFaceHeightRatio
-  ) {
-    return [
-      {
-        code: "face_too_small",
-        message: "Votre visage est trop éloigné. Rapprochez-vous pour qu’il soit clairement visible.",
-        severity: "critical",
-      },
-    ];
-  }
-
   return [];
 }
 

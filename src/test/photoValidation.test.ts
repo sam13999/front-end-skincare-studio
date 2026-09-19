@@ -10,7 +10,9 @@ import {
   analyzeBrightness,
   analyzeSharpness,
   buildCameraGuidanceState,
+  CAMERA_GUIDANCE_THRESHOLDS,
   calculateCoverCrop,
+  FACE_FRAMING_THRESHOLDS,
   getFaceBox,
   getFaceRoi,
   isTolerableSharpnessDrop,
@@ -41,15 +43,15 @@ describe("photo face validation", () => {
     expect(issues[0].code).toBe("multiple_faces");
   });
 
-  it("refuses a face that is too small for skin analysis", () => {
+  it("does not duplicate the landmark size gate in the detector guard", () => {
     const issues = evaluateFaceObservations(
       [{ ...validFace, box: { originX: 425, originY: 390, width: 150, height: 220 } }],
       1000,
       1000,
-      faceConfig
+      faceConfig,
     );
 
-    expect(issues[0].code).toBe("face_too_small");
+    expect(issues).toEqual([]);
   });
 
   it("accepts one sufficiently visible face", () => {
@@ -98,25 +100,33 @@ describe("photo face validation", () => {
   });
 });
 
-const makeLandmarks = (noseX = 0.5, shiftX = 0) => {
+const makeLandmarks = (noseX = 0.5, shiftX = 0, faceWidth = 0.4, faceHeight = 0.8) => {
   const landmarks = Array.from({ length: 468 }, () => ({ x: 0.5 + shiftX, y: 0.5, z: 0, visibility: 1 }));
-  landmarks[10] = { x: 0.5 + shiftX, y: 0.1, z: 0, visibility: 1 };
-  landmarks[152] = { x: 0.5 + shiftX, y: 0.9, z: 0, visibility: 1 };
-  landmarks[234] = { x: 0.3 + shiftX, y: 0.5, z: 0, visibility: 1 };
-  landmarks[454] = { x: 0.7 + shiftX, y: 0.5, z: 0, visibility: 1 };
-  landmarks[33] = { x: 0.4 + shiftX, y: 0.4, z: 0, visibility: 1 };
-  landmarks[263] = { x: 0.6 + shiftX, y: 0.4, z: 0, visibility: 1 };
+  landmarks[10] = { x: 0.5 + shiftX, y: 0.5 - faceHeight / 2, z: 0, visibility: 1 };
+  landmarks[152] = { x: 0.5 + shiftX, y: 0.5 + faceHeight / 2, z: 0, visibility: 1 };
+  landmarks[234] = { x: 0.5 + shiftX - faceWidth / 2, y: 0.5, z: 0, visibility: 1 };
+  landmarks[454] = { x: 0.5 + shiftX + faceWidth / 2, y: 0.5, z: 0, visibility: 1 };
+  landmarks[33] = { x: 0.5 + shiftX - faceWidth / 4, y: 0.4, z: 0, visibility: 1 };
+  landmarks[263] = { x: 0.5 + shiftX + faceWidth / 4, y: 0.4, z: 0, visibility: 1 };
   landmarks[1] = { x: noseX + shiftX, y: 0.5, z: 0, visibility: 1 };
   return landmarks;
 };
 
-const liveState = (step: "face" | "profile", brightness: number | null, noseX = 0.5, shiftX = 0, sharpness = 100) =>
+const liveState = (
+  step: "face" | "profile",
+  brightness: number | null,
+  noseX = 0.5,
+  shiftX = 0,
+  sharpness = 100,
+  faceWidth = 0.4,
+  faceHeight = 0.8,
+) =>
   buildCameraGuidanceState({
     step,
     cameraReady: true,
     brightness,
     sharpness,
-    faces: [makeLandmarks(noseX, shiftX)],
+    faces: [makeLandmarks(noseX, shiftX, faceWidth, faceHeight)],
   });
 
 const makeImageData = (width: number, height: number, fill = 0): ImageData => ({
@@ -127,6 +137,63 @@ const makeImageData = (width: number, height: number, fill = 0): ImageData => ({
 });
 
 describe("real-time camera guidance", () => {
+  it("uses one shared framing contract for live and post-capture geometry", () => {
+    expect(CAMERA_GUIDANCE_THRESHOLDS.minFaceWidth).toBe(FACE_FRAMING_THRESHOLDS.minFaceWidth);
+    expect(CAMERA_GUIDANCE_THRESHOLDS.maxFaceWidth).toBe(FACE_FRAMING_THRESHOLDS.maxFaceWidth);
+    expect(CAMERA_GUIDANCE_THRESHOLDS.minFaceHeight).toBe(FACE_FRAMING_THRESHOLDS.minFaceHeight);
+    expect(CAMERA_GUIDANCE_THRESHOLDS.maxFaceHeight).toBe(FACE_FRAMING_THRESHOLDS.maxFaceHeight);
+  });
+
+  it("accepts a slightly closer but still fully exploitable face", () => {
+    const state = liveState("face", 100, 0.5, 0, 100, 0.82, 0.9);
+
+    expect(state.facePositionOk).toBe(true);
+    expect(state.isRawValid).toBe(true);
+  });
+
+  it("rejects a genuinely distant face as too small", () => {
+    const position = validateFacePosition({
+      left: 0.42,
+      top: 0.385,
+      right: 0.58,
+      bottom: 0.615,
+      width: 0.16,
+      height: 0.23,
+      centerX: 0.5,
+      centerY: 0.5,
+    });
+
+    expect(position).toEqual({ ok: false, reason: "too_small" });
+  });
+
+  it("rejects a genuinely close or cut-off face as too large", () => {
+    const position = validateFacePosition({
+      left: 0.04,
+      top: 0.02,
+      right: 0.96,
+      bottom: 0.98,
+      width: 0.92,
+      height: 0.96,
+      centerX: 0.5,
+      centerY: 0.5,
+    });
+
+    expect(position).toEqual({ ok: false, reason: "too_large" });
+  });
+
+  it("does not reject a live-valid closer face as face_too_small post-capture", () => {
+    const live = liveState("face", 100, 0.5, 0, 100, 0.82, 0.9);
+    const detectorGuardIssues = evaluateFaceObservations(
+      [{ ...validFace, box: { originX: 420, originY: 385, width: 160, height: 230 } }],
+      1000,
+      1000,
+      faceConfig,
+    );
+
+    expect(live.facePositionOk).toBe(true);
+    expect(detectorGuardIssues.some((issue) => issue.code === "face_too_small")).toBe(false);
+  });
+
   it("uses relaxed sharpness thresholds while preserving a real-blur floor", () => {
     expect(faceConfig.minSharpness).toBe(4);
     expect(profileConfig.minSharpness).toBe(3.5);

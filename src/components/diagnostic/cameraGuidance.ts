@@ -53,6 +53,17 @@ export interface CameraGuidanceState {
   pose: HeadPose | null;
 }
 
+// Shared framing contract. The live camera and the post-capture landmark
+// validation both consume these values; the oval remains a visual guide.
+export const FACE_FRAMING_THRESHOLDS = {
+  centerToleranceX: 0.18,
+  centerToleranceY: 0.16,
+  minFaceWidth: 0.17,
+  maxFaceWidth: 0.84,
+  minFaceHeight: 0.24,
+  maxFaceHeight: 0.92,
+} as const;
+
 export const CAMERA_GUIDANCE_THRESHOLDS = {
   // Luma is measured on the 0–255 scale from a small video frame.
   minBrightness: 45,
@@ -64,12 +75,7 @@ export const CAMERA_GUIDANCE_THRESHOLDS = {
   maxTransientSharpnessDrops: 2,
   // A readable face is enough for the guided capture. The previous 400 px
   // projection was too demanding on portrait camera streams.
-  centerToleranceX: 0.18,
-  centerToleranceY: 0.16,
-  minFaceWidth: 0.2,
-  maxFaceWidth: 0.78,
-  minFaceHeight: 0.28,
-  maxFaceHeight: 0.88,
+  ...FACE_FRAMING_THRESHOLDS,
   frontYawMax: 12,
   frontRollMax: 15,
   rightYawMinInclusive: 10,
@@ -96,13 +102,9 @@ export const GUIDE_OVAL: GuideOval = {
   radiusY: 0.42,
 };
 
+const GUIDE_WIDTH_RATIO = 0.76;
+const GUIDE_ASPECT_RATIO = 0.72;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
-type FaceSizeThresholds = {
-  minFaceWidth?: number;
-  maxFaceWidth?: number;
-  minFaceHeight?: number;
-  maxFaceHeight?: number;
-};
 
 export function calculateCoverCrop(
   sourceWidth: number,
@@ -140,8 +142,8 @@ export function calculateCoverCrop(
 }
 
 export function getGuideOvalForViewport(displayWidth: number, displayHeight: number): GuideOval {
-  const guideWidth = Math.min(displayWidth * 0.76, 360);
-  const guideHeight = guideWidth / 0.72;
+  const guideWidth = Math.min(displayWidth * GUIDE_WIDTH_RATIO, 360);
+  const guideHeight = guideWidth / GUIDE_ASPECT_RATIO;
   return {
     centerX: 0.5,
     centerY: 0.5,
@@ -150,7 +152,7 @@ export function getGuideOvalForViewport(displayWidth: number, displayHeight: num
   };
 }
 
-export function getGuideOvalForAspect(displayAspectRatio: number, guideWidthRatio = 0.78): GuideOval {
+export function getGuideOvalForAspect(displayAspectRatio: number, guideWidthRatio = GUIDE_WIDTH_RATIO): GuideOval {
   const safeAspectRatio = Math.max(0.1, displayAspectRatio);
   const guideHeightRatio = guideWidthRatio * safeAspectRatio / 0.72;
   return {
@@ -286,28 +288,23 @@ export function readRegionFromSource(
 export function validateFacePosition(
   faceBox: FaceBox | null,
   guideOval: GuideOval = GUIDE_OVAL,
-  sizeThresholds: FaceSizeThresholds = {},
 ): { ok: boolean; reason: "missing" | "off_center" | "too_small" | "too_large" | "ok" } {
   if (!faceBox) return { ok: false, reason: "missing" };
-  const minFaceWidth = sizeThresholds.minFaceWidth ?? CAMERA_GUIDANCE_THRESHOLDS.minFaceWidth;
-  const maxFaceWidth = sizeThresholds.maxFaceWidth ?? CAMERA_GUIDANCE_THRESHOLDS.maxFaceWidth;
-  const minFaceHeight = sizeThresholds.minFaceHeight ?? CAMERA_GUIDANCE_THRESHOLDS.minFaceHeight;
-  const maxFaceHeight = sizeThresholds.maxFaceHeight ?? CAMERA_GUIDANCE_THRESHOLDS.maxFaceHeight;
   if (
-    Math.abs(faceBox.centerX - guideOval.centerX) > CAMERA_GUIDANCE_THRESHOLDS.centerToleranceX
-    || Math.abs(faceBox.centerY - guideOval.centerY) > CAMERA_GUIDANCE_THRESHOLDS.centerToleranceY
+    Math.abs(faceBox.centerX - guideOval.centerX) > FACE_FRAMING_THRESHOLDS.centerToleranceX
+    || Math.abs(faceBox.centerY - guideOval.centerY) > FACE_FRAMING_THRESHOLDS.centerToleranceY
   ) {
     return { ok: false, reason: "off_center" };
   }
   if (
-    faceBox.width < minFaceWidth
-    || faceBox.height < minFaceHeight
+    faceBox.width < FACE_FRAMING_THRESHOLDS.minFaceWidth
+    || faceBox.height < FACE_FRAMING_THRESHOLDS.minFaceHeight
   ) {
     return { ok: false, reason: "too_small" };
   }
   if (
-    faceBox.width > maxFaceWidth
-    || faceBox.height > maxFaceHeight
+    faceBox.width > FACE_FRAMING_THRESHOLDS.maxFaceWidth
+    || faceBox.height > FACE_FRAMING_THRESHOLDS.maxFaceHeight
   ) {
     return { ok: false, reason: "too_large" };
   }
