@@ -19,7 +19,7 @@ import {
   isTolerableSharpnessDrop,
   mapFaceBoxToVisibleViewport,
   validateFacePosition,
-  validateRightPose10to29,
+  validateProfilePose,
   type HeadPose,
 } from "@/components/diagnostic/cameraGuidance";
 
@@ -154,12 +154,12 @@ describe("real-time camera guidance", () => {
 
   it("rejects a genuinely distant face as too small", () => {
     const position = validateFacePosition({
-      left: 0.42,
-      top: 0.385,
-      right: 0.58,
-      bottom: 0.615,
-      width: 0.16,
-      height: 0.23,
+      left: 0.43,
+      top: 0.4,
+      right: 0.57,
+      bottom: 0.6,
+      width: 0.14,
+      height: 0.2,
       centerX: 0.5,
       centerY: 0.5,
     });
@@ -211,14 +211,15 @@ describe("real-time camera guidance", () => {
   });
 
   it("uses relaxed sharpness thresholds while preserving a real-blur floor", () => {
-    expect(faceConfig.minSharpness).toBe(4);
-    expect(profileConfig.minSharpness).toBe(3.5);
+    expect(faceConfig.minSharpness).toBe(3);
+    expect(profileConfig.minSharpness).toBe(2.75);
 
-    const mildlySoftFace = liveState("face", 100, 0.5, 0, 3);
-    const mildlySoftProfile = liveState("profile", 100, 0.5 - 15 / 350, 0, 2.75);
-    const genuinelyBlurryFace = liveState("face", 100, 0.5, 0, 1.5);
+    const mildlySoftFace = liveState("face", 100, 0.5, 0, 2);
+    const mildlySoftProfile = liveState("profile", 100, 0.5 - 15 / 350, 0, 1.5);
+    const genuinelyBlurryFace = liveState("face", 100, 0.5, 0, 1.4);
 
-    expect(mildlySoftFace.isRawValid).toBe(false);
+    expect(mildlySoftFace.isRawValid).toBe(true);
+    expect(mildlySoftProfile.isRawValid).toBe(true);
     expect(isTolerableSharpnessDrop(mildlySoftFace, "face")).toBe(true);
     expect(isTolerableSharpnessDrop(mildlySoftProfile, "profile")).toBe(true);
     expect(isTolerableSharpnessDrop(genuinelyBlurryFace, "face")).toBe(false);
@@ -272,8 +273,8 @@ describe("real-time camera guidance", () => {
       3024,
       4032,
     );
-    expect(faceInCrop.height).toBeGreaterThan(0.6);
-    expect(faceInCrop.height).toBeLessThan(0.8);
+    expect(faceInCrop.height).toBeGreaterThan(0.5);
+    expect(faceInCrop.height).toBeLessThan(0.7);
   });
 
   it("maps a native face box into the visible cropped viewport", () => {
@@ -340,16 +341,19 @@ describe("real-time camera guidance", () => {
     expect(state.guidanceMessage).toContain("floue");
   });
 
-  it("uses the same symmetric 10°–29° doctrine for both profile directions", () => {
+  it("uses the same tolerant symmetric 8°–30° doctrine for both profile directions", () => {
     const cases = [
       { yaw: 5, valid: false, message: "Tournez légèrement" },
-      { yaw: 9, valid: false, message: "Tournez légèrement" },
+      { yaw: 7, valid: false, message: "Tournez légèrement" },
+      { yaw: 8, valid: true, message: "Parfait" },
+      { yaw: 9, valid: true, message: "Parfait" },
       { yaw: 10, valid: true, message: "Parfait" },
       { yaw: 15, valid: true, message: "Parfait" },
       { yaw: 20, valid: true, message: "Parfait" },
       { yaw: 26, valid: true, message: "Parfait" },
       { yaw: 29, valid: true, message: "Parfait" },
-      { yaw: 30, valid: false, message: "Revenez" },
+      { yaw: 30, valid: true, message: "Parfait" },
+      { yaw: 31, valid: false, message: "Revenez" },
       { yaw: 35, valid: false, message: "Revenez" },
     ];
 
@@ -360,7 +364,7 @@ describe("real-time camera guidance", () => {
         expect(state.poseOk).toBe(valid);
         expect(state.isRawValid).toBe(valid);
         expect(state.guidanceMessage).toContain(message);
-        expect(validateRightPose10to29(state.pose)).toBe(valid);
+        expect(validateProfilePose(state.pose)).toBe(valid);
       });
     });
   });
@@ -374,7 +378,7 @@ describe("real-time camera guidance", () => {
   });
 
   it("rejects a face that is not centered", () => {
-    const state = liveState("face", 100, 0.5, 0.2);
+    const state = liveState("face", 100, 0.5, 0.24);
 
     expect(state.facePositionOk).toBe(false);
     expect(state.isRawValid).toBe(false);
@@ -403,16 +407,29 @@ describe("real-time camera guidance", () => {
     expect(state.guidanceMessage).toContain("visage");
   });
 
-  it("keeps the 10° lower boundary inclusive and 30° upper boundary exclusive", () => {
+  it("keeps both tolerant 3/4 boundaries inclusive and symmetric", () => {
     const pose = (yawDegrees: number): HeadPose => ({ yawDegrees, pitchDegrees: 0, rollDegrees: 0 });
 
-    expect(validateRightPose10to29(pose(9))).toBe(false);
-    expect(validateRightPose10to29(pose(10))).toBe(true);
-    expect(validateRightPose10to29(pose(29))).toBe(true);
-    expect(validateRightPose10to29(pose(30))).toBe(false);
-    expect(validateRightPose10to29(pose(-9))).toBe(false);
-    expect(validateRightPose10to29(pose(-10))).toBe(true);
-    expect(validateRightPose10to29(pose(-29))).toBe(true);
-    expect(validateRightPose10to29(pose(-30))).toBe(false);
+    expect(validateProfilePose(pose(7))).toBe(false);
+    expect(validateProfilePose(pose(8))).toBe(true);
+    expect(validateProfilePose(pose(30))).toBe(true);
+    expect(validateProfilePose(pose(31))).toBe(false);
+    expect(validateProfilePose(pose(-7))).toBe(false);
+    expect(validateProfilePose(pose(-8))).toBe(true);
+    expect(validateProfilePose(pose(-30))).toBe(true);
+    expect(validateProfilePose(pose(-31))).toBe(false);
+  });
+
+  it("accepts ordinary framing drift, distance variation and imperfect light", () => {
+    const cases = [
+      liveState("face", 39, 0.5, 0.18, 3, 0.34, 0.7),
+      liveState("face", 244, 0.5, -0.18, 3, 0.86, 0.92),
+      liveState("face", 100, 0.5, 0, 1.6, 0.4, 0.8),
+    ];
+
+    cases.forEach((state) => expect(state.isRawValid).toBe(true));
+    expect(liveState("face", 37).isRawValid).toBe(false);
+    expect(liveState("face", 246).isRawValid).toBe(false);
+    expect(liveState("face", 100, 0.5, 0, 1.4).isRawValid).toBe(false);
   });
 });

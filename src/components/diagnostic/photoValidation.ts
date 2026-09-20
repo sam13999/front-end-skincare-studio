@@ -11,7 +11,8 @@ import {
   readRegionFromSource,
   validateFacePosition,
   validateFrontPose,
-  validateRightPose10to29,
+  validateProfilePose,
+  CAMERA_GUIDANCE_THRESHOLDS,
 } from "./cameraGuidance";
 
 export interface PhotoValidationConfig {
@@ -27,9 +28,9 @@ export interface PhotoValidationConfig {
 
 // Aligned with the documented Zyla Skin Analyze Advanced image requirements.
 export const faceConfig: PhotoValidationConfig = {
-  minBrightness: 45,
-  maxBrightness: 240,
-  minSharpness: 4,
+  minBrightness: CAMERA_GUIDANCE_THRESHOLDS.minBrightness,
+  maxBrightness: CAMERA_GUIDANCE_THRESHOLDS.maxBrightness,
+  minSharpness: CAMERA_GUIDANCE_THRESHOLDS.minSharpness,
   minResolution: 201,
   maxResolution: 4095,
   minFileSizeKB: 100,
@@ -39,7 +40,7 @@ export const faceConfig: PhotoValidationConfig = {
 
 export const profileConfig: PhotoValidationConfig = {
   ...faceConfig,
-  minSharpness: 3.5,
+  minSharpness: CAMERA_GUIDANCE_THRESHOLDS.minSharpnessProfile,
 };
 
 export const ALLOWED_MIME = ["image/jpeg", "image/jpg"];
@@ -142,7 +143,7 @@ async function getFaceDetector(): Promise<MediaPipeFaceDetector> {
           delegate: "CPU",
         },
         runningMode: "IMAGE",
-        minDetectionConfidence: 0.6,
+        minDetectionConfidence: 0.55,
         minSuppressionThreshold: 0.3,
       });
     })().catch((error) => {
@@ -331,14 +332,14 @@ export async function validatePhoto(
         });
       }
       const pose = estimateHeadPose(landmarks, landmarkResult.facialTransformationMatrixes?.[0]);
-      const poseOk = type === "face" ? validateFrontPose(pose) : validateRightPose10to29(pose);
+      const poseOk = type === "face" ? validateFrontPose(pose) : validateProfilePose(pose);
       if (!poseOk) {
         const angle = Math.abs(pose?.yawDegrees ?? 0);
         issues.push({
-          code: type === "face" ? "not_frontal" : angle < 10 ? "profile_angle_too_low" : "profile_angle_too_high",
+          code: type === "face" ? "not_frontal" : angle < CAMERA_GUIDANCE_THRESHOLDS.profileYawMinInclusive ? "profile_angle_too_low" : "profile_angle_too_high",
           message: type === "face"
             ? "Regardez tout droit vers la caméra."
-            : angle < 10
+            : angle < CAMERA_GUIDANCE_THRESHOLDS.profileYawMinInclusive
               ? "Tournez légèrement la tête sur le côté."
               : "Revenez légèrement vers l’avant.",
           severity: "critical",

@@ -30,8 +30,8 @@ export interface CoverCrop {
   displayAspectRatio: number;
 }
 
-export const FACE_CAPTURE_TARGET_HEIGHT_RATIO = 0.70;
-const FACE_CAPTURE_MARGIN_RATIO = 1.25;
+export const FACE_CAPTURE_TARGET_HEIGHT_RATIO = 0.58;
+const FACE_CAPTURE_MARGIN_RATIO = 1.35;
 
 export interface HeadPose {
   /** Signed angle in degrees. Positive means the user's right. */
@@ -59,32 +59,32 @@ export interface CameraGuidanceState {
 // Shared framing contract. The live camera and the post-capture landmark
 // validation both consume these values; the oval remains a visual guide.
 export const FACE_FRAMING_THRESHOLDS = {
-  centerToleranceX: 0.18,
-  centerToleranceY: 0.16,
-  minVisibleFaceRatio: 0.8,
-  minFaceWidth: 0.17,
-  maxFaceWidth: 0.84,
-  minFaceHeight: 0.24,
-  maxFaceHeight: 0.92,
+  centerToleranceX: 0.22,
+  centerToleranceY: 0.20,
+  minVisibleFaceRatio: 0.72,
+  minFaceWidth: 0.15,
+  maxFaceWidth: 0.88,
+  minFaceHeight: 0.22,
+  maxFaceHeight: 0.94,
 } as const;
 
 export const CAMERA_GUIDANCE_THRESHOLDS = {
   // Luma is measured on the 0–255 scale from a small video frame.
-  minBrightness: 45,
-  maxBrightness: 240,
+  minBrightness: 38,
+  maxBrightness: 245,
   // Lowered to accept a normal handheld selfie while retaining the existing
   // hard-rejection floor at 50% of the relevant threshold.
-  minSharpness: 4,
-  minSharpnessProfile: 3.5,
-  maxTransientSharpnessDrops: 2,
+  minSharpness: 3,
+  minSharpnessProfile: 2.75,
+  maxTransientSharpnessDrops: 3,
   // A readable face is enough for the guided capture. The previous 400 px
   // projection was too demanding on portrait camera streams.
   ...FACE_FRAMING_THRESHOLDS,
-  frontYawMax: 12,
-  frontRollMax: 15,
-  rightYawMinInclusive: 10,
-  rightYawMaxExclusive: 30,
-  stableFramesRequired: 4,
+  frontYawMax: 15,
+  frontRollMax: 18,
+  profileYawMinInclusive: 8,
+  profileYawMaxInclusive: 30,
+  stableFramesRequired: 2,
   analysisIntervalMs: 120,
 } as const;
 
@@ -418,16 +418,18 @@ export function validateFrontPose(pose: HeadPose | null): boolean {
   );
 }
 
-export function validateRightPose10to29(pose: HeadPose | null): boolean {
+export function validateProfilePose(pose: HeadPose | null): boolean {
   if (!pose) return false;
-  // The product rule is intentionally symmetric: either side is valid.
-  // The lower bound is inclusive and the upper bound is exclusive; the
-  // underlying angle remains unrounded.
+  // Symmetric 3/4: either side is valid. Both boundaries are inclusive so a
+  // normal handheld estimate does not oscillate around an arbitrary edge.
   const yawMagnitude = Math.abs(pose.yawDegrees);
-  return yawMagnitude >= CAMERA_GUIDANCE_THRESHOLDS.rightYawMinInclusive
-    && yawMagnitude < CAMERA_GUIDANCE_THRESHOLDS.rightYawMaxExclusive
+  return yawMagnitude >= CAMERA_GUIDANCE_THRESHOLDS.profileYawMinInclusive
+    && yawMagnitude <= CAMERA_GUIDANCE_THRESHOLDS.profileYawMaxInclusive + 1e-6
     && Math.abs(pose.rollDegrees) <= CAMERA_GUIDANCE_THRESHOLDS.frontRollMax;
 }
+
+/** @deprecated Kept for import compatibility; the rule is symmetric. */
+export const validateRightPose10to29 = validateProfilePose;
 
 export function isTolerableSharpnessDrop(
   state: Pick<CameraGuidanceState, "faceCount" | "brightnessOk" | "sharpnessOk" | "sharpness" | "facePositionOk" | "poseOk">,
@@ -486,22 +488,23 @@ export function buildCameraGuidanceState(input: {
     : brightness >= CAMERA_GUIDANCE_THRESHOLDS.minBrightness && brightness <= CAMERA_GUIDANCE_THRESHOLDS.maxBrightness;
   const sharpnessThreshold = step === "face" ? CAMERA_GUIDANCE_THRESHOLDS.minSharpness : CAMERA_GUIDANCE_THRESHOLDS.minSharpnessProfile;
   const sharpnessOk = sharpness === null ? null : sharpness >= sharpnessThreshold;
-  const poseOk = step === "face" ? validateFrontPose(pose) : validateRightPose10to29(pose);
+  const poseOk = step === "face" ? validateFrontPose(pose) : validateProfilePose(pose);
+  const sharpnessUsable = sharpness !== null && sharpness >= sharpnessThreshold * 0.5;
 
   let guidanceMessage = "Préparez-vous pour la photo.";
   if (!cameraReady) guidanceMessage = "Activation de la caméra…";
   else if (faceCount === 0) guidanceMessage = "Placez votre visage dans le cadre";
   else if (faceCount > 1) guidanceMessage = "Une seule personne doit être visible";
   else if (brightnessOk === false) guidanceMessage = "Mettez-vous dans un endroit plus lumineux";
-  else if (sharpnessOk === false) guidanceMessage = "L’image est trop floue, stabilisez le téléphone";
+  else if (!sharpnessUsable) guidanceMessage = "L’image est trop floue, stabilisez le téléphone";
   else if (!position.ok && position.reason === "too_small") guidanceMessage = "Rapprochez-vous légèrement";
   else if (!position.ok && position.reason === "too_large") guidanceMessage = "Éloignez-vous légèrement";
   else if (!position.ok && position.reason === "cut_off") guidanceMessage = "Replacez votre visage dans le cadre";
   else if (!position.ok) guidanceMessage = "Placez votre visage dans le cadre";
   else if (step === "face" && !poseOk) guidanceMessage = "Regardez tout droit";
   else if (step === "profile" && !pose) guidanceMessage = "Tournez légèrement la tête sur le côté";
-  else if (step === "profile" && Math.abs(pose?.yawDegrees ?? 0) < CAMERA_GUIDANCE_THRESHOLDS.rightYawMinInclusive) guidanceMessage = "Tournez légèrement la tête sur le côté";
-  else if (step === "profile" && Math.abs(pose?.yawDegrees ?? 0) >= CAMERA_GUIDANCE_THRESHOLDS.rightYawMaxExclusive) guidanceMessage = "Revenez légèrement vers l’avant";
+  else if (step === "profile" && Math.abs(pose?.yawDegrees ?? 0) < CAMERA_GUIDANCE_THRESHOLDS.profileYawMinInclusive) guidanceMessage = "Tournez légèrement la tête sur le côté";
+  else if (step === "profile" && Math.abs(pose?.yawDegrees ?? 0) > CAMERA_GUIDANCE_THRESHOLDS.profileYawMaxInclusive + 1e-6) guidanceMessage = "Revenez légèrement vers l’avant";
   else if (brightnessOk === null) guidanceMessage = "Analyse de la lumière en cours…";
   else if (step === "profile" && poseOk) guidanceMessage = "Parfait, gardez cette position";
   else if (poseOk) guidanceMessage = "C’est bon, vous pouvez prendre la photo";
@@ -513,7 +516,7 @@ export function buildCameraGuidanceState(input: {
     sharpnessOk,
     facePositionOk: position.ok,
     poseOk,
-    isRawValid: cameraReady && faceCount === 1 && brightnessOk === true && position.ok && poseOk && sharpnessOk === true,
+    isRawValid: cameraReady && faceCount === 1 && brightnessOk === true && position.ok && poseOk && sharpnessUsable,
     poseAngle: pose?.yawDegrees ?? null,
     guidanceMessage,
     brightness,
@@ -535,9 +538,9 @@ async function createLandmarker(runningMode: "IMAGE" | "VIDEO"): Promise<FaceLan
     baseOptions: { modelAssetPath: MODEL_PATH, delegate: "CPU" },
     runningMode,
     numFaces: 2,
-    minFaceDetectionConfidence: 0.6,
-    minFacePresenceConfidence: 0.6,
-    minTrackingConfidence: 0.6,
+    minFaceDetectionConfidence: 0.55,
+    minFacePresenceConfidence: 0.55,
+    minTrackingConfidence: 0.55,
     outputFacialTransformationMatrixes: true,
   });
 }

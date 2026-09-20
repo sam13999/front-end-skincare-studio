@@ -37,7 +37,7 @@ const EMPTY_STATE: CameraGuidanceState = buildCameraGuidanceState({
 
 const CAMERA_CAPTURE_MAX_DIMENSION = 4095;
 const CAMERA_CAPTURE_MAX_BYTES = 5 * 1024 * 1024;
-const CAMERA_CAPTURE_JPEG_QUALITY = 0.97;
+const CAMERA_CAPTURE_JPEG_QUALITY = 0.95;
 
 type NativeImageCapture = {
   takePhoto: () => Promise<Blob>;
@@ -282,6 +282,8 @@ export const GuidedCamera = ({ step, onCapture, onClose, onFallback }: GuidedCam
       const encode = (width: number, height: number) => {
         canvas.width = width;
         canvas.height = height;
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = "high";
         try {
           // Keep the same unmirrored source orientation as the former file-input flow.
           context.drawImage(
