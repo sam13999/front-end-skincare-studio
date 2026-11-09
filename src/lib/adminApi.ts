@@ -17,6 +17,8 @@ export interface AdminSessionSummary {
   created_at: string;
   updated_at: string;
   status: "completed" | "in_progress" | "failed" | "partial";
+  review_revision?: string;
+  review_status?: "pending_review" | "needs_correction" | "approved" | "sent";
   raw_status?: string | null;
   current_stage?: string | null;
   last_successful_stage?: string | null;
@@ -130,5 +132,12 @@ export async function rerunAdminSession(token: string, sessionId: string, reason
 export async function resendAdminEmail(token: string, sessionId: string): Promise<Record<string, unknown>> {
   return adminFetch<Record<string, unknown>>(token, `/v1/admin/session/${encodeURIComponent(sessionId)}/resend-email`, {
     method: "POST",
+  });
+}
+
+
+export async function reviewAdminReport(token: string, sessionId: string, action: "approve" | "reject", expectedRevision: string, reason?: string) {
+  return adminFetch<Record<string, unknown>>(token, `/v1/admin/session/${encodeURIComponent(sessionId)}/review`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, expected_revision: expectedRevision, reason }),
   });
 }

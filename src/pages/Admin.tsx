@@ -31,12 +31,14 @@ import {
   fetchAdminSessions,
   PromptRun,
   resendAdminEmail,
+  reviewAdminReport,
   rerunAdminSession,
 } from "@/lib/adminApi";
 
 const TOKEN_KEY = "skinview_admin_token";
 
 const statusLabels: Record<string, string> = {
+  pending_review: "À vérifier", needs_correction: "À corriger", approved: "Approuvé", sent: "Envoyé",
   completed: "Complète",
   in_progress: "En cours",
   failed: "Échouée",
@@ -300,12 +302,22 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
     }
   }
 
+  async function review(action: "approve" | "reject") {
+    setBusy("review"); setNotice("");
+    try {
+      await reviewAdminReport(token, summary.session_id, action, summary.review_revision || "", reason);
+      setNotice(action === "approve" ? "Rapport approuvé. Vous pouvez maintenant l’envoyer." : "Rapport à corriger. L’accès client est bloqué.");
+      onRefresh();
+    } catch (err) { setNotice(err instanceof Error ? err.message : "Validation impossible."); }
+    finally { setBusy(""); }
+  }
+
   async function resend() {
     setBusy("email");
     setNotice("");
     try {
       await resendAdminEmail(token, summary.session_id);
-      setNotice("Email renvoyé avec succès.");
+      setNotice("Email envoyé avec succès.");
       onRefresh();
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Envoi impossible.");
@@ -357,7 +369,7 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
             <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">{summary.display_name}</h1>
             <p className="mt-1 font-mono text-xs text-slate-400">{summary.session_id}</p>
           </div>
-          <div className="flex flex-wrap gap-2"><StatusBadge value={summary.status} /><StatusBadge value={summary.payment.payment_status} /></div>
+          <div className="flex flex-wrap gap-2"><StatusBadge value={summary.review_status || summary.status} /><StatusBadge value={summary.payment.payment_status} /></div>
         </div>
         <div className="mt-6 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
           <Info label="Email" value={summary.email || "—"} />
@@ -403,11 +415,18 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
 
       {tab === "report" && <div className="space-y-4">
         <InfoCard title="Livraison">
+          <p className="mb-3 font-semibold">{{pending_review: "À vérifier", needs_correction: "À corriger", approved: "Approuvé", sent: "Envoyé"}[summary.review_status || "pending_review"]}</p>
+          <label htmlFor="review-reason">Correction demandée</label>
+          <textarea id="review-reason" className="mb-3 block w-full rounded border p-2" value={reason} onChange={e => setReason(e.target.value)} />
+          <div className="mb-3 flex gap-2">
+            <button className="primary-button" disabled={!!busy || !summary.pdf_available || (summary.review_status || "pending_review") !== "pending_review"} onClick={() => review("approve")}>Approuver ce rapport</button>
+            <button className="action-button" disabled={!!busy || !reason.trim()} onClick={() => review("reject")}>À corriger</button>
+          </div>
           <div className="flex flex-wrap gap-2">
             <button type="button" disabled={!summary.html_available || busy === "html"} className="primary-button disabled:opacity-40" onClick={() => artifact("html", "open", "rapport.html")}><ExternalLink className="h-3.5 w-3.5" /> Voir HTML</button>
             <button type="button" disabled={!summary.pdf_available || busy === "pdf"} className="action-button disabled:opacity-40" onClick={() => artifact("pdf", "download", "rapport.pdf")}><Download className="h-3.5 w-3.5" /> Télécharger PDF</button>
             <button type="button" className="action-button" onClick={() => artifact("pipeline_snapshot.json", "download", "session-final.json")}><FileJson className="h-3.5 w-3.5" /> JSON final</button>
-            <button type="button" disabled={!summary.pdf_available || busy === "email"} className="action-button disabled:opacity-40" onClick={resend}><Mail className="h-3.5 w-3.5" /> Renvoyer l’email</button>
+            <button type="button" disabled={!!busy || summary.review_status !== "approved"} className="action-button disabled:opacity-40" onClick={resend}><Mail className="h-3.5 w-3.5" /> Envoyer le rapport approuvé</button>
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-3"><Info label="Statut email" value={pretty((summary.email_status || {}).sent)} /><Info label="Destinataire" value={summary.email || "—"} /><Info label="Montant" value={formatAmount(summary.payment.payment_amount, summary.payment.payment_currency || "EUR")} /></div>
         </InfoCard>
@@ -509,7 +528,7 @@ function AdminPage() {
     return sessions.filter((item) => {
       const matchesQuery = !query || [item.display_name, item.first_name, item.email, item.session_id].join(" ").toLowerCase().includes(query);
       const matchesFilter = !filter
-        || (filter === "today" ? isToday(item.created_at) : item.status === filter || item.payment.payment_status === filter);
+        || (filter === "today" ? isToday(item.created_at) : (item.status === filter || item.review_status === filter) || item.payment.payment_status === filter);
       return matchesQuery && matchesFilter;
     });
   }, [sessions, search, filter]);
@@ -518,7 +537,7 @@ function AdminPage() {
   if (!token) return <Login onAuthenticated={setToken} />;
   if (detail) return <main className="min-h-screen bg-[#f5f7f9]"><header className="border-b border-slate-200 bg-white"><div className="mx-auto flex max-w-[1440px] items-center justify-between px-5 py-4 sm:px-8"><span className="font-semibold tracking-tight text-slate-950">SkinView <span className="text-slate-400">Admin</span></span><button type="button" className="action-button" onClick={logout}><LogOut className="h-3.5 w-3.5" /> Déconnexion</button></div></header><div className="mx-auto max-w-[1440px] px-5 py-6 sm:px-8"><DetailView token={token} detail={detail} onBack={() => { setDetail(null); navigate("/admin"); }} onRefresh={() => loadDetail(detail.summary.session_id)} /></div></main>;
 
-  const filters = [["", "Toutes"], ["today", "Aujourd’hui"], ["completed", "Complètes"], ["in_progress", "En cours"], ["failed", "Échouées"], ["paid", "Payées"], ["unpaid", "Non payées"]];
+  const filters = [["", "Toutes"], ["today", "Aujourd’hui"], ["pending_review", "À vérifier"], ["needs_correction", "À corriger"], ["approved", "Approuvés"], ["sent", "Envoyés"], ["completed", "Complètes"], ["in_progress", "En cours"], ["failed", "Échouées"], ["paid", "Payées"], ["unpaid", "Non payées"]];
   return (
     <main className="min-h-screen bg-[#f5f7f9]">
       <header className="border-b border-slate-200 bg-white"><div className="mx-auto flex max-w-[1440px] items-center justify-between px-5 py-4 sm:px-8"><div className="flex items-center gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-950 text-white"><ShieldCheck className="h-4 w-4" /></div><div><p className="font-semibold tracking-tight text-slate-950">SkinView <span className="text-slate-400">Admin</span></p><p className="text-[11px] text-slate-400">Suivi des sessions privées</p></div></div><button type="button" className="action-button" onClick={logout}><LogOut className="h-3.5 w-3.5" /> Déconnexion</button></div></header>
@@ -528,7 +547,7 @@ function AdminPage() {
         <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="flex flex-col gap-3 lg:flex-row"><div className="relative flex-1"><Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} className="h-10 w-full rounded-xl border border-slate-300 pl-9 pr-3 text-sm outline-none focus:border-slate-950" placeholder="Rechercher un prénom, email, session ou identifiant…" /></div><div className="flex gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1">{filters.map(([key, label]) => <button key={key} type="button" onClick={() => setFilter(key)} className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold ${filter === key ? "bg-white text-slate-950 shadow-sm" : "text-slate-500"}`}>{label}</button>)}</div></div>
           {error && <div className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
-          <div className="mt-5 overflow-x-auto"><table className="w-full min-w-[760px] text-left"><thead><tr className="border-b border-slate-200 text-[11px] uppercase tracking-[0.1em] text-slate-400"><th className="px-3 py-3 font-semibold">Session</th><th className="px-3 py-3 font-semibold">Date</th><th className="px-3 py-3 font-semibold">Email</th><th className="px-3 py-3 font-semibold">Statut</th><th className="px-3 py-3 font-semibold">Paiement</th><th className="px-3 py-3 font-semibold">Montant</th><th className="px-3 py-3" /></tr></thead><tbody>{filtered.map((item) => <tr key={item.session_id} className="cursor-pointer border-b border-slate-100 transition hover:bg-slate-50" onClick={() => { setDetail(null); navigate(`/admin/session/${item.session_id}`); }}><td className="px-3 py-4"><p className="font-semibold text-slate-900">{item.display_name}</p><p className="mt-1 font-mono text-[10px] text-slate-400">{item.session_id}</p></td><td className="whitespace-nowrap px-3 py-4 text-sm text-slate-600">{formatDate(item.created_at)}</td><td className="px-3 py-4 text-sm text-slate-600">{item.email || "—"}</td><td className="px-3 py-4"><StatusBadge value={item.status} /></td><td className="px-3 py-4"><StatusBadge value={item.payment.payment_status} /></td><td className="px-3 py-4 text-sm font-semibold text-slate-800">{formatAmount(item.payment.payment_amount, item.payment.payment_currency || "EUR")}</td><td className="px-3 py-4 text-right"><ChevronRight className="ml-auto h-4 w-4 text-slate-300" /></td></tr>)}</tbody></table>{!loading && filtered.length === 0 && <Empty text="Aucune session ne correspond aux critères." />}</div>
+          <div className="mt-5 overflow-x-auto"><table className="w-full min-w-[760px] text-left"><thead><tr className="border-b border-slate-200 text-[11px] uppercase tracking-[0.1em] text-slate-400"><th className="px-3 py-3 font-semibold">Session</th><th className="px-3 py-3 font-semibold">Date</th><th className="px-3 py-3 font-semibold">Email</th><th className="px-3 py-3 font-semibold">Statut</th><th className="px-3 py-3 font-semibold">Paiement</th><th className="px-3 py-3 font-semibold">Montant</th><th className="px-3 py-3" /></tr></thead><tbody>{filtered.map((item) => <tr key={item.session_id} className="cursor-pointer border-b border-slate-100 transition hover:bg-slate-50" onClick={() => { setDetail(null); navigate(`/admin/session/${item.session_id}`); }}><td className="px-3 py-4"><p className="font-semibold text-slate-900">{item.display_name}</p><p className="mt-1 font-mono text-[10px] text-slate-400">{item.session_id}</p></td><td className="whitespace-nowrap px-3 py-4 text-sm text-slate-600">{formatDate(item.created_at)}</td><td className="px-3 py-4 text-sm text-slate-600">{item.email || "—"}</td><td className="px-3 py-4"><StatusBadge value={item.review_status || item.status} /></td><td className="px-3 py-4"><StatusBadge value={item.payment.payment_status} /></td><td className="px-3 py-4 text-sm font-semibold text-slate-800">{formatAmount(item.payment.payment_amount, item.payment.payment_currency || "EUR")}</td><td className="px-3 py-4 text-right"><ChevronRight className="ml-auto h-4 w-4 text-slate-300" /></td></tr>)}</tbody></table>{!loading && filtered.length === 0 && <Empty text="Aucune session ne correspond aux critères." />}</div>
         </section>
       </div>
     </main>
@@ -536,3 +555,4 @@ function AdminPage() {
 }
 
 export default AdminPage;
+

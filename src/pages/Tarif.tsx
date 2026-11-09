@@ -82,7 +82,7 @@ const Tarif = () => {
               "SkinView est un service de conseil cosmétique.",
               "Le rapport n'est pas un avis médical.",
               "Aucune promesse de résultat.",
-              "Le rapport est envoyé par email. Reprise manuelle sous 24 à 48h en cas de problème technique.",
+              "Le rapport est vérifié par notre équipe puis envoyé par email sous 24 heures après votre demande.",
               "Sans affiliation à une marque.",
             ].map((d) => (
               <li
@@ -100,3 +100,4 @@ const Tarif = () => {
 };
 
 export default Tarif;
+

@@ -133,10 +133,8 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
       const pipeline = await runPipeline(currentSessionId, result.payload.questionnaire.email);
       setPipelineResult(pipeline);
       toast({
-        title: "Analyse terminée",
-        description: pipeline.email_status?.sent === true
-          ? "Votre rapport a été envoyé par email."
-          : "Votre rapport est disponible ci-dessous.",
+        title: "Demande reçue",
+        description: "Votre rapport sera vérifié par notre équipe puis envoyé par email sous 24 heures après votre demande.",
       });
       localStorage.removeItem(STORAGE_KEY);
     } catch (error) {
@@ -233,3 +231,4 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
 };
 
 export default DiagnosticFlow;
+
