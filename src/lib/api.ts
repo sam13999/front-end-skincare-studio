@@ -120,7 +120,7 @@ export async function runPipeline(sessionId: string, recipientEmail: string): Pr
   const response = await fetchWithTimeout(`${API_BASE_URL}/v1/session/${encodeURIComponent(sessionId)}/run`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ recipient_email: recipientEmail, send_email: true }),
+    body: JSON.stringify({ recipient_email: recipientEmail, send_email: false }),
   }, PIPELINE_TIMEOUT_MS);
   return parseResponse<RunPipelineResponse>(response);
 }
@@ -137,3 +137,4 @@ export async function downloadClientReport(sessionId: string): Promise<Blob> {
   }
   return response.blob();
 }
+

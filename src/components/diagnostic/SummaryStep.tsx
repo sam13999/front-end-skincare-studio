@@ -1,7 +1,6 @@
-import { useState } from "react";
 import { DiagnosticData, getVisibleQuestions } from "./types";
 import { Loader2, Pencil } from "lucide-react";
-import { clientReportUrl, downloadClientReport, type RunPipelineResponse } from "@/lib/api";
+import { type RunPipelineResponse } from "@/lib/api";
 
 interface SummaryStepProps {
   data: DiagnosticData;
@@ -24,8 +23,6 @@ export const SummaryStep = ({
   launchStage = null,
   pipelineResult = null,
 }: SummaryStepProps) => {
-  const [pdfError, setPdfError] = useState<string | null>(null);
-  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   const renderAnswer = (key: string) => {
     const value = data.answers[key];
@@ -99,57 +96,7 @@ export const SummaryStep = ({
 
       {pipelineResult ? (
         <div className="svd-result" role="status">
-          <p>
-            {pipelineResult.email_status?.sent === true
-              ? `Email envoyé à ${data.email}.`
-              : pipelineResult.email_status?.reason
-                ? `Email non envoyé : ${pipelineResult.email_status.reason}`
-                : "Email non envoyé."}
-          </p>
-          <div className="svd-result-actions">
-            <a
-              className="svd-primary svd-full"
-              href={clientReportUrl(pipelineResult.session_id, "html")}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Voir mon rapport HTML
-            </a>
-            <button
-              type="button"
-              className="svd-secondary svd-full"
-              disabled={downloadingPdf}
-              onClick={async () => {
-                setPdfError(null);
-                setDownloadingPdf(true);
-                try {
-                  const blob = await downloadClientReport(pipelineResult.session_id);
-                  const url = URL.createObjectURL(blob);
-                  const anchor = document.createElement("a");
-                  anchor.href = url;
-                  anchor.download = "rapport-skinview.pdf";
-                  anchor.rel = "noopener";
-                  document.body.appendChild(anchor);
-                  anchor.click();
-                  anchor.remove();
-                  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-                } catch (error) {
-                  setPdfError(error instanceof Error ? error.message : "Le rapport PDF n’est pas disponible pour le moment.");
-                } finally {
-                  setDownloadingPdf(false);
-                }
-              }}
-            >
-              {downloadingPdf ? (
-                <><Loader2 className="svd-spinner" aria-hidden="true" /> Préparation du PDF…</>
-              ) : pdfError ? (
-                "Réessayer le téléchargement PDF"
-              ) : (
-                "Télécharger mon rapport PDF"
-              )}
-            </button>
-          </div>
-          {pdfError && <p className="svd-error" role="alert">{pdfError}</p>}
+          <p>Votre demande est reçue. Votre rapport sera vérifié par notre équipe puis envoyé à {data.email} sous 24 heures après votre demande.</p>
         </div>
       ) : (
         <button type="button" className="svd-primary svd-full" onClick={onLaunch} disabled={launching}>
@@ -163,3 +110,4 @@ export const SummaryStep = ({
     </section>
   );
 };
+
