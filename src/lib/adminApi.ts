@@ -120,6 +120,7 @@ export async function fetchAdminSession(token: string, sessionId: string): Promi
 
 export async function fetchAdminArtifact(token: string, sessionId: string, kind: string): Promise<Blob> {
   const response = await fetch(`${API_BASE_URL}/v1/admin/session/${encodeURIComponent(sessionId)}/artifact/${kind.split("/").map(encodeURIComponent).join("/")}`, {
+    cache: "no-store",
     headers: {
       "X-Admin-Token": token,
       Authorization: `Bearer ${token}`,
