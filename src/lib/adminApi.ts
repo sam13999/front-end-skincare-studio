@@ -73,6 +73,14 @@ export interface AdminDetailResponse {
   raw_session: Record<string, unknown>;
 }
 
+export type EditPath = Array<string | number>;
+export interface ReportEditing {
+  fields: Array<{ path: EditPath; label: string; section: string; value: string }>;
+  zooms: Array<{ signal_id: string; source_photo: string; crop_box: number[]; crop_method: string; source_width: number; source_height: number; title: string }>;
+  history: Array<{ revision: number; action: string; reason: string; snapshot: string }>;
+  review_revision: string;
+}
+
 async function adminFetch<T>(token: string, path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -85,8 +93,8 @@ async function adminFetch<T>(token: string, path: string, init?: RequestInit): P
 
   const body = await response.json().catch(() => null);
   if (!response.ok) {
-    const message = body && typeof body === "object" && "message" in body
-      ? String((body as { message?: unknown }).message || "")
+    const message = body && typeof body === "object"
+      ? String((body as { message?: string; detail?: { message?: string } }).detail?.message || (body as { message?: string }).message || "")
       : "";
     throw new Error(message || (response.status === 401 ? "Token admin invalide." : "Erreur admin."));
   }
@@ -140,4 +148,35 @@ export async function reviewAdminReport(token: string, sessionId: string, action
   return adminFetch<Record<string, unknown>>(token, `/v1/admin/session/${encodeURIComponent(sessionId)}/review`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, expected_revision: expectedRevision, reason }),
   });
+}
+
+const editingPath = (sessionId: string) => `/v1/admin/session/${encodeURIComponent(sessionId)}/editing`;
+
+export const fetchReportEditing = (token: string, sessionId: string) =>
+  adminFetch<ReportEditing>(token, editingPath(sessionId));
+
+export const saveReportText = (token: string, sessionId: string, expectedRevision: string, changes: Array<{ path: EditPath; value: string }>) =>
+  adminFetch<{ review_revision: string }>(token, `${editingPath(sessionId)}/text`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ expected_revision: expectedRevision, changes }),
+  });
+
+export const saveReportCrop = (token: string, sessionId: string, index: number, expectedRevision: string, rect: number[]) =>
+  adminFetch<{ review_revision: string }>(token, `${editingPath(sessionId)}/zoom/${index}`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ expected_revision: expectedRevision, rect }),
+  });
+
+export const revertReport = (token: string, sessionId: string, revision: number, expectedRevision: string) =>
+  adminFetch<{ review_revision: string }>(token, `${editingPath(sessionId)}/revert`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ expected_revision: expectedRevision, revision }),
+  });
+
+export async function fetchOriginalZoom(token: string, sessionId: string, index: number): Promise<Blob> {
+  const response = await fetch(`${API_BASE_URL}${editingPath(sessionId)}/zoom/${index}/original`, {
+    headers: { "X-Admin-Token": token, Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error("Photo originale indisponible.");
+  return response.blob();
 }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import ReportEditor from "@/components/admin/ReportEditor";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -349,6 +350,7 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
     ["prompts", "Prompts"],
     ["qa", "QA"],
     ["report", "Rapport"],
+    ["editing", "Corriger le rapport"],
     ["history", "Historique / logs"],
   ];
 
@@ -434,6 +436,8 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
         <InfoCard title="Routine finale"><JsonPanel value={routine} /></InfoCard>
         <InfoCard title="Artefacts disponibles"><div className="space-y-2">{detail.artifacts.map((item) => <div key={item.path} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 text-xs"><span className="font-mono text-slate-600">{item.path}</span><span className="text-slate-400">{Math.round(item.size / 1024)} Ko</span></div>)}</div></InfoCard>
       </div>}
+
+      {tab === "editing" && <InfoCard title="Corrections avant validation"><ReportEditor token={token} sessionId={summary.session_id} onSaved={onRefresh} /></InfoCard>}
 
       {tab === "history" && <div className="space-y-4">
         <InfoCard title="Historique des étapes"><div className="space-y-2">{detail.history.length ? detail.history.map((item, index) => <div key={`${String(item.ts)}-${index}`} className="grid gap-1 rounded-xl border border-slate-100 p-3 text-xs sm:grid-cols-[150px_1fr_auto] sm:items-center"><span className="text-slate-400">{formatDate(item.ts as string)}</span><span className="font-semibold text-slate-700">{String(item.stage || "—")}</span><span className={item.ok ? "text-emerald-700" : "text-red-700"}>{item.ok ? "OK" : "Échec"}</span></div>) : <Empty text="Aucun log disponible." />}</div></InfoCard>
