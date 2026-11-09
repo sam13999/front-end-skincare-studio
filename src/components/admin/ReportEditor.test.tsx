@@ -9,6 +9,26 @@ vi.mock("@/lib/adminApi", () => ({
 }));
 
 describe("ReportEditor", () => {
+  it("borne le voile à la photo et garde historique et aperçu utilisables après recadrage", async () => {
+    const editing = { review_revision: "c".repeat(64),
+      zooms: [{ title: "Texture", signal_id: "texture", source_photo: "face_raw", crop_method: "manual",
+        source_width: 400, source_height: 400, crop_box: [100, 100, 300, 300] }],
+      history: [{ revision: 1, reason: "Original" }], fields: [] };
+    vi.mocked(api.fetchReportEditing).mockResolvedValue(editing);
+    vi.mocked(api.fetchOriginalZoom).mockResolvedValue(new Blob(["photo"]));
+    vi.mocked(api.saveReportCrop).mockResolvedValue({ review_revision: "d".repeat(64) });
+    vi.mocked(api.fetchAdminArtifact).mockResolvedValue(new Blob(["PDF"]));
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:photo") });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+    render(<ReportEditor token="admin" sessionId="session" onSaved={vi.fn()} />);
+    const original = await screen.findByAltText("Photo originale : face_raw");
+    expect(original.parentElement).toHaveClass("overflow-hidden");
+    expect(original.parentElement?.querySelector("[class*='shadow-[']")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer ce cadrage" }));
+    await waitFor(() => expect(api.saveReportCrop).toHaveBeenCalledOnce());
+    await screen.findByTitle("Aperçu du rapport");
+    expect(screen.getByRole("button", { name: "Restaurer" })).toBeEnabled();
+  });
   it("sauvegarde les champs structurés et prévisualise sans appel IA", async () => {
     const saved = vi.fn();
     const editing = { review_revision: "a".repeat(64), zooms: [], history: [],
