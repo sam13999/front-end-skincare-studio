@@ -403,6 +403,10 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
       </div>}
 
       {tab === "analysis" && <div className="space-y-4">
+        {detail.analysis.photo_evidence_limit && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          {String((detail.analysis.photo_evidence_limit as { message?: string }).message || "Preuves photographiques limitées.")}
+          <span className="ml-1">({String((detail.analysis.photo_evidence_limit as { available_count?: number }).available_count ?? "?")} signal(s) admissible(s))</span>
+        </div>}
         <InfoCard title="Analyse disponible"><JsonPanel value={detail.analysis} label="Vue formatée / données normalisées" /></InfoCard>
         <div className="flex flex-wrap gap-2"><button type="button" className="action-button" onClick={() => navigator.clipboard?.writeText(JSON.stringify(detail.analysis, null, 2))}><Copy className="h-3.5 w-3.5" /> Copier l’analyse</button><button type="button" className="action-button" onClick={() => downloadText("analysis.json", JSON.stringify(detail.analysis, null, 2), "application/json")}><Download className="h-3.5 w-3.5" /> Vue JSON brute</button></div>
       </div>}
