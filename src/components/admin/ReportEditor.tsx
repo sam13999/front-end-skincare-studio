@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { fetchAdminArtifact, fetchOriginalZoom, fetchReportEditing, ReportEditing,
   revertReport, saveReportCrop, saveReportText } from "@/lib/adminApi";
+const PdfPreview = lazy(() => import("./PdfPreview"));
 
 type Rect = [number, number, number, number];
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -11,6 +12,7 @@ function CropEditor({ token, sessionId, zoom, index, revision, onSaved }: {
 }) {
   const [src, setSrc] = useState("");
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
   const img = useRef<HTMLImageElement>(null);
   const initial = zoom.crop_box?.length === 4 && zoom.source_width && zoom.source_height
     ? [zoom.crop_box[0] / zoom.source_width, zoom.crop_box[1] / zoom.source_height,
@@ -40,9 +42,10 @@ function CropEditor({ token, sessionId, zoom, index, revision, onSaved }: {
   }
 
   async function save() {
-    setError("");
-    try { await saveReportCrop(token, sessionId, index, revision, rect); onSaved(); }
+    setError(""); setSaving(true);
+    try { await saveReportCrop(token, sessionId, index, revision, rect); await onSaved(); }
     catch (e) { setError(e instanceof Error ? e.message : "Cadrage refusé"); }
+    finally { setSaving(false); }
   }
 
   return <div className="rounded-xl border border-slate-200 p-4">
@@ -66,7 +69,7 @@ function CropEditor({ token, sessionId, zoom, index, revision, onSaved }: {
       <div className="mt-2 w-64 overflow-hidden rounded border bg-slate-100 relative" style={{ aspectRatio: `${rect[2] * (zoom.source_width || 1)} / ${rect[3] * (zoom.source_height || 1)}` }}>
         <img src={src} alt="Aperçu du recadrage" className="absolute max-w-none" style={{ width: `${100 / rect[2]}%`, height: `${100 / rect[3]}%`, left: `${-rect[0] / rect[2] * 100}%`, top: `${-rect[1] / rect[3] * 100}%` }} />
       </div>
-      <button type="button" className="action-button mt-3" onClick={save}>Enregistrer ce cadrage</button>
+      <button type="button" className="action-button mt-3" disabled={saving} onClick={save}>{saving ? "Actualisation du PDF…" : "Enregistrer ce cadrage"}</button>
     </div>}
     {error && <p role="alert" className="mt-2 text-sm text-red-700">{error}</p>}
   </div>;
@@ -77,7 +80,7 @@ export default function ReportEditor({ token, sessionId, onSaved }: { token: str
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [preview, setPreview] = useState("");
+  const [preview, setPreview] = useState<Blob | null>(null);
   const [busy, setBusy] = useState(false);
   const key = (path: Array<string | number>) => JSON.stringify(path);
 
@@ -87,37 +90,40 @@ export default function ReportEditor({ token, sessionId, onSaved }: { token: str
       setData(result);
       setValues(Object.fromEntries(result.fields.map(field => [key(field.path), field.value])));
       setError("");
-    } catch (e) { setError(e instanceof Error ? e.message : "Édition indisponible"); }
+      return result;
+    } catch (e) { setError(e instanceof Error ? e.message : "Édition indisponible"); throw e; }
   }
-  useEffect(() => { load(); }, [token, sessionId]);
-  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+  useEffect(() => { void load().catch(() => {}); }, [token, sessionId]);
 
-  async function refresh() {
-    await load(); onSaved();
+  async function refresh(expectedRevision?: string) {
+    const current = await load(); onSaved();
+    if (expectedRevision && current.review_revision !== expectedRevision) throw new Error("Le rapport a changé entre l’enregistrement et l’aperçu. Rechargez la session.");
     const blob = await fetchAdminArtifact(token, sessionId, "pdf");
-    setPreview(URL.createObjectURL(blob));
+    setPreview(blob);
     setNotice("Nouvelle version générée. Vérifiez-la avant approbation ; aucun email n’a été envoyé.");
   }
   async function save() {
     if (!data) return;
     const changes = data.fields.filter(field => values[key(field.path)] !== field.value)
       .map(field => ({ path: field.path, value: values[key(field.path)] }));
-    if (!changes.length) return;
+    if (!changes.length) { setNotice("Aucun texte modifié. Le cadrage s’enregistre séparément."); return; }
     setBusy(true); setError("");
-    try { await saveReportText(token, sessionId, data.review_revision, changes); await refresh(); }
+    setNotice("");
+    try { const saved = await saveReportText(token, sessionId, data.review_revision, changes); await refresh(saved.review_revision); }
     catch (e) { setError(e instanceof Error ? e.message : "Correction refusée"); }
     finally { setBusy(false); }
   }
   async function restore(revision: number) {
     if (!data) return;
     setBusy(true); setError("");
-    try { await revertReport(token, sessionId, revision, data.review_revision); await refresh(); }
+    try { const saved = await revertReport(token, sessionId, revision, data.review_revision); await refresh(saved.review_revision); }
     catch (e) { setError(e instanceof Error ? e.message : "Retour impossible"); }
     finally { setBusy(false); }
   }
 
   if (!data) return <p className="text-sm text-slate-500">{error || "Chargement des sections…"}</p>;
   const sections = [...new Set(data.fields.map(field => field.section))];
+  const hasTextChanges = data.fields.some(field => values[key(field.path)] !== field.value);
   return <div className="space-y-5">
     <p className="text-sm text-slate-600">Corrigez les textes affichés. Les produits, fréquences et sources des observations restent verrouillés. Chaque enregistrement reconstruit seulement le HTML et le PDF.</p>
     {sections.map(section => <section key={section} className="rounded-xl border p-4">
@@ -128,13 +134,14 @@ export default function ReportEditor({ token, sessionId, onSaved }: { token: str
           onChange={e => setValues(current => ({ ...current, [key(field.path)]: e.target.value }))} />
       </label>)}</div>
     </section>)}
-    <button type="button" className="primary-button" disabled={busy} onClick={save}>{busy ? "Génération…" : "Enregistrer et reconstruire HTML/PDF"}</button>
+    <button type="button" className="primary-button disabled:opacity-50" disabled={busy || !hasTextChanges} onClick={save}>{busy ? "Reconstruction HTML/PDF…" : "Enregistrer et reconstruire HTML/PDF"}</button>
+    {!hasTextChanges && <p className="text-sm text-slate-500">Modifiez un texte pour activer ce bouton. Les recadrages s’enregistrent séparément.</p>}
     {data.zooms.length > 0 && <section><h3 className="mb-3 font-semibold">Recadrages photographiques</h3><div className="space-y-3">{data.zooms.map((zoom, index) =>
       <CropEditor key={`${data.review_revision}-${index}`} token={token} sessionId={sessionId} zoom={zoom} index={index} revision={data.review_revision} onSaved={refresh} />)}</div></section>}
     {data.history.length > 0 && <section className="rounded-xl border p-4"><h3 className="font-semibold">Historique des versions</h3><div className="mt-3 space-y-2">{data.history.map(item =>
       <div key={item.revision} className="flex items-center justify-between gap-3 text-sm"><span>Version {item.revision} · {item.reason}</span><button type="button" className="action-button" disabled={busy} onClick={() => restore(item.revision)}>Restaurer</button></div>)}</div></section>}
     {notice && <p className="rounded bg-blue-50 p-3 text-sm text-blue-800">{notice}</p>}
     {error && <p role="alert" className="rounded bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-    {preview && <div><h3 className="mb-2 font-semibold">Aperçu PDF actualisé</h3><iframe title="Aperçu du rapport" src={preview} className="h-[750px] w-full rounded border" /></div>}
+    {preview && <Suspense fallback={<p>Chargement de l’aperçu PDF…</p>}><PdfPreview blob={preview} /></Suspense>}
   </div>;
 }
