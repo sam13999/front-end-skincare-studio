@@ -49,9 +49,13 @@ function CropEditor({ token, sessionId, zoom, index, revision, onSaved }: {
     <h4 className="font-semibold">{zoom.title} · signal {zoom.signal_id || "inconnu"}</h4>
     <p className="mb-3 text-xs text-slate-500">{zoom.source_photo} · {zoom.crop_method === "anatomical_approximation" ? "Zone anatomique approximative" : zoom.crop_method === "manual" ? "Cadrage manuel" : "Coordonnées fournisseur"}</p>
     {src && <div className="max-w-xl">
-      <div className="relative inline-block max-w-full touch-none" onPointerMove={move} onPointerUp={() => gesture.current = null} onPointerCancel={() => gesture.current = null}>
+      <div className="relative inline-block max-w-full overflow-hidden touch-none" onPointerMove={move} onPointerUp={() => gesture.current = null} onPointerCancel={() => gesture.current = null}>
         <img ref={img} src={src} alt={`Photo originale : ${zoom.source_photo}`} className="block max-h-[520px] max-w-full select-none" draggable={false} />
-        <div className="absolute cursor-move border-2 border-white bg-black/10 shadow-[0_0_0_999px_rgba(0,0,0,.4)]"
+        <div className="pointer-events-none absolute inset-x-0 top-0 bg-black/40" style={{ height: `${rect[1] * 100}%` }} />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-black/40" style={{ height: `${(1 - rect[1] - rect[3]) * 100}%` }} />
+        <div className="pointer-events-none absolute left-0 bg-black/40" style={{ top: `${rect[1] * 100}%`, height: `${rect[3] * 100}%`, width: `${rect[0] * 100}%` }} />
+        <div className="pointer-events-none absolute right-0 bg-black/40" style={{ top: `${rect[1] * 100}%`, height: `${rect[3] * 100}%`, width: `${(1 - rect[0] - rect[2]) * 100}%` }} />
+        <div className="absolute cursor-move border-2 border-white bg-black/10"
           style={{ left: `${rect[0] * 100}%`, top: `${rect[1] * 100}%`, width: `${rect[2] * 100}%`, height: `${rect[3] * 100}%` }}
           onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); gesture.current = { mode: "move", x: e.clientX, y: e.clientY, start: rect }; }}>
           <span className="absolute bottom-0 right-0 h-5 w-5 cursor-nwse-resize bg-white"
