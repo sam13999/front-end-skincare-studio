@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import {
   adminAuthCheck,
+  fetchZylaMap,
   AdminDetailResponse,
   AdminSessionSummary,
   fetchAdminArtifact,
@@ -96,6 +97,30 @@ function StatusBadge({ value }: { value: string }) {
       {value in statusLabels ? statusLabels[value] : paymentLabels[value] || value}
     </span>
   );
+}
+
+function ZylaMapPreview({ token, sessionId, photo, name }: { token: string; sessionId: string; photo: string; name: string }) {
+  const [opened, setOpened] = useState(false);
+  const [src, setSrc] = useState("");
+  const [error, setError] = useState("");
+  const title = `${name} · ${photo === "face" ? "Face" : "Profil"}`;
+  useEffect(() => {
+    if (!opened) return;
+    let active = true;
+    let url = "";
+    fetchZylaMap(token, sessionId, photo, name).then(blob => {
+      if (!active) return;
+      url = URL.createObjectURL(blob);
+      setSrc(url);
+    }).catch(err => { if (active) setError(err.message); });
+    return () => { active = false; if (url) URL.revokeObjectURL(url); };
+  }, [opened, token, sessionId, photo, name]);
+  return <div className="space-y-2">
+    {!opened && <button type="button" className="action-button" onClick={() => setOpened(true)}>Voir {title}</button>}
+    {opened && !src && !error && <p>Chargement de {title}…</p>}
+    {src && <img src={src} alt={title} className="max-h-96 rounded" />}
+    {error && <p role="alert">{error}</p>}
+  </div>;
 }
 
 function JsonPanel({ value, label = "JSON brut" }: { value: unknown; label?: string }) {
@@ -407,8 +432,22 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
           {String((detail.analysis.photo_evidence_limit as { message?: string }).message || "Preuves photographiques limitées.")}
           <span className="ml-1">({String((detail.analysis.photo_evidence_limit as { available_count?: number }).available_count ?? "?")} signal(s) admissible(s))</span>
         </div>}
-        <InfoCard title="Analyse disponible"><JsonPanel value={detail.analysis} label="Vue formatée / données normalisées" /></InfoCard>
-        <div className="flex flex-wrap gap-2"><button type="button" className="action-button" onClick={() => navigator.clipboard?.writeText(JSON.stringify(detail.analysis, null, 2))}><Copy className="h-3.5 w-3.5" /> Copier l’analyse</button><button type="button" className="action-button" onClick={() => downloadText("analysis.json", JSON.stringify(detail.analysis, null, 2), "application/json")}><Download className="h-3.5 w-3.5" /> Vue JSON brute</button></div>
+        {[
+          { title: "Réponse brute Zyla sans images", name: "zyla-raw.json", value: detail.analysis.zyla_raw },
+          { title: "Caractéristiques normalisées par photographie", name: "zyla-normalized.json", value: detail.analysis.zyla_normalized },
+          { title: "Payload envoyé à Prompt 2", name: "prompt2-submitted.json", value: detail.prompts.prompt_2?.at(-1)?.debug_info?.submitted_input },
+          { title: "Payload de réparation de Prompt 2", name: "prompt2-repair-submitted.json", value: detail.prompts.prompt_2?.at(-1)?.debug_info?.submitted_repair_input },
+        ].filter(item => item.value || item.name !== "prompt2-repair-submitted.json").map(item => <InfoCard key={item.name} title={item.title}>
+          {item.value ? <>
+            <JsonPanel value={item.value} />
+            <button type="button" className="action-button mt-2" onClick={() => downloadText(item.name, JSON.stringify(item.value, null, 2), "application/json")}><Download className="h-3.5 w-3.5" /> Télécharger JSON</button>
+          </> : <p>Données indisponibles pour cette génération.</p>}
+        </InfoCard>)}
+        <InfoCard title="Cartes visuelles Zyla">
+          {detail.analysis.zyla_maps?.length ? detail.analysis.zyla_maps.map(map => <ZylaMapPreview key={`${map.photo}:${map.name}`}
+            token={token} sessionId={summary.session_id} photo={map.photo} name={map.name} />) : <p>Aucune carte disponible.</p>}
+        </InfoCard>
+        <InfoCard title="Autres diagnostics"><JsonPanel value={Object.fromEntries(Object.entries(detail.analysis).filter(([key]) => !["zyla_raw", "zyla_normalized", "zyla_maps"].includes(key)))} /></InfoCard>
       </div>}
 
       {tab === "prompts" && <div className="space-y-3">{promptOrder.map((name) => <PromptCard key={name} name={name} runs={detail.prompts[name] || []} />)}</div>}

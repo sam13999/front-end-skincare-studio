@@ -48,7 +48,7 @@ export interface PromptRun {
   raw_output?: string | null;
   parsed_output?: unknown;
   qa_report?: unknown;
-  debug_info?: unknown;
+  debug_info?: { submitted_input?: unknown; submitted_repair_input?: unknown } & Record<string, unknown>;
   artifact_name?: string;
   repaired?: boolean;
 }
@@ -59,7 +59,11 @@ export interface AdminDetailResponse {
     questionnaire: Record<string, unknown>;
     photos: Array<{ kind: string; url: string }>;
   };
-  analysis: Record<string, unknown>;
+  analysis: Record<string, unknown> & {
+    zyla_raw?: unknown;
+    zyla_normalized?: unknown;
+    zyla_maps?: Array<{ photo: string; name: string }>;
+  };
   prompts: Record<string, PromptRun[]>;
   qa: {
     stages: Record<string, { status: "OK" | "Warnings" | "Blocage"; issues: Array<{ code?: string; severity?: string; message?: string; stage?: string; metadata?: Record<string, unknown> }> }>;
@@ -74,7 +78,19 @@ export interface AdminDetailResponse {
 }
 
 export type EditPath = Array<string | number>;
+export interface ZylaDetection {
+  id: string;
+  source_photo: string;
+  title: string;
+  zone: string;
+  confidence: number | null;
+  rect: [number, number, number, number];
+  source_width: number;
+  source_height: number;
+}
+
 export interface ReportEditing {
+  detections?: ZylaDetection[];
   fields: Array<{ path: EditPath; label: string; section: string; value: string }>;
   zooms: Array<{ signal_id: string; source_photo: string; crop_box: number[]; crop_method: string; source_width: number; source_height: number; title: string }>;
   history: Array<{ revision: number; action: string; reason: string; snapshot: string }>;
@@ -162,10 +178,10 @@ export const saveReportText = (token: string, sessionId: string, expectedRevisio
     body: JSON.stringify({ expected_revision: expectedRevision, changes }),
   });
 
-export const saveReportCrop = (token: string, sessionId: string, index: number, expectedRevision: string, rect: number[]) =>
+export const saveReportCrop = (token: string, sessionId: string, index: number, expectedRevision: string, rect: number[], detectionId?: string) =>
   adminFetch<{ review_revision: string }>(token, `${editingPath(sessionId)}/zoom/${index}`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ expected_revision: expectedRevision, rect }),
+    body: JSON.stringify({ expected_revision: expectedRevision, rect, detection_id: detectionId }),
   });
 
 export const revertReport = (token: string, sessionId: string, revision: number, expectedRevision: string) =>
@@ -174,10 +190,21 @@ export const revertReport = (token: string, sessionId: string, revision: number,
     body: JSON.stringify({ expected_revision: expectedRevision, revision }),
   });
 
-export async function fetchOriginalZoom(token: string, sessionId: string, index: number): Promise<Blob> {
-  const response = await fetch(`${API_BASE_URL}${editingPath(sessionId)}/zoom/${index}/original`, {
+export async function fetchOriginalZoom(token: string, sessionId: string, index: number, detectionId?: string): Promise<Blob> {
+  const query = detectionId ? `?${new URLSearchParams({ detection_id: detectionId })}` : "";
+  const response = await fetch(`${API_BASE_URL}${editingPath(sessionId)}/zoom/${index}/original${query}`, {
     headers: { "X-Admin-Token": token, Authorization: `Bearer ${token}` },
   });
   if (!response.ok) throw new Error("Photo originale indisponible.");
+  return response.blob();
+}
+
+export async function fetchZylaMap(token: string, sessionId: string, photo: string, name: string): Promise<Blob> {
+  const path = [sessionId, photo, name].map(encodeURIComponent);
+  const response = await fetch(`${API_BASE_URL}/v1/admin/session/${path[0]}/zyla-map/${path[1]}/${path[2]}`, {
+    cache: "no-store",
+    headers: { "X-Admin-Token": token, Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error("Carte Zyla indisponible ou illisible.");
   return response.blob();
 }
