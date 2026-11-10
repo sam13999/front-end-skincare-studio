@@ -102,3 +102,44 @@ describe("AdminPage", () => {
     expect(await screen.findByAltText("red_area · Profil")).toHaveAttribute("src", "blob:zyla");
   });
 });
+
+it.each([false, true])("affiche l’échec de Prompt 1 et ses diagnostics (ancienne session=%s)", async (oldSession) => {
+  const sessionId = "d".repeat(32);
+  const detail = {
+    summary: { ...summary(sessionId, "failed", "Session échouée"), failed_stage: "prompt_1" },
+    user: { questionnaire: {}, photos: [] }, analysis: {},
+    prompts: { prompt_1: [{ status: "failed", parsed_output: oldSession ? null : { profile: { insights: [] } },
+      input_payload: oldSession ? undefined : { context: "exact" },
+      debug_info: { error: "QA bloquant après repair", output_unavailable: oldSession, initial_raw_output: oldSession ? undefined : "original" },
+      qa_report: { status: "fail", issues: oldSession ? [] : [
+        { severity: "fail", code: "unproven_profile", message: "Référence rejetée : invented", path: "profile.insights[0]", metadata: { invalid_refs: ["invented"] } },
+        { severity: "warning", code: "length", message: "Texte trop long" },
+      ] },
+    }] },
+    qa: { stages: {}, issues: [], totals: { ok: 0, warnings: 0, blocking: 1 } },
+    artifacts: [], history: [], rerun_history: [], raw_session: {},
+  };
+  vi.spyOn(global, "fetch").mockImplementation(async (input) => {
+    const url = String(input);
+    return { ok: true, status: 200, json: async () => url.includes("/auth/check") ? { authenticated: true }
+      : url.includes(`/session/${sessionId}`) ? detail : { ...listResponse, items: [detail.summary] } } as Response;
+  });
+  render(<MemoryRouter initialEntries={[`/admin/session/${sessionId}`]}><Routes><Route path="/admin/session/:sessionId" element={<AdminPage />} /></Routes></MemoryRouter>);
+  fireEvent.change(screen.getByLabelText("Token admin"), { target: { value: "test-token" } });
+  fireEvent.submit(screen.getByRole("button", { name: "Se connecter" }).closest("form")!);
+  expect(await screen.findByText(/Échec à l’étape prompt_1/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Prompts" }));
+  expect(screen.getByText("Prompt 1 a échoué")).toBeInTheDocument();
+  expect(screen.getByText("QA bloquant après repair")).toBeInTheDocument();
+  if (oldSession) {
+    expect(screen.getByText(/La sortie rejetée n’a pas été conservée/)).toBeInTheDocument();
+    expect(screen.queryByText("Résultat rejeté")).not.toBeInTheDocument();
+  } else {
+    expect(screen.getByText("Référence rejetée : invented")).toBeInTheDocument();
+    expect(screen.getByText("Blocage · unproven_profile")).toBeInTheDocument();
+    expect(screen.getByText("Avertissement · length")).toBeInTheDocument();
+    expect(screen.getByText("Références contrôlées")).toBeInTheDocument();
+    expect(screen.getByText("Données transmises au prompt")).toBeInTheDocument();
+    expect(screen.getByText("Sortie avant réparation")).toBeInTheDocument();
+  }
+});

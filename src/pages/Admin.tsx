@@ -269,7 +269,20 @@ function PromptCard({ name, runs }: { name: string; runs: PromptRun[] }) {
             <button type="button" className="action-button" onClick={() => navigator.clipboard?.writeText(pretty(latest.parsed_output || latest.raw_output))}><Copy className="h-3.5 w-3.5" /> Copier</button>
             <button type="button" className="action-button" onClick={() => downloadText(`${name}.json`, JSON.stringify(latest, null, 2), "application/json")}><Download className="h-3.5 w-3.5" /> Télécharger JSON</button>
           </div>
-          <JsonPanel value={latest.parsed_output || latest.raw_output} label="Résultat formaté" />
+          {latest.status === "failed" && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            <p className="font-semibold">{name.replace("prompt_", "Prompt ")} a échoué</p>
+            {latest.debug_info?.error && <p className="mt-1 break-words">{String(latest.debug_info.error)}</p>}
+            {latest.debug_info?.output_unavailable && <p className="mt-1">La sortie rejetée n’a pas été conservée pour cette ancienne tentative.</p>}
+          </div>}
+          {latest.qa_report?.issues?.map((issue, index) => <div key={index} className={`rounded-xl p-3 text-xs ${issue.severity === "fail" ? "bg-red-50 text-red-800" : "bg-amber-50 text-amber-900"}`}>
+            <p className="font-semibold">{issue.severity === "fail" ? "Blocage" : "Avertissement"} · {issue.code}</p>
+            <p>{issue.message}</p>
+            {issue.path && <p>{issue.path}</p>}
+            {issue.metadata && <JsonPanel value={issue.metadata} label="Références contrôlées" />}
+          </div>)}
+          {!latest.debug_info?.output_unavailable && <JsonPanel value={latest.parsed_output || latest.raw_output} label={latest.status === "failed" ? "Résultat rejeté" : "Résultat formaté"} />}
+          {latest.input_payload && <details><summary className="cursor-pointer text-sm font-semibold">Données transmises au prompt</summary><JsonPanel value={latest.input_payload} /></details>}
+          {latest.debug_info?.initial_raw_output && <details><summary className="cursor-pointer text-sm font-semibold">Sortie avant réparation</summary><JsonPanel value={latest.debug_info.initial_raw_output} /></details>}
           {latest.raw_output && <JsonPanel value={latest.raw_output} label="Sortie brute" />}
           {runs.length > 1 && <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600"><p className="font-semibold text-slate-700">Tentatives précédentes</p><div className="mt-2 space-y-1">{runs.slice(0, -1).map((run, index) => <p key={`${String(run.timestamp)}-${index}`}>Run {index + 1} · {run.repaired ? "Repair" : "Tentative"} · {run.status || "—"} · {formatDate(run.timestamp)}</p>)}</div></div>}
         </div>
@@ -414,6 +427,7 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
 
       {tab === "summary" && <div className="grid gap-4 lg:grid-cols-2">
         <InfoCard title="État du traitement">
+          {summary.failed_stage && ["failed", "partial"].includes(summary.status) && <p role="alert" className="mb-3 text-sm font-semibold text-red-700">Échec à l’étape {summary.failed_stage}. Consultez l’onglet Prompts pour la cause et la sortie rejetée.</p>}
           <Info label="Statut global" value={statusLabels[summary.status]} /><Info label="Dernière étape réussie" value={summary.last_successful_stage || "—"} /><Info label="Étape ayant échoué" value={summary.failed_stage || "—"} /><Info label="Email envoyé" value={pretty((summary.email_status || {}).sent)} />
         </InfoCard>
         <InfoCard title="Paiement & livrables">
