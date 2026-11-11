@@ -312,12 +312,47 @@ function downloadBlob(name: string, blob: Blob) {
   URL.revokeObjectURL(url);
 }
 
-function DetailView({ token, detail, onBack, onRefresh }: { token: string; detail: AdminDetailResponse; onBack: () => void; onRefresh: () => void }) {
+function HtmlReportPreview({ token, sessionId }: { token: string; sessionId: string }) {
+  const [url, setUrl] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl = "";
+    fetchAdminArtifact(token, sessionId, "html")
+      .then((blob) => {
+        if (!active) return;
+        objectUrl = URL.createObjectURL(blob);
+        setUrl(objectUrl);
+      })
+      .catch((err) => {
+        if (active) setError(err instanceof Error ? err.message : "Aperçu HTML indisponible.");
+      });
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [token, sessionId]);
+
+  if (error) return <p role="alert" className="mt-4 text-sm text-red-700">{error}</p>;
+  if (!url) return <p role="status" className="mt-4 text-sm">Chargement du rapport HTML…</p>;
+
+  return <div className="mt-4 space-y-2">
+    <a className="action-button" href={url} target="_blank" rel="noopener noreferrer">
+      <ExternalLink className="h-3.5 w-3.5" /> Ouvrir le HTML dans un nouvel onglet
+    </a>
+    <iframe title="Aperçu du rapport HTML" src={url} sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+      className="h-[75dvh] w-full rounded-xl border border-slate-200" />
+  </div>;
+}
+
+function DetailView({ token, detail, onBack, onRefresh }: { token: string; detail: AdminDetailResponse; onBack: () => void; onRefresh: () => Promise<void> }) {
   const [tab, setTab] = useState("summary");
   const [rerunOpen, setRerunOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
+  const [htmlPreviewRequest, setHtmlPreviewRequest] = useState(0);
 
   const { summary } = detail;
   const raw = detail.raw_session || {};
@@ -325,17 +360,12 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
   const routine = raw.routine_finale || raw.final_routine || raw.routine;
   const promptOrder = ["prompt_2", "prompt_4", "prompt_1", "prompt_3", "prompt_0"];
 
-  async function artifact(kind: string, action: "open" | "download", filename: string) {
+  async function downloadArtifact(kind: string, filename: string) {
     setBusy(kind);
     setNotice("");
     try {
       const blob = await fetchAdminArtifact(token, summary.session_id, kind);
-      if (action === "download") downloadBlob(filename, blob);
-      else {
-        const url = URL.createObjectURL(blob);
-        window.open(url, "_blank", "noopener,noreferrer");
-        window.setTimeout(() => URL.revokeObjectURL(url), 60000);
-      }
+      downloadBlob(filename, blob);
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Artefact indisponible.");
     } finally {
@@ -489,12 +519,15 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
             <button className="action-button" disabled={!!busy || !reason.trim()} onClick={() => review("reject")}>À corriger</button>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" disabled={!summary.html_available || busy === "html"} className="primary-button disabled:opacity-40" onClick={() => artifact("html", "open", "rapport.html")}><ExternalLink className="h-3.5 w-3.5" /> Voir HTML</button>
-            <button type="button" disabled={!summary.pdf_available || busy === "pdf"} className="action-button disabled:opacity-40" onClick={() => artifact("pdf", "download", "rapport.pdf")}><Download className="h-3.5 w-3.5" /> Télécharger PDF</button>
-            <button type="button" className="action-button" onClick={() => artifact("pipeline_snapshot.json", "download", "session-final.json")}><FileJson className="h-3.5 w-3.5" /> Snapshot de génération</button>
+            <button type="button" disabled={!summary.html_available} className="primary-button disabled:opacity-40" onClick={() => setHtmlPreviewRequest(request => request + 1)}><ExternalLink className="h-3.5 w-3.5" /> Voir HTML</button>
+            <button type="button" disabled={!summary.pdf_available || busy === "pdf"} className="action-button disabled:opacity-40" onClick={() => downloadArtifact("pdf", "rapport.pdf")}><Download className="h-3.5 w-3.5" /> Télécharger PDF</button>
+            <button type="button" className="action-button" onClick={() => downloadArtifact("pipeline_snapshot.json", "session-final.json")}><FileJson className="h-3.5 w-3.5" /> Snapshot de génération</button>
             <button type="button" disabled={!!busy || summary.review_status !== "approved"} className="action-button disabled:opacity-40" onClick={resend}><Mail className="h-3.5 w-3.5" /> Envoyer le rapport approuvé</button>
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-3"><Info label="Statut email" value={pretty((summary.email_status || {}).sent)} /><Info label="Destinataire" value={summary.email || "—"} /><Info label="Montant" value={formatAmount(summary.payment.payment_amount, summary.payment.payment_currency || "EUR")} /></div>
+          {summary.html_available && htmlPreviewRequest > 0 && <HtmlReportPreview
+            key={`${summary.session_id}:${summary.review_revision}:${htmlPreviewRequest}`}
+            token={token} sessionId={summary.session_id} />}
         </InfoCard>
         <InfoCard title="Produits de la génération initiale"><JsonPanel value={products} /></InfoCard>
         <InfoCard title="Routine de la génération initiale"><JsonPanel value={routine} /></InfoCard>

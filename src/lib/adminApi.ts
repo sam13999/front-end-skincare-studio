@@ -135,7 +135,7 @@ export async function fetchAdminSessions(token: string, params: { search?: strin
 }
 
 export async function fetchAdminSession(token: string, sessionId: string): Promise<AdminDetailResponse> {
-  return adminFetch<AdminDetailResponse>(token, `/v1/admin/session/${encodeURIComponent(sessionId)}`);
+  return adminFetch<AdminDetailResponse>(token, `/v1/admin/session/${encodeURIComponent(sessionId)}`, { cache: "no-store" });
 }
 
 export async function fetchAdminArtifact(token: string, sessionId: string, kind: string): Promise<Blob> {
@@ -174,7 +174,7 @@ export async function reviewAdminReport(token: string, sessionId: string, action
 const editingPath = (sessionId: string) => `/v1/admin/session/${encodeURIComponent(sessionId)}/editing`;
 
 export const fetchReportEditing = (token: string, sessionId: string) =>
-  adminFetch<ReportEditing>(token, editingPath(sessionId));
+  adminFetch<ReportEditing>(token, editingPath(sessionId), { cache: "no-store" });
 
 export const saveReportText = (token: string, sessionId: string, expectedRevision: string, changes: Array<{ path: EditPath; value: string }>) =>
   adminFetch<{ review_revision: string }>(token, `${editingPath(sessionId)}/text`, {

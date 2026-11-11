@@ -1,7 +1,9 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import AdminPage from "./Admin";
+
+vi.mock("@/components/admin/PdfPreview", () => ({ default: () => <div>Lecteur PDF</div> }));
 
 const summary = (id: string, status: "completed" | "in_progress" | "failed" | "partial", name: string) => ({
   session_id: id,
@@ -48,6 +50,69 @@ describe("AdminPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Échouées" }));
     expect(screen.getByText("Beta140926beta")).toBeInTheDocument();
     expect(screen.queryByText("Alpha140926alph")).not.toBeInTheDocument();
+  });
+
+  it("affiche dans Rapport le HTML reconstruit après une correction", async () => {
+    const sessionId = "a".repeat(32);
+    let revision = "initiale";
+    let html = "<p>Texte initial</p>";
+    const field = { path: ["overview", "summary_sentence"], label: "Résumé", section: "overview" };
+    const json = (body: unknown) => new Response(JSON.stringify(body));
+    const fetchMock = vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/auth/check")) return json({ authenticated: true });
+      if (url.endsWith("/editing/text")) {
+        const { expected_revision, changes } = JSON.parse(String(init?.body));
+        expect(expected_revision).toBe("initiale");
+        revision = "corrigée";
+        html = `<p>${changes[0].value}</p>`;
+        return json({ review_revision: revision });
+      }
+      if (url.endsWith("/editing")) return json({
+        fields: [{ ...field, value: revision === "initiale" ? "Texte initial" : "Texte corrigé" }],
+        review_revision: revision, zooms: [], history: [],
+      });
+      if (url.endsWith("/artifact/html")) return new Response(html, { headers: { "Content-Type": "text/html" } });
+      if (url.endsWith("/artifact/pdf")) return new Response("PDF");
+      if (url.endsWith(`/session/${sessionId}`)) return json({
+        summary: { ...listResponse.items[0], review_revision: revision },
+        user: { questionnaire: {}, photos: [] }, analysis: {}, prompts: {},
+        qa: { stages: {}, issues: [], totals: { ok: 0, warnings: 0, blocking: 0 } },
+        artifacts: [], history: [], rerun_history: [], raw_session: {},
+      });
+      return json(listResponse);
+    });
+    const createUrl = vi.fn().mockReturnValueOnce("blob:initial").mockReturnValueOnce("blob:corrige");
+    const revokeUrl = vi.fn();
+    vi.stubGlobal("URL", Object.assign(class extends URL {}, { createObjectURL: createUrl, revokeObjectURL: revokeUrl }));
+    try {
+      render(<MemoryRouter initialEntries={[`/admin/session/${sessionId}`]}><Routes><Route path="/admin/session/:sessionId" element={<AdminPage />} /></Routes></MemoryRouter>);
+      fireEvent.change(screen.getByLabelText("Token admin"), { target: { value: "test-token" } });
+      fireEvent.submit(screen.getByRole("button", { name: "Se connecter" }).closest("form")!);
+      fireEvent.click(await screen.findByRole("button", { name: "Rapport" }));
+      fireEvent.click(screen.getByRole("button", { name: "Voir HTML" }));
+      expect(await screen.findByTitle("Aperçu du rapport HTML")).toHaveAttribute("src", "blob:initial");
+      fireEvent.click(screen.getByRole("button", { name: "Corriger le rapport" }));
+      expect(revokeUrl).toHaveBeenCalledWith("blob:initial");
+      fireEvent.change(await screen.findByLabelText("Résumé"), { target: { value: "Texte corrigé" } });
+      fireEvent.click(screen.getByRole("button", { name: "Enregistrer et reconstruire HTML/PDF" }));
+      await screen.findByText(/Nouvelle version générée/);
+      fireEvent.click(screen.getByRole("button", { name: "Rapport" }));
+      expect(await screen.findByTitle("Aperçu du rapport HTML")).toHaveAttribute("src", "blob:corrige");
+      const renderedText = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsText(createUrl.mock.calls[1][0]);
+      });
+      expect(renderedText).toBe("<p>Texte corrigé</p>");
+      const htmlCalls = fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/artifact/html"));
+      expect(htmlCalls).toHaveLength(2);
+      expect(htmlCalls[1][1]).toMatchObject({ cache: "no-store" });
+    } finally {
+      cleanup();
+      vi.unstubAllGlobals();
+    }
   });
 
   it("distingue les warnings QA des blocages", async () => {

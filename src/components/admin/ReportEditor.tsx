@@ -100,7 +100,7 @@ function CropEditor({ token, sessionId, zoom, index, revision, detections, onSav
   </div>;
 }
 
-export default function ReportEditor({ token, sessionId, onSaved }: { token: string; sessionId: string; onSaved: () => void }) {
+export default function ReportEditor({ token, sessionId, onSaved }: { token: string; sessionId: string; onSaved: () => void | Promise<void> }) {
   const [data, setData] = useState<ReportEditing | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
@@ -121,7 +121,8 @@ export default function ReportEditor({ token, sessionId, onSaved }: { token: str
   useEffect(() => { void load().catch(() => {}); }, [token, sessionId]);
 
   async function refresh(expectedRevision?: string) {
-    const current = await load(); onSaved();
+    const current = await load();
+    await onSaved();
     if (expectedRevision && current.review_revision !== expectedRevision) throw new Error("Le rapport a changé entre l’enregistrement et l’aperçu. Rechargez la session.");
     const blob = await fetchAdminArtifact(token, sessionId, "pdf");
     setPreview(blob);
