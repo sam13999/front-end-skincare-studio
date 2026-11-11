@@ -20,7 +20,7 @@ const makeView = (): RoutineView => ({
   route_id: "a", initial_route_id: "a", initial_frequencies: [{ ...serum, moments: [...serum.moments] }],
   frequencies: [{ ...serum, moments: [...serum.moments] }],
   products: [
-    { id_produit: "serum", name: "Sérum correctif", moments: {
+    { id_produit: "serum", name: "Sérum correctif", allowed_moments: ["matin", "soir"], moments: {
       matin: { initial_per_week: 7, maximum_per_week: 7 }, soir: { initial_per_week: 5, maximum_per_week: 5 },
     } },
     { id_produit: "exfol", name: "Exfoliant", moments: { hebdomadaire: { initial_per_week: 1, maximum_per_week: 2 } } },
@@ -56,6 +56,7 @@ describe("Révision de la routine", () => {
     const product = within(Array.from(container.querySelectorAll("details")).find(
       details => details.querySelector("summary")?.textContent === "Sérum correctif",
     )!);
+    expect(product.queryByLabelText("Soin hebdomadaire")).toBeNull();
     fireEvent.click(product.getByLabelText("Matin"));
     fireEvent.change(product.getByLabelText("Départ / semaine"), { target: { value: "3" } });
     fireEvent.change(product.getByLabelText("Maximum / semaine"), { target: { value: "4" } });
@@ -102,7 +103,7 @@ describe("Révision de la routine", () => {
     fireEvent.click(launch);
     expect(api.rerunPrompt4).toHaveBeenCalledExactlyOnceWith("test", "session", initial, "b");
     expect(launch).toBeDisabled();
-    expect(await screen.findByText("Prompt 4 en cours…")).toBeInTheDocument();
+    expect(launch).toHaveTextContent("Prompt 4 en cours…");
     resolve(candidate);
     expect(await screen.findByText("Proposition · Route 2")).toBeInTheDocument();
     expect(api.decideRoutineCandidate).not.toHaveBeenCalled();
