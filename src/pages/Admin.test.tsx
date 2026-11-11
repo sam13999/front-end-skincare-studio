@@ -72,7 +72,10 @@ describe("AdminPage", () => {
         fields: [{ ...field, value: revision === "initiale" ? "Texte initial" : "Texte corrigé" }],
         review_revision: revision, zooms: [], history: [],
       });
-      if (url.endsWith("/artifact/html")) return new Response(html, { headers: { "Content-Type": "text/html" } });
+      if (url.endsWith("/artifact/html")) {
+        const blob = new window.Blob([html], { type: "text/html" });
+        return { ok: true, blob: async () => blob } as Response;
+      }
       if (url.endsWith("/artifact/pdf")) return new Response("PDF");
       if (url.endsWith(`/session/${sessionId}`)) return json({
         summary: { ...listResponse.items[0], review_revision: revision },
