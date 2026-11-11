@@ -370,6 +370,10 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
     setNotice("");
     try {
       const response = await rerunAdminSession(token, summary.session_id, reason);
+      if (response.status === "failed") {
+        onRefresh();
+        throw new Error(String(response.error || "La reprise a échoué. Consultez les diagnostics de la session."));
+      }
       setNotice(`Reprise ${String(response.run || "")} terminée : ${String(response.status || "ok")}.`);
       setRerunOpen(false);
       setReason("");
@@ -503,6 +507,8 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
 
       {rerunOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" role="dialog" aria-modal="true">
         <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
+          {busy === "rerun" && <p role="status" className="mb-3 text-sm text-blue-800">Reprise en cours. La génération peut prendre plusieurs minutes. Les étapes et résultats seront actualisés à la fin.</p>}
+          {notice && <p role="alert" className="mb-3 break-words text-sm text-red-800">{notice}</p>}
           <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Confirmation requise</p><h2 className="mt-1 text-2xl font-semibold text-slate-950">Reprendre cette session ?</h2></div><button type="button" onClick={() => setRerunOpen(false)}><X className="h-5 w-5 text-slate-400" /></button></div>
           <p className="mt-4 text-sm leading-6 text-slate-600">L’architecture actuelle permet une reprise sûre du pipeline complet uniquement. Les anciennes sorties seront conservées dans une nouvelle version.</p>
           <div className="mt-4 rounded-2xl bg-slate-50 p-4"><p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">Étapes recalculées</p><p className="mt-2 text-sm leading-6 text-slate-700">Zyla → Prompt 2 → filtre → Prompt 4 → Prompt 1 → Prompt 3 → Prompt 0 → HTML → PDF</p></div>
