@@ -72,11 +72,11 @@ describe("AdminPage", () => {
         fields: [{ ...field, value: revision === "initiale" ? "Texte initial" : "Texte corrigé" }],
         review_revision: revision, zooms: [], history: [],
       });
-      if (url.endsWith("/artifact/html")) {
+      if (url.includes("/artifact/html?")) {
         const blob = new window.Blob([html], { type: "text/html" });
         return { ok: true, blob: async () => blob } as Response;
       }
-      if (url.endsWith("/artifact/pdf")) return new Response("PDF");
+      if (url.includes("/artifact/pdf?")) return new Response("PDF");
       if (url.endsWith(`/session/${sessionId}`)) return json({
         summary: { ...listResponse.items[0], review_revision: revision },
         user: { questionnaire: {}, photos: [] }, analysis: {}, prompts: {},
@@ -109,8 +109,9 @@ describe("AdminPage", () => {
         reader.readAsText(createUrl.mock.calls[1][0]);
       });
       expect(renderedText).toBe("<p>Texte corrigé</p>");
-      const htmlCalls = fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/artifact/html"));
+      const htmlCalls = fetchMock.mock.calls.filter(([url]) => String(url).includes("/artifact/html?"));
       expect(htmlCalls).toHaveLength(2);
+      expect(new URL(String(htmlCalls[1][0])).searchParams.get("revision")).toBe("corrigée");
       expect(htmlCalls[1][1]).toMatchObject({ cache: "no-store" });
     } finally {
       cleanup();

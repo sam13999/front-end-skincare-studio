@@ -93,7 +93,7 @@ export interface ZylaDetection {
 export interface ReportEditing {
   detections?: ZylaDetection[];
   fields: Array<{ path: EditPath; label: string; section: string; value: string }>;
-  zooms: Array<{ signal_id: string; source_photo: string; crop_box: number[]; crop_method: string; source_width: number; source_height: number; title: string }>;
+  zooms: Array<{ signal_id: string; source_photo: string; crop_box: number[]; crop_method: string; source_width: number; source_height: number; title: string; caption?: string; image_alt?: string }>;
   history: Array<{ revision: number; action: string; reason: string; snapshot: string }>;
   review_revision: string;
 }
@@ -138,14 +138,16 @@ export async function fetchAdminSession(token: string, sessionId: string): Promi
   return adminFetch<AdminDetailResponse>(token, `/v1/admin/session/${encodeURIComponent(sessionId)}`, { cache: "no-store" });
 }
 
-export async function fetchAdminArtifact(token: string, sessionId: string, kind: string): Promise<Blob> {
-  const response = await fetch(`${API_BASE_URL}/v1/admin/session/${encodeURIComponent(sessionId)}/artifact/${kind.split("/").map(encodeURIComponent).join("/")}`, {
+export async function fetchAdminArtifact(token: string, sessionId: string, kind: string, revision?: string): Promise<Blob> {
+  const query = revision ? `?${new URLSearchParams({ revision })}` : "";
+  const response = await fetch(`${API_BASE_URL}/v1/admin/session/${encodeURIComponent(sessionId)}/artifact/${kind.split("/").map(encodeURIComponent).join("/")}${query}`, {
     cache: "no-store",
     headers: {
       "X-Admin-Token": token,
       Authorization: `Bearer ${token}`,
     },
   });
+  if (response.status === 409) throw new Error("Le rapport a changé. Actualisez la session.");
   if (!response.ok) throw new Error("Artefact introuvable.");
   return response.blob();
 }
@@ -188,18 +190,31 @@ export const saveReportCrop = (token: string, sessionId: string, index: number, 
     body: JSON.stringify({ expected_revision: expectedRevision, rect, detection_id: detectionId }),
   });
 
+export const deleteReportZoom = (token: string, sessionId: string, index: number, expectedRevision: string) =>
+  adminFetch<{ review_revision: string }>(token, `${editingPath(sessionId)}/zoom/${index}`, {
+    method: "DELETE", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ expected_revision: expectedRevision }),
+  });
+
 export const revertReport = (token: string, sessionId: string, revision: number, expectedRevision: string) =>
   adminFetch<{ review_revision: string }>(token, `${editingPath(sessionId)}/revert`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ expected_revision: expectedRevision, revision }),
   });
 
-export async function fetchOriginalZoom(token: string, sessionId: string, index: number, detectionId?: string): Promise<Blob> {
-  const query = detectionId ? `?${new URLSearchParams({ detection_id: detectionId })}` : "";
+export async function fetchOriginalZoom(token: string, sessionId: string, index: number, detectionId?: string, revision?: string): Promise<Blob> {
+  const params = new URLSearchParams();
+  if (detectionId) params.set("detection_id", detectionId);
+  if (revision) params.set("revision", revision);
+  const query = params.size ? `?${params}` : "";
   const response = await fetch(`${API_BASE_URL}${editingPath(sessionId)}/zoom/${index}/original${query}`, {
+    cache: "no-store",
     headers: { "X-Admin-Token": token, Authorization: `Bearer ${token}` },
   });
-  if (!response.ok) throw new Error("Photo originale indisponible.");
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.detail?.message || "Photo originale indisponible.");
+  }
   return response.blob();
 }
 
