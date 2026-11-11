@@ -33,10 +33,12 @@ const toggle = <T,>(items: T[], value: T, on: boolean) => on ? [...items, value]
 const control = "block min-h-11 w-full rounded-md border border-slate-300 bg-white px-2 text-base";
 
 function FrequencySummary({ rows }: { rows: RoutineFrequency[] }) {
+  const names = new Map(rows.map(row => [row.id_produit, row.name]));
   return <ul className="space-y-1 text-sm text-slate-700">
     {rows.map(row => <li key={row.id_produit}><strong>{row.name}</strong>{" · "}
       {row.initial_per_week ?? "?"} au départ / {row.maximum_per_week ?? "?"} max par semaine{" · "}
-      {row.moments.map(moment => momentLabels[moment]).join(", ")}</li>)}
+      {row.moments.map(moment => momentLabels[moment]).join(", ")}
+      {!!row.coordinates_with?.length && ` · À coordonner avec ${row.coordinates_with.map(id => names.get(id) || id).join(", ")}`}</li>)}
   </ul>;
 }
 
@@ -68,6 +70,7 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
   function install(result: RoutineView) {
     setView(result);
     setPlans(schedules(result));
+    setPreview(null);
   }
 
   useEffect(() => {
@@ -113,7 +116,8 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
     return JSON.stringify(plans[pid]) !== JSON.stringify(initial[pid]) ? [{ id_produit: pid, moments: plans[pid] }] : [];
   });
   const valid = changes.every(change => Object.values(change.moments).length > 0 && Object.values(change.moments).every(plan =>
-    plan.initial_per_week !== null && plan.maximum_per_week !== null && plan.initial_per_week >= 0
+    plan.initial_per_week !== null && plan.maximum_per_week !== null && Number.isInteger(plan.initial_per_week)
+    && Number.isInteger(plan.maximum_per_week) && plan.initial_per_week >= 0
     && plan.maximum_per_week >= plan.initial_per_week && plan.maximum_per_week <= 7));
   const candidate = view.candidate;
   const disabled = !view.editable || !!busy;
@@ -149,6 +153,7 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
             <legend className="sr-only">Moments et fréquence de {product.name}</legend>
             {routineMoments.map(moment => {
               const plan = plans[pid]?.[moment];
+              if (!plan && product.allowed_moments && !product.allowed_moments.includes(moment)) return null;
               return <div key={moment} className="space-y-2 rounded-md border p-3">
                 <label className="flex min-h-9 items-center gap-2 font-medium">
                   <input type="checkbox" checked={!!plan} onChange={e => update(pid, moment, e.target.checked ? defaultPlan() : undefined)} />
@@ -207,7 +212,7 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
           setPreview(null);
           onSaved();
           await reload(saved.review_revision);
-        })}>Enregistrer les fréquences</button>
+        })}>{busy === "Reconstruction HTML/PDF…" ? busy : "Enregistrer les fréquences"}</button>
       {!!changes.length && !valid && <p className="text-sm text-amber-900">Conservez au moins un créneau valide par produit.</p>}
     </section>
 
@@ -221,6 +226,7 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
           <p>{item.logique_technique}</p><p>{item.difference_majeure}</p>
           <p>{item.treatments} traitement(s) correctif(s){item.nombre_produits_cible ? ` · ${item.nombre_produits_cible} produits visés` : ""}</p>
           {!!item.intensities?.length && <p>Intensité des candidats correctifs · {item.intensities.join(", ")}</p>}
+          {!!item.corrective_frequencies?.length && <p>Cadences correctives cibles · {item.corrective_frequencies.join(" · ")}</p>}
           {!!item.precautions.length && <p>{item.precautions.join(" · ")}</p>}
           {!item.available && <p>{item.missing_required_levers?.length
             ? `Le filtre n’a pas couvert ces exigences : ${item.missing_required_levers.join(", ")}.`
@@ -239,7 +245,7 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
           const proposal = await rerunPrompt4(token, sessionId, view.review_revision, route || null);
           setView(current => current ? { ...current, candidate: proposal } : current);
           setNotice("Proposition prête à comparer. Le rapport actif est conservé.");
-        })}>Générer une proposition</button>
+        })}>{busy === "Prompt 4 en cours…" ? busy : "Générer une proposition"}</button>
       {candidate && <div className="space-y-3 border-t pt-3">
         <h4 className="font-semibold">Proposition · {view.routes.find(item => item.route_id === candidate.route_id)?.nom || candidate.route_id}</h4>
         <FrequencySummary rows={candidate.frequencies} />
