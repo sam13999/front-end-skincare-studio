@@ -113,7 +113,10 @@ async function adminFetch<T>(token: string, path: string, init?: RequestInit): P
     const message = body && typeof body === "object"
       ? String((body as { message?: string; detail?: { message?: string } }).detail?.message || (body as { message?: string }).message || "")
       : "";
-    throw new Error(message || (response.status === 401 ? "Token admin invalide." : "Erreur admin."));
+    const validation = Array.isArray(body?.detail)
+      ? body.detail.map((item: { msg?: string }) => item.msg?.replace(/^Value error, /, "")).filter(Boolean).join(" ")
+      : "";
+    throw new Error(message || validation || (response.status === 401 ? "Token admin invalide." : "Erreur admin."));
   }
   return body as T;
 }
@@ -207,5 +210,88 @@ export async function fetchZylaMap(token: string, sessionId: string, photo: stri
     headers: { "X-Admin-Token": token, Authorization: `Bearer ${token}` },
   });
   if (!response.ok) throw new Error("Carte Zyla indisponible ou illisible.");
+  return response.blob();
+}
+
+export const routineMoments = ["matin", "soir", "hebdomadaire"] as const;
+export type RoutineMoment = typeof routineMoments[number];
+export interface FrequencyPlan {
+  initial_per_week: number | null;
+  maximum_per_week: number | null;
+  days: number[];
+  excluded_days: number[];
+  alternate_with: string[];
+  pair_with: string[];
+  progression: string;
+}
+export interface RoutineFrequency {
+  id_produit: string;
+  name: string;
+  initial_per_week: number | null;
+  maximum_per_week: number | null;
+  moments: RoutineMoment[];
+  coordinates_with: string[];
+}
+export interface RoutineWarning { code: string; message: string; id_produit?: string; product_ids?: string[] }
+export interface RoutineCandidate {
+  id: string;
+  route_id: string;
+  frequencies: RoutineFrequency[];
+  warnings: RoutineWarning[];
+  texts_to_review: string[];
+  stale: boolean;
+}
+export interface RoutineView {
+  review_revision: string;
+  active_version: number | null;
+  source: "initial" | "prompt_4";
+  adjusted_products: string[];
+  route_id: string;
+  initial_route_id: string;
+  initial_frequencies: RoutineFrequency[];
+  frequencies: RoutineFrequency[];
+  products: Array<{ id_produit: string; name: string; moments: Partial<Record<RoutineMoment, Partial<FrequencyPlan>>> }>;
+  warnings: RoutineWarning[];
+  texts_to_review: string[];
+  routes: Array<{
+    route_id: string;
+    nom: string;
+    logique_technique: string;
+    difference_majeure: string;
+    available: boolean;
+    missing_required_levers: string[];
+    nombre_produits_cible: number | null;
+    treatments: number;
+    precautions: string[];
+  }>;
+  candidate: RoutineCandidate | null;
+  editable: boolean;
+}
+
+const routinePath = (sessionId: string) => `${editingPath(sessionId)}/routine`;
+export const fetchRoutine = (token: string, sessionId: string) =>
+  adminFetch<RoutineView>(token, routinePath(sessionId), { cache: "no-store" });
+
+function routinePost<T>(token: string, sessionId: string, action: string, revision: string, data: object) {
+  return adminFetch<T>(token, `${routinePath(sessionId)}/${action}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ expected_revision: revision, ...data }),
+  });
+}
+
+export const saveFrequencies = (token: string, sessionId: string, revision: string,
+  changes: Array<{ id_produit: string; moments: Partial<Record<RoutineMoment, FrequencyPlan>> }>) =>
+  routinePost<{ review_revision: string }>(token, sessionId, "frequencies", revision, { changes });
+export const rerunPrompt4 = (token: string, sessionId: string, revision: string, routeId: string | null) =>
+  routinePost<RoutineCandidate>(token, sessionId, "prompt4", revision, { route_id: routeId });
+export const decideRoutineCandidate = (token: string, sessionId: string, revision: string, candidateId: string, accept: boolean) =>
+  routinePost<{ review_revision: string }>(token, sessionId, "prompt4/decision", revision, { candidate_id: candidateId, accept });
+
+export async function fetchRoutineCandidatePdf(token: string, sessionId: string, candidateId: string) {
+  const response = await fetch(`${API_BASE_URL}${routinePath(sessionId)}/prompt4/${encodeURIComponent(candidateId)}/pdf`, {
+    cache: "no-store", headers: { "X-Admin-Token": token, Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error("Aperçu de la proposition indisponible.");
   return response.blob();
 }

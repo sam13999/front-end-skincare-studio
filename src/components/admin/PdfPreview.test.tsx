@@ -14,7 +14,7 @@ vi.mock("pdfjs-dist/build/pdf.worker.min.mjs?url", () => ({ default: "/worker.mj
 it("affiche les sept pages, navigation, zoom, ouverture native et téléchargement", async () => {
   class Observer { observe() {} disconnect() {} }
   vi.stubGlobal("ResizeObserver", Observer);
-  HTMLCanvasElement.prototype.getContext = vi.fn(() => ({})) as typeof HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = vi.fn(() => ({})) as unknown as typeof HTMLCanvasElement.prototype.getContext;
   URL.createObjectURL = vi.fn(() => "blob:rapport");
   URL.revokeObjectURL = vi.fn();
   const blob = new Blob(["pdf"], { type: "application/pdf" });

@@ -150,9 +150,9 @@ export default function ReportEditor({ token, sessionId, onSaved }: { token: str
   const sections = [...new Set(data.fields.map(field => field.section))];
   const hasTextChanges = data.fields.some(field => values[key(field.path)] !== field.value);
   return <div className="space-y-5">
-    <p className="text-sm text-slate-600">Corrigez les textes affichés. Les produits, fréquences et sources des observations restent verrouillés. Chaque enregistrement reconstruit seulement le HTML et le PDF.</p>
+    <p className="text-sm text-slate-600">Corrigez les textes affichés. Les fréquences se modifient dans l’onglet Routine. Chaque enregistrement reconstruit seulement le HTML et le PDF.</p>
     {sections.map(section => <section key={section} className="rounded-xl border p-4">
-      <h3 className="mb-3 font-semibold capitalize">{section.replaceAll("_", " ")}</h3>
+      <h3 className="mb-3 font-semibold capitalize">{section.replace(/_/g, " ")}</h3>
       <div className="grid gap-3 md:grid-cols-2">{data.fields.filter(field => field.section === section).map(field => <label key={key(field.path)} className="block text-sm font-medium text-slate-700">
         {field.label} <span className="font-normal text-slate-400">{field.path.filter(x => typeof x === "number").map(x => `#${Number(x) + 1}`).join(" ")}</span>
         <textarea className="mt-1 block min-h-20 w-full rounded border border-slate-300 p-2 font-normal" value={values[key(field.path)] || ""}
