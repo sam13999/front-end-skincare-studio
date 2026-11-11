@@ -140,12 +140,12 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
       <Warnings issues={view.warnings.filter(issue => !issue.id_produit && !issue.product_ids?.length)} />
       {view.products.map(product => {
         const pid = product.id_produit;
-        return <details key={pid} className="rounded-xl border border-slate-200 p-3">
+        return <details key={pid} className="min-w-0 rounded-xl border border-slate-200 p-3">
           <summary className="min-h-8 cursor-pointer font-medium">{product.name}
             {view.adjusted_products.includes(pid) && <span className="ml-2 text-sm text-slate-500">Ajusté</span>}
           </summary>
           <Warnings issues={view.warnings.filter(issue => issue.id_produit === pid || issue.product_ids?.includes(pid))} />
-          <fieldset disabled={disabled} className="mt-3 space-y-3">
+          <fieldset disabled={disabled} className="mt-3 min-w-0 space-y-3">
             <legend className="sr-only">Moments et fréquence de {product.name}</legend>
             {routineMoments.map(moment => {
               const plan = plans[pid]?.[moment];
@@ -163,7 +163,7 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
                       </label>)}
                   </div>
                   {([["days", "Jours possibles"], ["excluded_days", "Jours à exclure"]] as const).map(([key, label]) =>
-                    <fieldset key={key}>
+                    <fieldset key={key} className="min-w-0">
                       <legend className="text-sm">{label}</legend>
                       <div className="flex flex-wrap gap-1">
                         {days.map((day, index) => <label key={day} className="flex min-h-10 items-center gap-1 rounded border px-2 text-sm">

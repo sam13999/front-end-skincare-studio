@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import ReportEditor from "@/components/admin/ReportEditor";
-import RoutineEditor from "@/components/admin/RoutineEditor";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -37,6 +36,8 @@ import {
   reviewAdminReport,
   rerunAdminSession,
 } from "@/lib/adminApi";
+
+const RoutineEditor = lazy(() => import("@/components/admin/RoutineEditor"));
 
 const TOKEN_KEY = "skinview_admin_token";
 
@@ -500,7 +501,11 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
         <InfoCard title="Artefacts disponibles"><div className="space-y-2">{detail.artifacts.map((item) => <div key={item.path} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 text-xs"><span className="font-mono text-slate-600">{item.path}</span><span className="text-slate-400">{Math.round(item.size / 1024)} Ko</span></div>)}</div></InfoCard>
       </div>}
 
-      {tab === "routine" && <InfoCard title="Révision de la routine"><RoutineEditor key={summary.session_id} token={token} sessionId={summary.session_id} onSaved={onRefresh} /></InfoCard>}
+      {tab === "routine" && <InfoCard title="Révision de la routine">
+        <Suspense fallback={<p role="status" className="text-sm">Chargement de la routine…</p>}>
+          <RoutineEditor key={summary.session_id} token={token} sessionId={summary.session_id} onSaved={onRefresh} />
+        </Suspense>
+      </InfoCard>}
 
       {tab === "editing" && <InfoCard title="Corrections avant validation"><ReportEditor token={token} sessionId={summary.session_id} onSaved={onRefresh} /></InfoCard>}
 
