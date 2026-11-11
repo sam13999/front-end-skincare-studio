@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import ReportEditor from "@/components/admin/ReportEditor";
 import {
@@ -36,6 +36,8 @@ import {
   reviewAdminReport,
   rerunAdminSession,
 } from "@/lib/adminApi";
+
+const RoutineEditor = lazy(() => import("@/components/admin/RoutineEditor"));
 
 const TOKEN_KEY = "skinview_admin_token";
 
@@ -392,6 +394,7 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
     ["prompts", "Prompts"],
     ["qa", "QA"],
     ["report", "Rapport"],
+    ["routine", "Routine"],
     ["editing", "Corriger le rapport"],
     ["history", "Historique / logs"],
   ];
@@ -488,15 +491,21 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
           <div className="flex flex-wrap gap-2">
             <button type="button" disabled={!summary.html_available || busy === "html"} className="primary-button disabled:opacity-40" onClick={() => artifact("html", "open", "rapport.html")}><ExternalLink className="h-3.5 w-3.5" /> Voir HTML</button>
             <button type="button" disabled={!summary.pdf_available || busy === "pdf"} className="action-button disabled:opacity-40" onClick={() => artifact("pdf", "download", "rapport.pdf")}><Download className="h-3.5 w-3.5" /> Télécharger PDF</button>
-            <button type="button" className="action-button" onClick={() => artifact("pipeline_snapshot.json", "download", "session-final.json")}><FileJson className="h-3.5 w-3.5" /> JSON final</button>
+            <button type="button" className="action-button" onClick={() => artifact("pipeline_snapshot.json", "download", "session-final.json")}><FileJson className="h-3.5 w-3.5" /> Snapshot de génération</button>
             <button type="button" disabled={!!busy || summary.review_status !== "approved"} className="action-button disabled:opacity-40" onClick={resend}><Mail className="h-3.5 w-3.5" /> Envoyer le rapport approuvé</button>
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-3"><Info label="Statut email" value={pretty((summary.email_status || {}).sent)} /><Info label="Destinataire" value={summary.email || "—"} /><Info label="Montant" value={formatAmount(summary.payment.payment_amount, summary.payment.payment_currency || "EUR")} /></div>
         </InfoCard>
-        <InfoCard title="Produits retenus"><JsonPanel value={products} /></InfoCard>
-        <InfoCard title="Routine finale"><JsonPanel value={routine} /></InfoCard>
+        <InfoCard title="Produits de la génération initiale"><JsonPanel value={products} /></InfoCard>
+        <InfoCard title="Routine de la génération initiale"><JsonPanel value={routine} /></InfoCard>
         <InfoCard title="Artefacts disponibles"><div className="space-y-2">{detail.artifacts.map((item) => <div key={item.path} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 text-xs"><span className="font-mono text-slate-600">{item.path}</span><span className="text-slate-400">{Math.round(item.size / 1024)} Ko</span></div>)}</div></InfoCard>
       </div>}
+
+      {tab === "routine" && <InfoCard title="Révision de la routine">
+        <Suspense fallback={<p role="status" className="text-sm">Chargement de la routine…</p>}>
+          <RoutineEditor key={summary.session_id} token={token} sessionId={summary.session_id} onSaved={onRefresh} />
+        </Suspense>
+      </InfoCard>}
 
       {tab === "editing" && <InfoCard title="Corrections avant validation"><ReportEditor token={token} sessionId={summary.session_id} onSaved={onRefresh} /></InfoCard>}
 
