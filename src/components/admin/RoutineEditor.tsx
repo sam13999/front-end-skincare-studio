@@ -213,12 +213,14 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
 
     <section className="space-y-3 rounded-xl border p-3">
       <h3 className="font-semibold">Relancer Prompt 4</h3>
+      {!view.routes.length && <p className="text-sm">Les routes filtrées sont absentes du snapshot de cette session.</p>}
       {view.routes.map(item => <details key={item.route_id} className="rounded-md border p-2">
         <summary className="cursor-pointer text-sm font-medium">{item.nom || item.route_id} · {item.available ? "Disponible" : "Indisponible"}
           {item.route_id === view.route_id ? " · Route active" : ""}</summary>
         <div className="space-y-1 pt-2 text-sm text-slate-700">
           <p>{item.logique_technique}</p><p>{item.difference_majeure}</p>
           <p>{item.treatments} traitement(s) correctif(s){item.nombre_produits_cible ? ` · ${item.nombre_produits_cible} produits visés` : ""}</p>
+          {!!item.intensities?.length && <p>Intensité des candidats correctifs · {item.intensities.join(", ")}</p>}
           {!!item.precautions.length && <p>{item.precautions.join(" · ")}</p>}
           {!item.available && <p>{item.missing_required_levers?.length
             ? `Le filtre n’a pas couvert ces exigences : ${item.missing_required_levers.join(", ")}.`
@@ -266,10 +268,10 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
       </div>}
     </section>
 
-    {(busy || notice) && <p role="status" className="rounded bg-blue-50 p-3 text-sm text-blue-800">{busy || notice}</p>}
+    {(busy || notice) && <p role="status" className="sticky bottom-2 rounded bg-blue-50 p-3 text-sm text-blue-800">{busy || notice}</p>}
     {error && <div role="alert" className="rounded bg-red-50 p-3 text-sm text-red-800">
       <p>{error}</p>
-      <button type="button" className="action-button mt-2" disabled={!!busy} onClick={() => run("Rechargement…", () => reload())}>Recharger la routine</button>
+      <button type="button" className="action-button mt-2" disabled={!!busy} onClick={() => run("Rechargement…", () => reload())}>Recharger et effacer la saisie</button>
     </div>}
     {preview && <section><h3 className="font-semibold">{preview.label}</h3>
       <Suspense fallback={<p>Chargement de l’aperçu…</p>}><PdfPreview blob={preview.blob} /></Suspense>

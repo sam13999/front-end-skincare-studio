@@ -262,6 +262,7 @@ export interface RoutineView {
     missing_required_levers: string[];
     nombre_produits_cible: number | null;
     treatments: number;
+    intensities?: string[];
     precautions: string[];
   }>;
   candidate: RoutineCandidate | null;
