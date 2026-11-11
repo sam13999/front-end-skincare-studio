@@ -312,14 +312,14 @@ function downloadBlob(name: string, blob: Blob) {
   URL.revokeObjectURL(url);
 }
 
-function HtmlReportPreview({ token, sessionId }: { token: string; sessionId: string }) {
+function HtmlReportPreview({ token, sessionId, revision }: { token: string; sessionId: string; revision?: string }) {
   const [url, setUrl] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
     let active = true;
     let objectUrl = "";
-    fetchAdminArtifact(token, sessionId, "html")
+    fetchAdminArtifact(token, sessionId, "html", revision)
       .then((blob) => {
         if (!active) return;
         objectUrl = URL.createObjectURL(blob);
@@ -332,7 +332,7 @@ function HtmlReportPreview({ token, sessionId }: { token: string; sessionId: str
       active = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [token, sessionId]);
+  }, [token, sessionId, revision]);
 
   if (error) return <p role="alert" className="mt-4 text-sm text-red-700">{error}</p>;
   if (!url) return <p role="status" className="mt-4 text-sm">Chargement du rapport HTML…</p>;
@@ -346,7 +346,7 @@ function HtmlReportPreview({ token, sessionId }: { token: string; sessionId: str
   </div>;
 }
 
-function DetailView({ token, detail, onBack, onRefresh }: { token: string; detail: AdminDetailResponse; onBack: () => void; onRefresh: () => Promise<void> }) {
+function DetailView({ token, detail, onBack, onRefresh, onEditRefresh }: { token: string; detail: AdminDetailResponse; onBack: () => void; onRefresh: () => Promise<void>; onEditRefresh: () => Promise<void> }) {
   const [tab, setTab] = useState("summary");
   const [rerunOpen, setRerunOpen] = useState(false);
   const [reason, setReason] = useState("");
@@ -527,7 +527,7 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
           <div className="mt-5 grid gap-3 sm:grid-cols-3"><Info label="Statut email" value={pretty((summary.email_status || {}).sent)} /><Info label="Destinataire" value={summary.email || "—"} /><Info label="Montant" value={formatAmount(summary.payment.payment_amount, summary.payment.payment_currency || "EUR")} /></div>
           {summary.html_available && htmlPreviewRequest > 0 && <HtmlReportPreview
             key={`${summary.session_id}:${summary.review_revision}:${htmlPreviewRequest}`}
-            token={token} sessionId={summary.session_id} />}
+            token={token} sessionId={summary.session_id} revision={summary.review_revision} />}
         </InfoCard>
         <InfoCard title="Produits de la génération initiale"><JsonPanel value={products} /></InfoCard>
         <InfoCard title="Routine de la génération initiale"><JsonPanel value={routine} /></InfoCard>
@@ -540,7 +540,8 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
         </Suspense>
       </InfoCard>}
 
-      {tab === "editing" && <InfoCard title="Corrections avant validation"><ReportEditor token={token} sessionId={summary.session_id} onSaved={onRefresh} /></InfoCard>}
+      {tab === "editing" && <InfoCard title="Corrections avant validation"><ReportEditor key={summary.session_id} token={token} sessionId={summary.session_id}
+        onSaved={async () => { await onEditRefresh(); setHtmlPreviewRequest(request => request + 1); }} /></InfoCard>}
 
       {tab === "history" && <div className="space-y-4">
         <InfoCard title="Historique des étapes"><div className="space-y-2">{detail.history.length ? detail.history.map((item, index) => <div key={`${String(item.ts)}-${index}`} className="grid gap-1 rounded-xl border border-slate-100 p-3 text-xs sm:grid-cols-[150px_1fr_auto] sm:items-center"><span className="text-slate-400">{formatDate(item.ts as string)}</span><span className="font-semibold text-slate-700">{String(item.stage || "—")}</span><span className={item.ok ? "text-emerald-700" : "text-red-700"}>{item.ok ? "OK" : "Échec"}</span></div>) : <Empty text="Aucun log disponible." />}</div></InfoCard>
@@ -615,11 +616,18 @@ function AdminPage() {
     }
   }
 
-  async function loadDetail(sessionId: string) {
+  async function loadDetail(sessionId: string, strict = false) {
     if (!token) return;
     setLoading(true);
     setError("");
-    try { setDetail(await fetchAdminSession(token, sessionId)); } catch (err) { setError(err instanceof Error ? err.message : "Détail indisponible."); } finally { setLoading(false); }
+    try {
+      setDetail(await fetchAdminSession(token, sessionId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Détail indisponible.");
+      if (strict) throw err;
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => { if (token) loadSessions(token); }, [token]);
@@ -644,7 +652,7 @@ function AdminPage() {
 
   if (checking) return <main className="flex min-h-screen items-center justify-center bg-[#f5f7f9]"><RefreshCw className="h-6 w-6 animate-spin text-slate-400" /></main>;
   if (!token) return <Login onAuthenticated={setToken} />;
-  if (detail) return <main className="min-h-screen bg-[#f5f7f9]"><header className="border-b border-slate-200 bg-white"><div className="mx-auto flex max-w-[1440px] items-center justify-between px-5 py-4 sm:px-8"><span className="font-semibold tracking-tight text-slate-950">SkinView <span className="text-slate-400">Admin</span></span><button type="button" className="action-button" onClick={logout}><LogOut className="h-3.5 w-3.5" /> Déconnexion</button></div></header><div className="mx-auto max-w-[1440px] px-5 py-6 sm:px-8"><DetailView token={token} detail={detail} onBack={() => { setDetail(null); navigate("/admin"); }} onRefresh={() => loadDetail(detail.summary.session_id)} /></div></main>;
+  if (detail) return <main className="min-h-screen bg-[#f5f7f9]"><header className="border-b border-slate-200 bg-white"><div className="mx-auto flex max-w-[1440px] items-center justify-between px-5 py-4 sm:px-8"><span className="font-semibold tracking-tight text-slate-950">SkinView <span className="text-slate-400">Admin</span></span><button type="button" className="action-button" onClick={logout}><LogOut className="h-3.5 w-3.5" /> Déconnexion</button></div></header><div className="mx-auto max-w-[1440px] px-5 py-6 sm:px-8"><DetailView token={token} detail={detail} onBack={() => { setDetail(null); navigate("/admin"); }} onRefresh={() => loadDetail(detail.summary.session_id)} onEditRefresh={() => loadDetail(detail.summary.session_id, true)} /></div></main>;
 
   const filters = [["", "Toutes"], ["today", "Aujourd’hui"], ["pending_review", "À vérifier"], ["needs_correction", "À corriger"], ["approved", "Approuvés"], ["sent", "Envoyés"], ["completed", "Complètes"], ["in_progress", "En cours"], ["failed", "Échouées"], ["paid", "Payées"], ["unpaid", "Non payées"]];
   return (

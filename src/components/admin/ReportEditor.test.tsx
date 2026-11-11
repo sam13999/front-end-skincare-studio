@@ -7,7 +7,7 @@ vi.mock("./PdfPreview", () => ({ default: () => <div aria-label="Aperçu PDF act
 
 vi.mock("@/lib/adminApi", () => ({
   fetchReportEditing: vi.fn(), saveReportText: vi.fn(), fetchAdminArtifact: vi.fn(),
-  saveReportCrop: vi.fn(), fetchOriginalZoom: vi.fn(), revertReport: vi.fn(),
+  saveReportCrop: vi.fn(), deleteReportZoom: vi.fn(), fetchOriginalZoom: vi.fn(), revertReport: vi.fn(),
 }));
 
 describe("ReportEditor", () => {
@@ -52,7 +52,7 @@ describe("ReportEditor", () => {
       zooms: [{ title: "Texture", signal_id: "texture", source_photo: "face_raw", crop_method: "manual",
         source_width: 400, source_height: 400, crop_box: [100, 100, 300, 300] }],
       history: [{ revision: 1, reason: "Original", action: "original", snapshot: "inject.json" }], fields: [] };
-    vi.mocked(api.fetchReportEditing).mockResolvedValue(editing);
+    vi.mocked(api.fetchReportEditing).mockResolvedValueOnce(editing).mockResolvedValue({ ...editing, review_revision: "d".repeat(64) });
     vi.mocked(api.fetchOriginalZoom).mockResolvedValue(new Blob(["photo"]));
     vi.mocked(api.saveReportCrop).mockResolvedValue({ review_revision: "d".repeat(64) });
     vi.mocked(api.fetchAdminArtifact).mockResolvedValue(new Blob(["PDF"]));
@@ -70,24 +70,25 @@ describe("ReportEditor", () => {
   it("change la photo et envoie la détection sélectionnée avec les coordonnées", async () => {
     const revision = "a".repeat(64);
     const rect: [number, number, number, number] = [.25, .3, .4, .4];
-    vi.mocked(api.fetchReportEditing).mockResolvedValue({
+    const editing: api.ReportEditing = {
       review_revision: revision, fields: [], history: [],
       zooms: [{ title: "Texture", signal_id: "texture", source_photo: "face", crop_method: "manual",
         source_width: 400, source_height: 400, crop_box: [100, 100, 300, 300] }],
       detections: [{ id: "side:skin_spot:0", title: "Zone pigmentée", zone: "joue droite",
         source_photo: "side", confidence: null, source_width: 800, source_height: 700, rect }],
-    });
+    };
+    vi.mocked(api.fetchReportEditing).mockResolvedValueOnce(editing).mockResolvedValue({ ...editing, review_revision: "d".repeat(64) });
     vi.mocked(api.fetchOriginalZoom).mockResolvedValue(new Blob(["photo"]));
     vi.mocked(api.saveReportCrop).mockResolvedValue({ review_revision: "d".repeat(64) });
     vi.mocked(api.fetchAdminArtifact).mockResolvedValue(new Blob(["PDF"]));
     Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:photo") });
     Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
     render(<ReportEditor token="admin" sessionId="session" onSaved={vi.fn()} />);
-    const select = await screen.findByRole("combobox", { name: "Détection Zyla du zoom 1" });
+    const select = await screen.findByRole("combobox", { name: "Preuve photographique du zoom 1" });
     fireEvent.change(select, { target: { value: "side:skin_spot:0" } });
     await screen.findByAltText("Photo originale : side");
-    expect(api.fetchOriginalZoom).toHaveBeenLastCalledWith("admin", "session", 0, "side:skin_spot:0");
-    fireEvent.click(screen.getByRole("button", { name: "Enregistrer ce cadrage" }));
+    expect(api.fetchOriginalZoom).toHaveBeenLastCalledWith("admin", "session", 0, "side:skin_spot:0", revision);
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer le remplacement" }));
     await waitFor(() => expect(api.saveReportCrop).toHaveBeenLastCalledWith("admin", "session", 0, revision, rect, "side:skin_spot:0"));
     await screen.findByLabelText("Aperçu PDF actualisé");
   });
@@ -109,6 +110,66 @@ describe("ReportEditor", () => {
     ]));
     await screen.findByLabelText("Aperçu PDF actualisé");
     expect(saved).toHaveBeenCalledOnce();
-    expect(screen.getByText(/aucun email n’a été envoyé/)).toBeInTheDocument();
+    expect(screen.getByText(/Vérifiez-la avant approbation/)).toBeInTheDocument();
   });
+});
+
+it("enregistre le titre, la légende et la description sans inclure le brouillon du rapport", async () => {
+  const revision = "a".repeat(64);
+  const nextRevision = "b".repeat(64);
+  const zoom = { title: "Pores visibles", caption: "Légende initiale", image_alt: "Photo des pores",
+    signal_id: "pores_left_cheek", source_photo: "face", crop_method: "manual",
+    source_width: 400, source_height: 400, crop_box: [100, 100, 300, 300] };
+  const editing = { review_revision: revision, zooms: [zoom], history: [], fields: [
+    { path: ["overview", "summary_sentence"], label: "Résumé", section: "overview", value: "Texte initial" },
+    { path: ["overview", "zooms", 0, "title"], label: "Observation", section: "overview", value: zoom.title },
+  ] };
+  vi.mocked(api.fetchReportEditing).mockResolvedValueOnce(editing)
+    .mockResolvedValue({ ...editing, review_revision: nextRevision, zooms: [{ ...zoom, title: "Pores de la joue" }] });
+  vi.mocked(api.fetchOriginalZoom).mockResolvedValue(new Blob(["photo"]));
+  vi.mocked(api.fetchAdminArtifact).mockResolvedValue(new Blob(["PDF"]));
+  vi.mocked(api.saveReportText).mockResolvedValue({ review_revision: nextRevision });
+
+  render(<ReportEditor token="admin" sessionId="session" onSaved={vi.fn()} />);
+  fireEvent.change(await screen.findByLabelText("Résumé"), { target: { value: "Brouillon" } });
+  fireEvent.change(screen.getByLabelText("Titre de l’observation"), { target: { value: "Pores de la joue" } });
+  fireEvent.change(screen.getByLabelText("Légende"), { target: { value: "Détail de la joue." } });
+  fireEvent.change(screen.getByLabelText("Description accessible"), { target: { value: "Vue rapprochée des pores" } });
+  fireEvent.click(screen.getByRole("button", { name: "Enregistrer les textes du zoom" }));
+  await screen.findByLabelText("Aperçu PDF actualisé");
+  expect(api.saveReportText).toHaveBeenLastCalledWith("admin", "session", revision, [
+    { path: ["overview", "zooms", 0, "title"], value: "Pores de la joue" },
+    { path: ["overview", "zooms", 0, "caption"], value: "Détail de la joue." },
+    { path: ["overview", "zooms", 0, "image_alt"], value: "Vue rapprochée des pores" },
+  ]);
+  expect(screen.getByLabelText("Résumé")).toHaveValue("Brouillon");
+  expect(screen.queryByText("Observation")).not.toBeInTheDocument();
+});
+
+it("demande confirmation avant suppression et indique quand il ne reste aucun zoom", async () => {
+  const revision = "a".repeat(64);
+  const nextRevision = "b".repeat(64);
+  const editing = { review_revision: revision, fields: [], history: [], zooms: [
+    { title: "Pores visibles", signal_id: "pores_left_cheek", source_photo: "face", crop_method: "manual",
+      source_width: 400, source_height: 400, crop_box: [100, 100, 300, 300] },
+  ] };
+  vi.mocked(api.fetchReportEditing).mockResolvedValueOnce(editing)
+    .mockResolvedValue({ ...editing, review_revision: nextRevision, zooms: [] });
+  vi.mocked(api.fetchOriginalZoom).mockResolvedValue(new Blob(["photo"]));
+  vi.mocked(api.deleteReportZoom).mockResolvedValue({ review_revision: nextRevision });
+  vi.mocked(api.fetchAdminArtifact).mockResolvedValue(new Blob(["PDF"]));
+  const confirmation = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+  try {
+    render(<ReportEditor token="admin" sessionId="session" onSaved={vi.fn()} />);
+    const button = await screen.findByRole("button", { name: "Supprimer ce zoom" });
+    fireEvent.click(button);
+    expect(api.deleteReportZoom).not.toHaveBeenCalled();
+    fireEvent.click(button);
+    expect(await screen.findByText(/Aucune preuve photographique affichée/)).toBeInTheDocument();
+    expect(api.deleteReportZoom).toHaveBeenCalledWith("admin", "session", 0, revision);
+    await screen.findByLabelText("Aperçu PDF actualisé");
+    expect(api.fetchAdminArtifact).toHaveBeenLastCalledWith("admin", "session", "pdf", nextRevision);
+  } finally {
+    confirmation.mockRestore();
+  }
 });
