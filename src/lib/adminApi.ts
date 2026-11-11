@@ -47,7 +47,8 @@ export interface PromptRun {
   status?: string;
   raw_output?: string | null;
   parsed_output?: unknown;
-  qa_report?: unknown;
+  qa_report?: { status?: string; issues?: Array<{ severity?: string; code?: string; message?: string; path?: string; metadata?: Record<string, unknown> }> };
+  input_payload?: unknown;
   debug_info?: { submitted_input?: unknown; submitted_repair_input?: unknown } & Record<string, unknown>;
   artifact_name?: string;
   repaired?: boolean;
