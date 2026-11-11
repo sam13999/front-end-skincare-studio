@@ -51,7 +51,7 @@ describe("ReportEditor", () => {
     const editing = { review_revision: "c".repeat(64),
       zooms: [{ title: "Texture", signal_id: "texture", source_photo: "face_raw", crop_method: "manual",
         source_width: 400, source_height: 400, crop_box: [100, 100, 300, 300] }],
-      history: [{ revision: 1, reason: "Original" }], fields: [] };
+      history: [{ revision: 1, reason: "Original", action: "original", snapshot: "inject.json" }], fields: [] };
     vi.mocked(api.fetchReportEditing).mockResolvedValue(editing);
     vi.mocked(api.fetchOriginalZoom).mockResolvedValue(new Blob(["photo"]));
     vi.mocked(api.saveReportCrop).mockResolvedValue({ review_revision: "d".repeat(64) });
@@ -66,6 +66,30 @@ describe("ReportEditor", () => {
     await waitFor(() => expect(api.saveReportCrop).toHaveBeenCalledOnce());
     await screen.findByLabelText("Aperçu PDF actualisé");
     expect(screen.getByRole("button", { name: "Restaurer" })).toBeEnabled();
+  });
+  it("change la photo et envoie la détection sélectionnée avec les coordonnées", async () => {
+    const revision = "a".repeat(64);
+    const rect: [number, number, number, number] = [.25, .3, .4, .4];
+    vi.mocked(api.fetchReportEditing).mockResolvedValue({
+      review_revision: revision, fields: [], history: [],
+      zooms: [{ title: "Texture", signal_id: "texture", source_photo: "face", crop_method: "manual",
+        source_width: 400, source_height: 400, crop_box: [100, 100, 300, 300] }],
+      detections: [{ id: "side:skin_spot:0", title: "Zone pigmentée", zone: "joue droite",
+        source_photo: "side", confidence: null, source_width: 800, source_height: 700, rect }],
+    });
+    vi.mocked(api.fetchOriginalZoom).mockResolvedValue(new Blob(["photo"]));
+    vi.mocked(api.saveReportCrop).mockResolvedValue({ review_revision: "d".repeat(64) });
+    vi.mocked(api.fetchAdminArtifact).mockResolvedValue(new Blob(["PDF"]));
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:photo") });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+    render(<ReportEditor token="admin" sessionId="session" onSaved={vi.fn()} />);
+    const select = await screen.findByRole("combobox", { name: "Détection Zyla du zoom 1" });
+    fireEvent.change(select, { target: { value: "side:skin_spot:0" } });
+    await screen.findByAltText("Photo originale : side");
+    expect(api.fetchOriginalZoom).toHaveBeenLastCalledWith("admin", "session", 0, "side:skin_spot:0");
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer ce cadrage" }));
+    await waitFor(() => expect(api.saveReportCrop).toHaveBeenLastCalledWith("admin", "session", 0, revision, rect, "side:skin_spot:0"));
+    await screen.findByLabelText("Aperçu PDF actualisé");
   });
   it("sauvegarde les champs structurés et prévisualise sans appel IA", async () => {
     const saved = vi.fn();

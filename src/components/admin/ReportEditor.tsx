@@ -1,16 +1,19 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { fetchAdminArtifact, fetchOriginalZoom, fetchReportEditing, ReportEditing,
+import { fetchAdminArtifact, fetchOriginalZoom, fetchReportEditing, ReportEditing, ZylaDetection,
   revertReport, saveReportCrop, saveReportText } from "@/lib/adminApi";
 const PdfPreview = lazy(() => import("./PdfPreview"));
 
 type Rect = [number, number, number, number];
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
-function CropEditor({ token, sessionId, zoom, index, revision, onSaved }: {
+function CropEditor({ token, sessionId, zoom, index, revision, detections, onSaved }: {
   token: string; sessionId: string; zoom: ReportEditing["zooms"][number]; index: number;
-  revision: string; onSaved: () => void;
+  revision: string; detections: ZylaDetection[]; onSaved: () => void;
 }) {
   const [src, setSrc] = useState("");
+  const [detectionId, setDetectionId] = useState("");
+  const selected = detections.find(item => item.id === detectionId);
+  const photo = selected?.source_photo || zoom.source_photo;
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const img = useRef<HTMLImageElement>(null);
@@ -23,12 +26,22 @@ function CropEditor({ token, sessionId, zoom, index, revision, onSaved }: {
   const gesture = useRef<{ mode: "move" | "resize"; x: number; y: number; start: Rect } | null>(null);
 
   useEffect(() => {
+    let active = true;
     let url = "";
-    fetchOriginalZoom(token, sessionId, index).then(blob => {
+    setSrc("");
+    setError("");
+    fetchOriginalZoom(token, sessionId, index, detectionId || undefined).then(blob => {
+      if (!active) return;
       url = URL.createObjectURL(blob); setSrc(url);
-    }).catch(e => setError(e instanceof Error ? e.message : "Photo indisponible"));
-    return () => { if (url) URL.revokeObjectURL(url); };
-  }, [token, sessionId, index]);
+    }).catch(e => { if (active) setError(e instanceof Error ? e.message : "Photo indisponible"); });
+    return () => { active = false; if (url) URL.revokeObjectURL(url); };
+  }, [token, sessionId, index, detectionId]);
+
+  function chooseDetection(id: string) {
+    setDetectionId(id);
+    setSrc("");
+    setRect(detections.find(item => item.id === id)?.rect || initial);
+  }
 
   function move(event: React.PointerEvent<HTMLDivElement>) {
     if (!gesture.current || !img.current) return;
@@ -43,7 +56,7 @@ function CropEditor({ token, sessionId, zoom, index, revision, onSaved }: {
 
   async function save() {
     setError(""); setSaving(true);
-    try { await saveReportCrop(token, sessionId, index, revision, rect); await onSaved(); }
+    try { await saveReportCrop(token, sessionId, index, revision, rect, detectionId || undefined); await onSaved(); }
     catch (e) { setError(e instanceof Error ? e.message : "Cadrage refusé"); }
     finally { setSaving(false); }
   }
@@ -51,9 +64,21 @@ function CropEditor({ token, sessionId, zoom, index, revision, onSaved }: {
   return <div className="rounded-xl border border-slate-200 p-4">
     <h4 className="font-semibold">{zoom.title} · signal {zoom.signal_id || "inconnu"}</h4>
     <p className="mb-3 text-xs text-slate-500">{zoom.source_photo} · {zoom.crop_method === "anatomical_approximation" ? "Zone anatomique approximative" : zoom.crop_method === "manual" ? "Cadrage manuel" : "Coordonnées fournisseur"}</p>
+    {detections.length > 0 && <label className="mb-3 block text-sm">
+      Détection Zyla du zoom {index + 1}
+      <select className="ml-2 rounded border p-1" value={detectionId} disabled={saving}
+        onChange={event => chooseDetection(event.target.value)}>
+        <option value="">Conserver la preuve actuelle</option>
+        {["face", "side"].map(view => <optgroup key={view} label={view === "face" ? "Face" : "Profil"}>
+          {detections.filter(item => item.source_photo === view).map(item => <option key={item.id} value={item.id}>
+            {item.title} · {item.zone} · {item.id.split(":").at(-1)} · {item.confidence == null ? "confiance inconnue" : `${Math.round(item.confidence * 100)} %`}
+          </option>)}
+        </optgroup>)}
+      </select>
+    </label>}
     {src && <div className="max-w-xl">
       <div className="relative inline-block max-w-full overflow-hidden touch-none" onPointerMove={move} onPointerUp={() => gesture.current = null} onPointerCancel={() => gesture.current = null}>
-        <img ref={img} src={src} alt={`Photo originale : ${zoom.source_photo}`} className="block max-h-[520px] max-w-full select-none" draggable={false} />
+        <img ref={img} src={src} alt={`Photo originale : ${photo}`} className="block max-h-[520px] max-w-full select-none" draggable={false} />
         <div className="pointer-events-none absolute inset-x-0 top-0 bg-black/40" style={{ height: `${rect[1] * 100}%` }} />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-black/40" style={{ height: `${(1 - rect[1] - rect[3]) * 100}%` }} />
         <div className="pointer-events-none absolute left-0 bg-black/40" style={{ top: `${rect[1] * 100}%`, height: `${rect[3] * 100}%`, width: `${rect[0] * 100}%` }} />
@@ -66,7 +91,7 @@ function CropEditor({ token, sessionId, zoom, index, revision, onSaved }: {
         </div>
       </div>
       <p className="mt-2 text-xs text-slate-500">Déplacez le rectangle ; tirez le coin blanc pour le redimensionner. Aperçu immédiat ci-dessous.</p>
-      <div className="mt-2 w-64 overflow-hidden rounded border bg-slate-100 relative" style={{ aspectRatio: `${rect[2] * (zoom.source_width || 1)} / ${rect[3] * (zoom.source_height || 1)}` }}>
+      <div className="mt-2 w-64 overflow-hidden rounded border bg-slate-100 relative" style={{ aspectRatio: `${rect[2] * (selected?.source_width || zoom.source_width || 1)} / ${rect[3] * (selected?.source_height || zoom.source_height || 1)}` }}>
         <img src={src} alt="Aperçu du recadrage" className="absolute max-w-none" style={{ width: `${100 / rect[2]}%`, height: `${100 / rect[3]}%`, left: `${-rect[0] / rect[2] * 100}%`, top: `${-rect[1] / rect[3] * 100}%` }} />
       </div>
       <button type="button" className="action-button mt-3" disabled={saving} onClick={save}>{saving ? "Actualisation du PDF…" : "Enregistrer ce cadrage"}</button>
@@ -137,7 +162,7 @@ export default function ReportEditor({ token, sessionId, onSaved }: { token: str
     <button type="button" className="primary-button disabled:opacity-50" disabled={busy || !hasTextChanges} onClick={save}>{busy ? "Reconstruction HTML/PDF…" : "Enregistrer et reconstruire HTML/PDF"}</button>
     {!hasTextChanges && <p className="text-sm text-slate-500">Modifiez un texte pour activer ce bouton. Les recadrages s’enregistrent séparément.</p>}
     {data.zooms.length > 0 && <section><h3 className="mb-3 font-semibold">Recadrages photographiques</h3><div className="space-y-3">{data.zooms.map((zoom, index) =>
-      <CropEditor key={`${data.review_revision}-${index}`} token={token} sessionId={sessionId} zoom={zoom} index={index} revision={data.review_revision} onSaved={refresh} />)}</div></section>}
+      <CropEditor key={`${data.review_revision}-${index}`} token={token} sessionId={sessionId} zoom={zoom} index={index} detections={data.detections || []} revision={data.review_revision} onSaved={refresh} />)}</div></section>}
     {data.history.length > 0 && <section className="rounded-xl border p-4"><h3 className="font-semibold">Historique des versions</h3><div className="mt-3 space-y-2">{data.history.map(item =>
       <div key={item.revision} className="flex items-center justify-between gap-3 text-sm"><span>Version {item.revision} · {item.reason}</span><button type="button" className="action-button" disabled={busy} onClick={() => restore(item.revision)}>Restaurer</button></div>)}</div></section>}
     {notice && <p className="rounded bg-blue-50 p-3 text-sm text-blue-800">{notice}</p>}

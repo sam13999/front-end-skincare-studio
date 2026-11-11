@@ -55,8 +55,11 @@ describe("AdminPage", () => {
     const detail = {
       summary: summary(sessionId, "partial", "Client140926test"),
       user: { questionnaire: { email: "client@example.com" }, photos: [] },
-      analysis: {},
-      prompts: { prompt_0: [], prompt_1: [], prompt_2: [], prompt_3: [], prompt_4: [] },
+      analysis: {
+        zyla_raw: { results: [] }, zyla_normalized: { signals: { skin_type: {} } },
+        zyla_maps: [{ photo: "side", name: "red_area" }],
+      },
+      prompts: { prompt_0: [], prompt_1: [], prompt_2: [{ debug_info: { submitted_input: { skin_analysis_normalized: {} } } }], prompt_3: [], prompt_4: [] },
       qa: {
         stages: {
           "Prompt 0": { status: "Warnings" as const, issues: [{ code: "long_text", severity: "warning", message: "Texte long" }] },
@@ -74,6 +77,7 @@ describe("AdminPage", () => {
     vi.spyOn(global, "fetch").mockImplementation(async (input) => {
       const url = String(input);
       if (url.includes("/auth/check")) return { ok: true, status: 200, json: async () => ({ authenticated: true }) } as Response;
+      if (url.endsWith("/zyla-map/side/red_area")) return new Response(new Blob(["image"], { type: "image/jpeg" }));
       if (url.includes(`/session/${sessionId}`)) return { ok: true, status: 200, json: async () => detail } as Response;
       return { ok: true, status: 200, json: async () => ({ ...listResponse, items: [detail.summary] }) } as Response;
     });
@@ -88,5 +92,13 @@ describe("AdminPage", () => {
     expect(screen.getByText("Blocage")).toBeInTheDocument();
     expect(screen.getByText("Texte long")).toBeInTheDocument();
     expect(screen.getByText("Rendu impossible")).toBeInTheDocument();
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:zyla") });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+    fireEvent.click(screen.getByRole("button", { name: "Analyse" }));
+    expect(screen.getByText("Réponse brute Zyla sans images")).toBeInTheDocument();
+    expect(screen.getByText("Caractéristiques normalisées par photographie")).toBeInTheDocument();
+    expect(screen.getByText("Payload envoyé à Prompt 2")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Voir red_area · Profil" }));
+    expect(await screen.findByAltText("red_area · Profil")).toHaveAttribute("src", "blob:zyla");
   });
 });
