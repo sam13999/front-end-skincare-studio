@@ -18,7 +18,7 @@ export interface AdminSessionSummary {
   updated_at: string;
   status: "completed" | "in_progress" | "failed" | "partial";
   review_revision?: string;
-  review_status?: "pending_review" | "needs_correction" | "approved" | "sent";
+  review_status?: "pending_review" | "needs_correction" | "approved" | "sent" | "legacy_delivered";
   raw_status?: string | null;
   current_stage?: string | null;
   last_successful_stage?: string | null;
@@ -56,6 +56,7 @@ export interface PromptRun {
 
 export interface AdminDetailResponse {
   summary: AdminSessionSummary;
+  delivery?: ReportDelivery | null;
   user: {
     questionnaire: Record<string, unknown>;
     photos: Array<{ kind: string; url: string }>;
@@ -78,6 +79,37 @@ export interface AdminDetailResponse {
   raw_session: Record<string, unknown>;
 }
 
+type DeliveryState = "accepted" | "rejected" | "unknown" | null;
+export interface ReportDelivery {
+  html_status: DeliveryState;
+  resend_status: DeliveryState;
+  pdf_status: DeliveryState;
+  expires_at?: string;
+  link_active: boolean;
+  expired: boolean;
+  revoked_at?: string;
+  pdf_accepted_at?: string;
+  next_retry_at?: string;
+  recovery_until?: string;
+  escalated_at?: string;
+  deleted_at?: string;
+  cleanup_status?: "held" | "failed" | "deleted";
+  test: boolean;
+  history: Array<{ event: string; at: string; reference?: string; message_id?: string }>;
+}
+
+type DeliveryCommand =
+  | { action: "send"; expected_revision?: string }
+  | { action: "resend"; expected_revision?: string; request_id: string }
+  | { action: "link" | "revoke" | "retry_pdf" | "simulate" }
+  | { action: "reconcile"; stage: "html" | "resend" | "pdf"; resolution: "accepted" | "rejected"; accepted_at?: string; message_id?: string };
+
+export const manageReportDelivery = (token: string, sessionId: string, command: DeliveryCommand) =>
+  adminFetch<ReportDelivery & { client_link?: string }>(token,
+    `/v1/admin/session/${encodeURIComponent(sessionId)}/delivery`, {
+      method: "POST", cache: "no-store", headers: { "Content-Type": "application/json" }, body: JSON.stringify(command),
+    });
+
 export type EditPath = Array<string | number>;
 export interface ZylaDetection {
   id: string;
@@ -93,7 +125,7 @@ export interface ZylaDetection {
 export interface ReportEditing {
   detections?: ZylaDetection[];
   fields: Array<{ path: EditPath; label: string; section: string; value: string }>;
-  zooms: Array<{ signal_id: string; source_photo: string; crop_box: number[]; crop_method: string; source_width: number; source_height: number; title: string }>;
+  zooms: Array<{ signal_id: string; source_photo: string; crop_box: number[]; crop_method: string; source_width: number; source_height: number; title: string; caption?: string; image_alt?: string }>;
   history: Array<{ revision: number; action: string; reason: string; snapshot: string }>;
   review_revision: string;
 }
@@ -138,14 +170,16 @@ export async function fetchAdminSession(token: string, sessionId: string): Promi
   return adminFetch<AdminDetailResponse>(token, `/v1/admin/session/${encodeURIComponent(sessionId)}`, { cache: "no-store" });
 }
 
-export async function fetchAdminArtifact(token: string, sessionId: string, kind: string): Promise<Blob> {
-  const response = await fetch(`${API_BASE_URL}/v1/admin/session/${encodeURIComponent(sessionId)}/artifact/${kind.split("/").map(encodeURIComponent).join("/")}`, {
+export async function fetchAdminArtifact(token: string, sessionId: string, kind: string, revision?: string): Promise<Blob> {
+  const query = revision ? `?${new URLSearchParams({ revision })}` : "";
+  const response = await fetch(`${API_BASE_URL}/v1/admin/session/${encodeURIComponent(sessionId)}/artifact/${kind.split("/").map(encodeURIComponent).join("/")}${query}`, {
     cache: "no-store",
     headers: {
       "X-Admin-Token": token,
       Authorization: `Bearer ${token}`,
     },
   });
+  if (response.status === 409) throw new Error("Le rapport a changé. Actualisez la session.");
   if (!response.ok) throw new Error("Artefact introuvable.");
   return response.blob();
 }
@@ -188,18 +222,31 @@ export const saveReportCrop = (token: string, sessionId: string, index: number, 
     body: JSON.stringify({ expected_revision: expectedRevision, rect, detection_id: detectionId }),
   });
 
+export const deleteReportZoom = (token: string, sessionId: string, index: number, expectedRevision: string) =>
+  adminFetch<{ review_revision: string }>(token, `${editingPath(sessionId)}/zoom/${index}`, {
+    method: "DELETE", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ expected_revision: expectedRevision }),
+  });
+
 export const revertReport = (token: string, sessionId: string, revision: number, expectedRevision: string) =>
   adminFetch<{ review_revision: string }>(token, `${editingPath(sessionId)}/revert`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ expected_revision: expectedRevision, revision }),
   });
 
-export async function fetchOriginalZoom(token: string, sessionId: string, index: number, detectionId?: string): Promise<Blob> {
-  const query = detectionId ? `?${new URLSearchParams({ detection_id: detectionId })}` : "";
+export async function fetchOriginalZoom(token: string, sessionId: string, index: number, detectionId?: string, revision?: string): Promise<Blob> {
+  const params = new URLSearchParams();
+  if (detectionId) params.set("detection_id", detectionId);
+  if (revision) params.set("revision", revision);
+  const query = params.size ? `?${params}` : "";
   const response = await fetch(`${API_BASE_URL}${editingPath(sessionId)}/zoom/${index}/original${query}`, {
+    cache: "no-store",
     headers: { "X-Admin-Token": token, Authorization: `Bearer ${token}` },
   });
-  if (!response.ok) throw new Error("Photo originale indisponible.");
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.detail?.message || "Photo originale indisponible.");
+  }
   return response.blob();
 }
 
