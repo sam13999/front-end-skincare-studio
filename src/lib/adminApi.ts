@@ -18,7 +18,7 @@ export interface AdminSessionSummary {
   updated_at: string;
   status: "completed" | "in_progress" | "failed" | "partial";
   review_revision?: string;
-  review_status?: "pending_review" | "needs_correction" | "approved" | "sent";
+  review_status?: "pending_review" | "needs_correction" | "approved" | "sent" | "legacy_delivered";
   raw_status?: string | null;
   current_stage?: string | null;
   last_successful_stage?: string | null;
@@ -56,6 +56,7 @@ export interface PromptRun {
 
 export interface AdminDetailResponse {
   summary: AdminSessionSummary;
+  delivery?: ReportDelivery | null;
   user: {
     questionnaire: Record<string, unknown>;
     photos: Array<{ kind: string; url: string }>;
@@ -77,6 +78,37 @@ export interface AdminDetailResponse {
   rerun_history: Array<Record<string, unknown>>;
   raw_session: Record<string, unknown>;
 }
+
+type DeliveryState = "accepted" | "rejected" | "unknown" | null;
+export interface ReportDelivery {
+  html_status: DeliveryState;
+  resend_status: DeliveryState;
+  pdf_status: DeliveryState;
+  expires_at?: string;
+  link_active: boolean;
+  expired: boolean;
+  revoked_at?: string;
+  pdf_accepted_at?: string;
+  next_retry_at?: string;
+  recovery_until?: string;
+  escalated_at?: string;
+  deleted_at?: string;
+  cleanup_status?: "held" | "failed" | "deleted";
+  test: boolean;
+  history: Array<{ event: string; at: string; reference?: string; message_id?: string }>;
+}
+
+type DeliveryCommand =
+  | { action: "send"; expected_revision?: string }
+  | { action: "resend"; expected_revision?: string; request_id: string }
+  | { action: "link" | "revoke" | "retry_pdf" | "simulate" }
+  | { action: "reconcile"; stage: "html" | "resend" | "pdf"; resolution: "accepted" | "rejected"; accepted_at?: string; message_id?: string };
+
+export const manageReportDelivery = (token: string, sessionId: string, command: DeliveryCommand) =>
+  adminFetch<ReportDelivery & { client_link?: string }>(token,
+    `/v1/admin/session/${encodeURIComponent(sessionId)}/delivery`, {
+      method: "POST", cache: "no-store", headers: { "Content-Type": "application/json" }, body: JSON.stringify(command),
+    });
 
 export type EditPath = Array<string | number>;
 export interface ZylaDetection {

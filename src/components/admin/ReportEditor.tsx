@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { deleteReportZoom, fetchAdminArtifact, fetchOriginalZoom, fetchReportEditing, ReportEditing, ZylaDetection,
   revertReport, saveReportCrop, saveReportText } from "@/lib/adminApi";
 const PdfPreview = lazy(() => import("./PdfPreview"));
@@ -11,11 +11,26 @@ const zoomTextFields = [
   ["caption", "Légende"],
   ["image_alt", "Description accessible"],
 ] as const;
+const sectionLabels = {
+  overview: "Observations photographiques",
+  profile: "Votre profil",
+  strategy: "Objectifs et stratégie",
+  routine: "Routine matin et soir",
+  followup: "Conseils et suivi",
+};
+type Section = keyof typeof sectionLabels;
+const sectionOf = (path: Array<string | number>): Section => {
+  if (path[0] === "routine_pages") return "routine";
+  if (path[0] === "routine_overview") {
+    return path[1] === "follow_up" || path[1] === "conclusion" ? "followup" : "routine";
+  }
+  return path[0] as Section;
+};
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
-function CropEditor({ token, sessionId, zoom, index, revision, detections, busy, runEdit }: {
+function CropEditor({ token, sessionId, zoom, index, revision, detections, busy, runEdit, onDirty }: {
   token: string; sessionId: string; zoom: ReportEditing["zooms"][number]; index: number;
-  revision: string; detections: ZylaDetection[]; busy: boolean; runEdit: RunEdit;
+  revision: string; detections: ZylaDetection[]; busy: boolean; runEdit: RunEdit; onDirty: (index: number, dirty: boolean) => void;
 }) {
   const [src, setSrc] = useState("");
   const [detectionId, setDetectionId] = useState("");
@@ -35,6 +50,13 @@ function CropEditor({ token, sessionId, zoom, index, revision, detections, busy,
        (zoom.crop_box[3] - zoom.crop_box[1]) / zoom.source_height] as Rect
     : [.25, .25, .5, .4] as Rect;
   const [rect, setRect] = useState<Rect>(initial);
+  const cropDirty = !!selected || rect.some((value, i) => value !== initial[i]);
+  const textDirty = textChanges.length > 0;
+  useEffect(() => {
+    onDirty(index, cropDirty || textDirty);
+    return () => onDirty(index, false);
+  }, [index, cropDirty, textDirty, onDirty]);
+
   const gesture = useRef<{ mode: "move" | "resize"; x: number; y: number; start: Rect } | null>(null);
 
   useEffect(() => {
@@ -79,17 +101,17 @@ function CropEditor({ token, sessionId, zoom, index, revision, detections, busy,
       <legend className="mb-2 text-sm font-medium">Renommer ou préciser l’observation</legend>
       {zoomTextFields.map(([field, label]) => <label className="block text-sm" key={field}>
         {label}
-        <input className="mt-1 block w-full rounded border p-2" value={texts[field]} maxLength={2500}
+        <input className="mt-1 block min-h-11 w-full min-w-0 rounded-lg border p-2 text-base" value={texts[field]} maxLength={2500}
           onChange={event => setTexts({ ...texts, [field]: event.target.value })} />
       </label>)}
       <p className="text-xs text-slate-500 sm:col-span-2">Décrivez la caractéristique indiquée ci-dessus. Pour en choisir une autre, remplacez la preuve.</p>
       <div className="sm:col-span-2"><button type="button" className="action-button" disabled={!textChanges.length}
-        onClick={() => runEdit(() => saveReportText(token, sessionId, revision, textChanges))}>Enregistrer les textes du zoom</button></div>
+        onClick={() => { if (!cropDirty || window.confirm("Le cadrage en cours sera perdu. Enregistrer les textes ?")) void runEdit(() => saveReportText(token, sessionId, revision, textChanges)); }}>Enregistrer les textes du zoom</button></div>
     </fieldset>
     {detections.length > 0 && <label className="mb-3 block text-sm">
       Preuve photographique du zoom {index + 1}
-      <select className="ml-2 rounded border p-1" value={detectionId} disabled={busy}
-        onChange={event => chooseDetection(event.target.value)}>
+      <select className="mt-1 block min-h-11 w-full min-w-0 rounded-lg border p-2 text-base" value={detectionId} disabled={busy}
+        onChange={event => { if (!cropDirty || window.confirm("Remplacer le cadrage en cours ?")) chooseDetection(event.target.value); }}>
         <option value="">Conserver la preuve actuelle</option>
         {["face", "side"].map(view => <optgroup key={view} label={view === "face" ? "Face" : "Profil"}>
           {detections.filter(item => item.source_photo === view).map(item => <option key={item.id} value={item.id}>
@@ -115,11 +137,11 @@ function CropEditor({ token, sessionId, zoom, index, revision, detections, busy,
         </div>
       </div>
       <p className="mt-2 text-xs text-slate-500">Déplacez le rectangle ; tirez le coin blanc pour le redimensionner. Aperçu immédiat ci-dessous.</p>
-      <div className="mt-2 w-64 overflow-hidden rounded border bg-slate-100 relative" style={{ aspectRatio: `${rect[2] * (selected?.source_width || zoom.source_width || 1)} / ${rect[3] * (selected?.source_height || zoom.source_height || 1)}` }}>
+      <div className="mt-2 w-64 max-w-full overflow-hidden rounded border bg-slate-100 relative" style={{ aspectRatio: `${rect[2] * (selected?.source_width || zoom.source_width || 1)} / ${rect[3] * (selected?.source_height || zoom.source_height || 1)}` }}>
         <img src={src} alt="Aperçu du recadrage" className="absolute max-w-none" style={{ width: `${100 / rect[2]}%`, height: `${100 / rect[3]}%`, left: `${-rect[0] / rect[2] * 100}%`, top: `${-rect[1] / rect[3] * 100}%` }} />
       </div>
       <button type="button" className="action-button mt-3" disabled={busy}
-        onClick={() => runEdit(() => saveReportCrop(token, sessionId, index, revision, rect, detectionId || undefined))}>
+        onClick={() => { if (!textDirty || window.confirm("Les textes du zoom en cours seront perdus. Enregistrer le cadrage ?")) void runEdit(() => saveReportCrop(token, sessionId, index, revision, rect, detectionId || undefined)); }}>
         {selected ? "Enregistrer le remplacement" : "Enregistrer ce cadrage"}
       </button>
     </div>}
@@ -128,7 +150,7 @@ function CropEditor({ token, sessionId, zoom, index, revision, detections, busy,
   </div>;
 }
 
-export default function ReportEditor({ token, sessionId, onSaved }: { token: string; sessionId: string; onSaved: () => void | Promise<void> }) {
+export default function ReportEditor({ token, sessionId, onSaved, onDraftChange }: { token: string; sessionId: string; onSaved: () => void | Promise<void>; onDraftChange?: (dirty: boolean) => void }) {
   const [data, setData] = useState<ReportEditing | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
@@ -136,15 +158,32 @@ export default function ReportEditor({ token, sessionId, onSaved }: { token: str
   const [preview, setPreview] = useState<Blob | null>(null);
   const [busy, setBusy] = useState(false);
   const saving = useRef(false);
+  const [openSection, setOpenSection] = useState<Section | null>("overview");
+  const [savingSection, setSavingSection] = useState<Section | null>(null);
+  const [savedSection, setSavedSection] = useState<Section | null>(null);
+  const [zoomDrafts, setZoomDrafts] = useState<number[]>([]);
+  const onZoomDirty = useCallback((index: number, dirty: boolean) => {
+    setZoomDrafts(current => dirty ? [...new Set([...current, index])] : current.filter(item => item !== index));
+  }, []);
+  const dirtyFields = data?.fields.filter(field => values[JSON.stringify(field.path)] !== field.value) || [];
+  const dirty = dirtyFields.length > 0 || zoomDrafts.length > 0;
+  useEffect(() => {
+    onDraftChange?.(dirty || busy);
+    if (!dirty && !busy) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty, busy, onDraftChange]);
+
   const key = (path: Array<string | number>) => JSON.stringify(path);
 
-  function applyEditing(result: ReportEditing, preserveDraft: boolean) {
+  function applyEditing(result: ReportEditing, preserveDraft: boolean, savedPaths = new Set<string>()) {
     const fields = result.fields.filter(field => field.path[0] !== "overview" || field.path[1] !== "zooms");
     setValues(current => Object.fromEntries(fields.map(field => {
       const id = key(field.path);
       const previous = data?.fields.find(item => key(item.path) === id);
       const dirty = previous && current[id] !== previous.value;
-      return [id, preserveDraft && dirty ? current[id] : field.value];
+      return [id, preserveDraft && dirty && !savedPaths.has(id) ? current[id] : field.value];
     })));
     setData({ ...result, fields });
   }
@@ -157,10 +196,15 @@ export default function ReportEditor({ token, sessionId, onSaved }: { token: str
     return () => { active = false; };
   }, [token, sessionId]);
 
-  const runEdit: RunEdit = async (write, preserveDraft = true) => {
+  const runEdit = async (write: () => Promise<EditResult>, preserveDraft = true,
+    options: { section?: Section; paths?: Set<string>; zoomIndex?: number } = {}) => {
     if (saving.current) return;
+    const losesDraft = zoomDrafts.some(index => index !== options.zoomIndex) || (!preserveDraft && dirtyFields.length > 0);
+    if (losesDraft && !window.confirm("Cette opération remplacera des modifications non enregistrées. Continuer ?")) return;
     saving.current = true;
     setBusy(true);
+    setSavingSection(options.section ?? null);
+    setSavedSection(null);
     setError("");
     setNotice("");
     let committed = false;
@@ -169,54 +213,109 @@ export default function ReportEditor({ token, sessionId, onSaved }: { token: str
       committed = true;
       setPreview(null);
       const current = await fetchReportEditing(token, sessionId);
-      applyEditing(current, preserveDraft);
+      applyEditing(current, preserveDraft, options.paths);
       await onSaved();
       if (current.review_revision !== saved.review_revision) {
         throw new Error("Le rapport a changé depuis l’enregistrement. La version actuelle est affichée.");
       }
-      setPreview(await fetchAdminArtifact(token, sessionId, "pdf", saved.review_revision));
+      const [, pdf] = await Promise.all([
+        fetchAdminArtifact(token, sessionId, "html", saved.review_revision),
+        fetchAdminArtifact(token, sessionId, "pdf", saved.review_revision),
+      ]);
+      setPreview(pdf);
+      setSavedSection(options.section ?? null);
       setNotice("Nouvelle version générée. Vérifiez-la avant approbation.");
     } catch (e) {
       const message = e instanceof Error ? e.message : "Correction refusée";
-      setError(committed ? `Version enregistrée. Actualisation de l’aperçu incomplète. ${message}` : message);
+      setError(committed ? `L’écriture a abouti. La vérification des aperçus a échoué. ${message}` : message);
     } finally {
       saving.current = false;
       setBusy(false);
+      setSavingSection(null);
     }
   };
-  function save() {
+  async function reload() {
+    if (dirty && !window.confirm("Recharger le rapport et abandonner les modifications non enregistrées ?")) return;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const current = await fetchReportEditing(token, sessionId);
+      applyEditing(current, false);
+      setPreview(null);
+      await onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Le rapport n’a pas pu être rechargé.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function save(section: Section) {
     if (!data) return;
-    const changes = data.fields.filter(field => values[key(field.path)] !== field.value)
+    const changes = dirtyFields.filter(field => sectionOf(field.path) === section)
       .map(field => ({ path: field.path, value: values[key(field.path)] }));
-    if (changes.length) void runEdit(() => saveReportText(token, sessionId, data.review_revision, changes), false);
+    if (changes.length) {
+      void runEdit(() => saveReportText(token, sessionId, data.review_revision, changes), true,
+        { section, paths: new Set(changes.map(change => key(change.path))) });
+    }
   }
 
   if (!data) return <p className="text-sm text-slate-500">{error || "Chargement des sections…"}</p>;
-  const sections = [...new Set(data.fields.map(field => field.section))];
-  const hasTextChanges = data.fields.some(field => values[key(field.path)] !== field.value);
-  return <div className="space-y-5">
-    <p className="text-sm text-slate-600">Corrigez les textes affichés. Les fréquences se modifient dans l’onglet Routine. Chaque enregistrement reconstruit seulement le HTML et le PDF.</p>
-    {sections.map(section => <section key={section} className="rounded-xl border p-4">
-      <h3 className="mb-3 font-semibold capitalize">{section.replace(/_/g, " ")}</h3>
-      <div className="grid gap-3 md:grid-cols-2">{data.fields.filter(field => field.section === section).map(field => <label key={key(field.path)} className="block text-sm font-medium text-slate-700">
-        {field.label} <span className="font-normal text-slate-400">{field.path.filter(x => typeof x === "number").map(x => `#${Number(x) + 1}`).join(" ")}</span>
-        <textarea className="mt-1 block min-h-20 w-full rounded border border-slate-300 p-2 font-normal" value={values[key(field.path)] || ""} disabled={busy}
-          onChange={e => setValues(current => ({ ...current, [key(field.path)]: e.target.value }))} />
-      </label>)}</div>
-    </section>)}
-    <button type="button" className="primary-button disabled:opacity-50" disabled={busy || !hasTextChanges} onClick={save}>{busy ? "Reconstruction HTML/PDF…" : "Enregistrer et reconstruire HTML/PDF"}</button>
-    {!hasTextChanges && <p className="text-sm text-slate-500">Modifiez un texte pour activer ce bouton. Les recadrages s’enregistrent séparément.</p>}
-    <section><h3 className="mb-3 font-semibold">Recadrages photographiques</h3>
-      {data.zooms.length === 0 && <p role="status" className="text-sm text-amber-800">Aucune preuve photographique affichée dans ce rapport.</p>}
-      <div className="space-y-3">{data.zooms.map((zoom, index) =>
-        <CropEditor key={`${data.review_revision}-${index}`} token={token} sessionId={sessionId} zoom={zoom} index={index}
-          detections={data.detections || []} revision={data.review_revision} busy={busy} runEdit={runEdit} />)}</div>
-    </section>
-    {data.history.length > 0 && <section className="rounded-xl border p-4"><h3 className="font-semibold">Historique des versions</h3><div className="mt-3 space-y-2">{data.history.map(item =>
-      <div key={item.revision} className="flex items-center justify-between gap-3 text-sm"><span>Version {item.revision} · {item.reason}</span><button type="button" className="action-button" disabled={busy} onClick={() => runEdit(() => revertReport(token, sessionId, item.revision, data.review_revision), false)}>Restaurer</button></div>)}</div></section>}
-    {busy && <p role="status" className="text-sm">Reconstruction ou chargement du rapport…</p>}
-    {notice && <p role="status" className="rounded bg-blue-50 p-3 text-sm text-blue-800">{notice}</p>}
-    {error && <p role="alert" className="rounded bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-    {preview && <Suspense fallback={<p>Chargement de l’aperçu PDF…</p>}><PdfPreview blob={preview} /></Suspense>}
+  const sections = (Object.keys(sectionLabels) as Section[])
+    .filter(section => section === "overview" || data.fields.some(field => sectionOf(field.path) === section));
+  function jump(section: Section) {
+    setOpenSection(section);
+    document.getElementById(`report-edit-${section}`)?.scrollIntoView?.({ block: "start" });
+  }
+  return <div className="min-w-0 space-y-4 pb-[env(safe-area-inset-bottom)]">
+    <nav aria-label="Sections du rapport" className="flex flex-wrap gap-2">
+      {sections.map(section => <button key={section} type="button" className="action-button min-h-11"
+        aria-controls={`report-edit-${section}`} onClick={() => jump(section)}>{sectionLabels[section]}</button>)}
+    </nav>
+    {sections.map(section => {
+      const fields = data.fields.filter(field => sectionOf(field.path) === section);
+      const changed = fields.some(field => values[key(field.path)] !== field.value);
+      const sectionState = savingSection === section ? "Enregistrement…" : changed || (section === "overview" && zoomDrafts.length)
+        ? "Modifications en cours" : savedSection === section ? "Enregistré" : "";
+      return <section key={section} id={`report-edit-${section}`} className="scroll-mt-3 rounded-2xl border border-slate-200 bg-white">
+        <h3><button type="button" aria-expanded={openSection === section} aria-controls={`report-fields-${section}`}
+          onClick={() => setOpenSection(openSection === section ? null : section)}
+          className="flex min-h-14 w-full items-center justify-between gap-3 px-4 py-3 text-left font-semibold text-slate-900">
+          <span>{sectionLabels[section]}{sectionState && <span className="block text-xs font-normal text-slate-600">{sectionState}</span>}</span>
+          <span aria-hidden="true">{openSection === section ? "−" : "+"}</span>
+        </button></h3>
+        <div id={`report-fields-${section}`} hidden={openSection !== section} className="space-y-4 border-t border-slate-100 p-3 sm:p-4">
+          <div className="grid gap-4 md:grid-cols-2">{fields.map(field => <label key={key(field.path)} className="block min-w-0 text-sm font-medium text-slate-700">
+            {field.label} <span className="font-normal text-slate-500">{field.path.filter(x => typeof x === "number").map(x => `n°${Number(x) + 1}`).join(" · ")}</span>
+            <textarea className="mt-1 block min-h-24 w-full rounded-lg border border-slate-300 p-3 text-base font-normal"
+              value={values[key(field.path)] ?? ""} disabled={busy} maxLength={2500}
+              onChange={event => setValues(current => ({ ...current, [key(field.path)]: event.target.value }))} />
+          </label>)}</div>
+          {fields.length > 0 && <button type="button" className="primary-button min-h-11 w-full disabled:opacity-50 sm:w-auto"
+            disabled={busy || !changed} onClick={() => save(section)}>Enregistrer les modifications</button>}
+          {section === "overview" && <>
+            <h4 className="font-semibold">Recadrages photographiques</h4>
+            {data.zooms.length === 0 && <p role="status" className="text-sm text-amber-800">Aucune preuve photographique affichée dans ce rapport.</p>}
+            <div className="space-y-3">{data.zooms.map((zoom, index) => (
+              <CropEditor key={`${data.review_revision}-${index}`} token={token} sessionId={sessionId} zoom={zoom} index={index}
+                detections={data.detections || []} revision={data.review_revision} busy={busy} onDirty={onZoomDirty}
+                runEdit={write => runEdit(write, true, { section, zoomIndex: index })} />
+            ))}</div>
+          </>}
+          {error && openSection === section && <div className="space-y-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+            <p role="alert">{error}</p>
+            <button type="button" className="action-button min-h-11" disabled={busy} onClick={() => void reload()}>Recharger les champs</button>
+          </div>}
+          {notice && openSection === section && <p role="status" className="rounded-lg bg-blue-50 p-3 text-sm text-blue-800">{notice}</p>}
+        </div>
+      </section>;
+    })}
+    {data.history.length > 0 && <details className="rounded-2xl border border-slate-200 bg-white p-4"><summary className="cursor-pointer font-semibold">Historique des versions</summary><div className="mt-3 space-y-2">{data.history.map(item =>
+      <div key={item.revision} className="flex flex-wrap items-center justify-between gap-3 text-sm"><span>Version {item.revision} · {item.reason}</span><button type="button" className="action-button min-h-11" disabled={busy} onClick={() => runEdit(() => revertReport(token, sessionId, item.revision, data.review_revision), false)}>Restaurer</button></div>)}</div></details>}
+    {openSection === null && error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+    {preview && <details className="rounded-2xl border border-slate-200 bg-white p-4"><summary className="cursor-pointer font-semibold">Aperçu PDF</summary>
+      <Suspense fallback={<p>Chargement de l’aperçu PDF…</p>}><PdfPreview blob={preview} /></Suspense>
+    </details>}
   </div>;
 }

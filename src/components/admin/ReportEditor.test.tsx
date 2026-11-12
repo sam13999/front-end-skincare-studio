@@ -16,8 +16,7 @@ describe("ReportEditor", () => {
       { path: ["overview", "summary_sentence"], label: "Résumé", section: "overview", value: "Initial" },
     ] });
     render(<ReportEditor token="admin" sessionId="session" onSaved={vi.fn()} />);
-    expect(await screen.findByRole("button", { name: "Enregistrer et reconstruire HTML/PDF" })).toBeDisabled();
-    expect(screen.getByText(/Modifiez un texte pour activer/)).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Enregistrer les modifications" })).toBeDisabled();
   });
 
   it("affiche le chargement puis une erreur API sans annoncer de succès", async () => {
@@ -28,8 +27,9 @@ describe("ReportEditor", () => {
     vi.mocked(api.saveReportText).mockImplementation(() => new Promise((_, fail) => { reject = fail; }));
     render(<ReportEditor token="admin" sessionId="session" onSaved={vi.fn()} />);
     fireEvent.change(await screen.findByLabelText("Résumé"), { target: { value: "Nouveau" } });
-    fireEvent.click(screen.getByRole("button", { name: "Enregistrer et reconstruire HTML/PDF" }));
-    expect(screen.getByRole("button", { name: /Reconstruction HTML\/PDF/ })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer les modifications" }));
+    expect(screen.getByRole("button", { name: "Enregistrer les modifications" })).toBeDisabled();
+    expect(screen.getByText("Enregistrement…")).toBeInTheDocument();
     reject(new Error("La version consultée a changé. Ouvrez le nouveau rapport."));
     expect(await screen.findByRole("alert")).toHaveTextContent("La version consultée a changé");
     expect(screen.queryByText(/Nouvelle version générée/)).not.toBeInTheDocument();
@@ -42,8 +42,9 @@ describe("ReportEditor", () => {
     vi.mocked(api.saveReportText).mockRejectedValue(new Error("Correction refusée : objectif incohérent."));
     vi.mocked(api.fetchAdminArtifact).mockClear();
     render(<ReportEditor token="admin" sessionId="session" onSaved={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("navigation", { name: "Sections du rapport" }).then(nav => nav.querySelector("button:last-child")!));
     fireEvent.change(await screen.findByLabelText("Stratégie"), { target: { value: "Nouveau" } });
-    fireEvent.click(screen.getByRole("button", { name: "Enregistrer et reconstruire HTML/PDF" }));
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer les modifications" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("objectif incohérent");
     expect(api.fetchAdminArtifact).not.toHaveBeenCalled();
   });
@@ -65,6 +66,7 @@ describe("ReportEditor", () => {
     fireEvent.click(screen.getByRole("button", { name: "Enregistrer ce cadrage" }));
     await waitFor(() => expect(api.saveReportCrop).toHaveBeenCalledOnce());
     await screen.findByLabelText("Aperçu PDF actualisé");
+    fireEvent.click(screen.getByText("Historique des versions"));
     expect(screen.getByRole("button", { name: "Restaurer" })).toBeEnabled();
   });
   it("change la photo et envoie la détection sélectionnée avec les coordonnées", async () => {
@@ -104,7 +106,7 @@ describe("ReportEditor", () => {
 
     render(<ReportEditor token="admin" sessionId="session" onSaved={saved} />);
     fireEvent.change(await screen.findByLabelText("Résumé"), { target: { value: "Texte corrigé" } });
-    fireEvent.click(screen.getByRole("button", { name: /Enregistrer et reconstruire/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Enregistrer les modifications/ }));
     await waitFor(() => expect(api.saveReportText).toHaveBeenCalledWith("admin", "session", "a".repeat(64), [
       { path: ["overview", "summary_sentence"], value: "Texte corrigé" },
     ]));

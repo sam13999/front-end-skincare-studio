@@ -1,6 +1,7 @@
-import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import ReportEditor from "@/components/admin/ReportEditor";
+import ReportDelivery from "@/components/admin/ReportDelivery";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -16,7 +17,6 @@ import {
 
   KeyRound,
   LogOut,
-  Mail,
   Play,
   RefreshCw,
   Search,
@@ -32,7 +32,6 @@ import {
   fetchAdminSession,
   fetchAdminSessions,
   PromptRun,
-  resendAdminEmail,
   reviewAdminReport,
   rerunAdminSession,
 } from "@/lib/adminApi";
@@ -42,7 +41,7 @@ const RoutineEditor = lazy(() => import("@/components/admin/RoutineEditor"));
 const TOKEN_KEY = "skinview_admin_token";
 
 const statusLabels: Record<string, string> = {
-  pending_review: "À vérifier", needs_correction: "À corriger", approved: "Approuvé", sent: "Envoyé",
+  pending_review: "À vérifier", needs_correction: "À corriger", approved: "Approuvé", sent: "Envoyé", legacy_delivered: "Livré",
   completed: "Complète",
   in_progress: "En cours",
   failed: "Échouée",
@@ -346,15 +345,29 @@ function HtmlReportPreview({ token, sessionId, revision }: { token: string; sess
   </div>;
 }
 
-function DetailView({ token, detail, onBack, onRefresh, onEditRefresh }: { token: string; detail: AdminDetailResponse; onBack: () => void; onRefresh: () => Promise<void>; onEditRefresh: () => Promise<void> }) {
+function DetailView({ token, detail, onBack, onRefresh, onEditRefresh, onDraftChange }: { token: string; detail: AdminDetailResponse; onBack: () => void; onRefresh: () => Promise<void>; onEditRefresh: () => Promise<void>; onDraftChange: (dirty: boolean) => void }) {
   const [tab, setTab] = useState("summary");
+  const [editorMounted, setEditorMounted] = useState(false);
+  const [hasDraft, setHasDraft] = useState(false);
   const [rerunOpen, setRerunOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
   const [htmlPreviewRequest, setHtmlPreviewRequest] = useState(0);
 
-  const { summary } = detail;
+  const { summary, delivery } = detail;
+  const frozen = !!delivery || summary.review_status === "sent" || summary.review_status === "legacy_delivered";
+
+  function chooseTab(nextTab: string) {
+    if (nextTab === "editing") setEditorMounted(true);
+    if (nextTab === "report") setHtmlPreviewRequest(request => request || 1);
+    setTab(nextTab);
+  }
+
+  function draftChanged(dirty: boolean) {
+    setHasDraft(dirty);
+    onDraftChange(dirty);
+  }
   const raw = detail.raw_session || {};
   const products = raw.products_retained || raw.produits_retenus || raw.selected_products;
   const routine = raw.routine_finale || raw.final_routine || raw.routine;
@@ -381,20 +394,6 @@ function DetailView({ token, detail, onBack, onRefresh, onEditRefresh }: { token
       onRefresh();
     } catch (err) { setNotice(err instanceof Error ? err.message : "Validation impossible."); }
     finally { setBusy(""); }
-  }
-
-  async function resend() {
-    setBusy("email");
-    setNotice("");
-    try {
-      await resendAdminEmail(token, summary.session_id);
-      setNotice("Email envoyé avec succès.");
-      onRefresh();
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Envoi impossible.");
-    } finally {
-      setBusy("");
-    }
   }
 
   async function rerun() {
@@ -425,17 +424,17 @@ function DetailView({ token, detail, onBack, onRefresh, onEditRefresh }: { token
     ["qa", "QA"],
     ["report", "Rapport"],
     ["routine", "Routine"],
-    ["editing", "Corriger le rapport"],
+    ["editing", "Modifier le rapport"],
     ["history", "Historique / logs"],
   ];
 
   return (
     <section className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <button type="button" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-950" onClick={onBack}><ArrowLeft className="h-4 w-4" /> Toutes les sessions</button>
+        <button type="button" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-950" onClick={() => { if (!hasDraft || window.confirm("Quitter avec des modifications non enregistrées ?")) { onDraftChange(false); onBack(); } }}><ArrowLeft className="h-4 w-4" /> Toutes les sessions</button>
         <div className="flex flex-wrap gap-2">
           <button type="button" className="action-button" onClick={onRefresh}><RefreshCw className="h-3.5 w-3.5" /> Actualiser</button>
-          <button type="button" className="primary-button" onClick={() => setRerunOpen(true)}><Play className="h-3.5 w-3.5" /> Reprendre la session</button>
+          <button type="button" className="primary-button" disabled={frozen || hasDraft} onClick={() => setRerunOpen(true)}><Play className="h-3.5 w-3.5" /> Reprendre la session</button>
         </div>
       </div>
 
@@ -456,8 +455,8 @@ function DetailView({ token, detail, onBack, onRefresh, onEditRefresh }: { token
         </div>
       </div>
 
-      <div className="flex gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1">
-        {tabs.map(([key, label]) => <button key={key} type="button" onClick={() => setTab(key)} className={`whitespace-nowrap rounded-xl px-3 py-2 text-xs font-semibold transition sm:px-4 ${tab === key ? "bg-slate-950 text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>{label}</button>)}
+      <div className="flex flex-wrap gap-1 rounded-2xl border border-slate-200 bg-white p-1">
+        {tabs.map(([key, label]) => <button key={key} type="button" onClick={() => chooseTab(key)} className={`min-h-11 rounded-xl px-3 py-2 text-xs font-semibold transition sm:px-4 ${tab === key ? "bg-slate-950 text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}`}>{label}</button>)}
       </div>
 
       {notice && <div className="rounded-2xl bg-blue-50 px-4 py-3 text-sm text-blue-800">{notice}</div>}
@@ -511,20 +510,22 @@ function DetailView({ token, detail, onBack, onRefresh, onEditRefresh }: { token
 
       {tab === "report" && <div className="space-y-4">
         <InfoCard title="Livraison">
-          <p className="mb-3 font-semibold">{{pending_review: "À vérifier", needs_correction: "À corriger", approved: "Approuvé", sent: "Envoyé"}[summary.review_status || "pending_review"]}</p>
-          <label htmlFor="review-reason">Correction demandée</label>
-          <textarea id="review-reason" className="mb-3 block w-full rounded border p-2" value={reason} onChange={e => setReason(e.target.value)} />
-          <div className="mb-3 flex gap-2">
-            <button className="primary-button" disabled={!!busy || !summary.pdf_available || (summary.review_status || "pending_review") !== "pending_review"} onClick={() => review("approve")}>Approuver ce rapport</button>
-            <button className="action-button" disabled={!!busy || !reason.trim()} onClick={() => review("reject")}>À corriger</button>
-          </div>
+          {!frozen && <>
+            <label htmlFor="review-reason">Correction demandée</label>
+            <textarea id="review-reason" className="mb-3 block w-full rounded border p-2 text-base" value={reason} onChange={e => setReason(e.target.value)} />
+            <div className="mb-3 flex flex-wrap gap-2">
+              <button className="primary-button min-h-11" disabled={!!busy || hasDraft || !summary.pdf_available || (summary.review_status || "pending_review") !== "pending_review"} onClick={() => review("approve")}>Approuver ce rapport</button>
+              <button className="action-button min-h-11" disabled={!!busy || hasDraft || !reason.trim()} onClick={() => review("reject")}>À corriger</button>
+            </div>
+          </>}
           <div className="flex flex-wrap gap-2">
             <button type="button" disabled={!summary.html_available} className="primary-button disabled:opacity-40" onClick={() => setHtmlPreviewRequest(request => request + 1)}><ExternalLink className="h-3.5 w-3.5" /> Voir HTML</button>
             <button type="button" disabled={!summary.pdf_available || busy === "pdf"} className="action-button disabled:opacity-40" onClick={() => downloadArtifact("pdf", "rapport.pdf")}><Download className="h-3.5 w-3.5" /> Télécharger PDF</button>
             <button type="button" className="action-button" onClick={() => downloadArtifact("pipeline_snapshot.json", "session-final.json")}><FileJson className="h-3.5 w-3.5" /> Snapshot de génération</button>
-            <button type="button" disabled={!!busy || summary.review_status !== "approved"} className="action-button disabled:opacity-40" onClick={resend}><Mail className="h-3.5 w-3.5" /> Envoyer le rapport approuvé</button>
+            {!frozen && <button type="button" className="action-button min-h-11" onClick={() => chooseTab("editing")}>Retour aux corrections</button>}
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-3"><Info label="Statut email" value={pretty((summary.email_status || {}).sent)} /><Info label="Destinataire" value={summary.email || "—"} /><Info label="Montant" value={formatAmount(summary.payment.payment_amount, summary.payment.payment_currency || "EUR")} /></div>
+          <ReportDelivery token={token} summary={summary} delivery={delivery} onRefresh={onRefresh} disabled={!!busy || hasDraft} />
           {summary.html_available && htmlPreviewRequest > 0 && <HtmlReportPreview
             key={`${summary.session_id}:${summary.review_revision}:${htmlPreviewRequest}`}
             token={token} sessionId={summary.session_id} revision={summary.review_revision} />}
@@ -540,8 +541,12 @@ function DetailView({ token, detail, onBack, onRefresh, onEditRefresh }: { token
         </Suspense>
       </InfoCard>}
 
-      {tab === "editing" && <InfoCard title="Corrections avant validation"><ReportEditor key={summary.session_id} token={token} sessionId={summary.session_id}
-        onSaved={async () => { await onEditRefresh(); setHtmlPreviewRequest(request => request + 1); }} /></InfoCard>}
+      {editorMounted && <div hidden={tab !== "editing"} className="min-w-0 space-y-3">
+        <button type="button" className="action-button min-h-11" onClick={() => chooseTab("report")}>Voir le rapport</button>
+        {frozen ? <Empty text="Cette version est réservée à la livraison." /> :
+          <ReportEditor key={summary.session_id} token={token} sessionId={summary.session_id} onDraftChange={draftChanged}
+            onSaved={async () => { await onEditRefresh(); setHtmlPreviewRequest(request => request + 1); }} />}
+      </div>}
 
       {tab === "history" && <div className="space-y-4">
         <InfoCard title="Historique des étapes"><div className="space-y-2">{detail.history.length ? detail.history.map((item, index) => <div key={`${String(item.ts)}-${index}`} className="grid gap-1 rounded-xl border border-slate-100 p-3 text-xs sm:grid-cols-[150px_1fr_auto] sm:items-center"><span className="text-slate-400">{formatDate(item.ts as string)}</span><span className="font-semibold text-slate-700">{String(item.stage || "—")}</span><span className={item.ok ? "text-emerald-700" : "text-red-700"}>{item.ok ? "OK" : "Échec"}</span></div>) : <Empty text="Aucun log disponible." />}</div></InfoCard>
@@ -633,7 +638,11 @@ function AdminPage() {
   useEffect(() => { if (token) loadSessions(token); }, [token]);
   useEffect(() => { if (token && params.sessionId) loadDetail(params.sessionId); else if (!params.sessionId) setDetail(null); }, [token, params.sessionId]);
 
+  const draftInProgress = useRef(false);
+
   function logout() {
+    if (draftInProgress.current && !window.confirm("Se déconnecter avec des modifications non enregistrées ?")) return;
+    draftInProgress.current = false;
     sessionStorage.removeItem(TOKEN_KEY);
     setToken("");
     setDetail(null);
@@ -652,7 +661,7 @@ function AdminPage() {
 
   if (checking) return <main className="flex min-h-screen items-center justify-center bg-[#f5f7f9]"><RefreshCw className="h-6 w-6 animate-spin text-slate-400" /></main>;
   if (!token) return <Login onAuthenticated={setToken} />;
-  if (detail) return <main className="min-h-screen bg-[#f5f7f9]"><header className="border-b border-slate-200 bg-white"><div className="mx-auto flex max-w-[1440px] items-center justify-between px-5 py-4 sm:px-8"><span className="font-semibold tracking-tight text-slate-950">SkinView <span className="text-slate-400">Admin</span></span><button type="button" className="action-button" onClick={logout}><LogOut className="h-3.5 w-3.5" /> Déconnexion</button></div></header><div className="mx-auto max-w-[1440px] px-5 py-6 sm:px-8"><DetailView token={token} detail={detail} onBack={() => { setDetail(null); navigate("/admin"); }} onRefresh={() => loadDetail(detail.summary.session_id)} onEditRefresh={() => loadDetail(detail.summary.session_id, true)} /></div></main>;
+  if (detail) return <main className="min-h-screen bg-[#f5f7f9]"><header className="border-b border-slate-200 bg-white"><div className="mx-auto flex max-w-[1440px] items-center justify-between px-5 py-4 sm:px-8"><span className="font-semibold tracking-tight text-slate-950">SkinView <span className="text-slate-400">Admin</span></span><button type="button" className="action-button" onClick={logout}><LogOut className="h-3.5 w-3.5" /> Déconnexion</button></div></header><div className="mx-auto max-w-[1440px] px-5 py-6 sm:px-8"><DetailView key={detail.summary.session_id} onDraftChange={dirty => { draftInProgress.current = dirty; }} token={token} detail={detail} onBack={() => { setDetail(null); navigate("/admin"); }} onRefresh={() => loadDetail(detail.summary.session_id)} onEditRefresh={() => loadDetail(detail.summary.session_id, true)} /></div></main>;
 
   const filters = [["", "Toutes"], ["today", "Aujourd’hui"], ["pending_review", "À vérifier"], ["needs_correction", "À corriger"], ["approved", "Approuvés"], ["sent", "Envoyés"], ["completed", "Complètes"], ["in_progress", "En cours"], ["failed", "Échouées"], ["paid", "Payées"], ["unpaid", "Non payées"]];
   return (
