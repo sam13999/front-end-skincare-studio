@@ -358,7 +358,8 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
   const raw = detail.raw_session || {};
   const products = raw.products_retained || raw.produits_retenus || raw.selected_products;
   const routine = raw.routine_finale || raw.final_routine || raw.routine;
-  const promptOrder = ["prompt_2", "prompt_4", "prompt_5", "prompt_1", "prompt_3", "prompt_0"];
+  // Execution order of the V14 pipeline.
+  const promptOrder = ["prompt_0", "prompt_1", "prompt_2", "prompt_4", "prompt_5", "prompt_3"];
 
   async function downloadArtifact(kind: string, filename: string) {
     setBusy(kind);
