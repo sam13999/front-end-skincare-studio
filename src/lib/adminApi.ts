@@ -250,7 +250,12 @@ export interface RoutineView {
   initial_route_id: string;
   initial_frequencies: RoutineFrequency[];
   frequencies: RoutineFrequency[];
-  products: Array<{ id_produit: string; name: string; moments: Partial<Record<RoutineMoment, Partial<FrequencyPlan>>> }>;
+  products: Array<{
+    id_produit: string;
+    name: string;
+    allowed_moments?: RoutineMoment[];
+    moments: Partial<Record<RoutineMoment, Partial<FrequencyPlan>>>;
+  }>;
   warnings: RoutineWarning[];
   texts_to_review: string[];
   routes: Array<{
@@ -263,6 +268,7 @@ export interface RoutineView {
     nombre_produits_cible: number | null;
     treatments: number;
     intensities?: string[];
+    corrective_frequencies?: string[];
     precautions: string[];
   }>;
   candidate: RoutineCandidate | null;
