@@ -1,21 +1,33 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { fetchAdminArtifact, fetchOriginalZoom, fetchReportEditing, ReportEditing, ZylaDetection,
+import { deleteReportZoom, fetchAdminArtifact, fetchOriginalZoom, fetchReportEditing, ReportEditing, ZylaDetection,
   revertReport, saveReportCrop, saveReportText } from "@/lib/adminApi";
 const PdfPreview = lazy(() => import("./PdfPreview"));
 
 type Rect = [number, number, number, number];
+type EditResult = { review_revision: string };
+type RunEdit = (write: () => Promise<EditResult>, preserveDraft?: boolean) => Promise<void>;
+const zoomTextFields = [
+  ["title", "Titre de l’observation"],
+  ["caption", "Légende"],
+  ["image_alt", "Description accessible"],
+] as const;
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
-function CropEditor({ token, sessionId, zoom, index, revision, detections, onSaved }: {
+function CropEditor({ token, sessionId, zoom, index, revision, detections, busy, runEdit }: {
   token: string; sessionId: string; zoom: ReportEditing["zooms"][number]; index: number;
-  revision: string; detections: ZylaDetection[]; onSaved: () => void;
+  revision: string; detections: ZylaDetection[]; busy: boolean; runEdit: RunEdit;
 }) {
   const [src, setSrc] = useState("");
   const [detectionId, setDetectionId] = useState("");
   const selected = detections.find(item => item.id === detectionId);
   const photo = selected?.source_photo || zoom.source_photo;
   const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [texts, setTexts] = useState(() => ({
+    title: zoom.title, caption: zoom.caption ?? "", image_alt: zoom.image_alt ?? "",
+  }));
+  const textChanges = zoomTextFields
+    .filter(([field]) => texts[field] !== (zoom[field] ?? ""))
+    .map(([field]) => ({ path: ["overview", "zooms", index, field], value: texts[field] }));
   const img = useRef<HTMLImageElement>(null);
   const initial = zoom.crop_box?.length === 4 && zoom.source_width && zoom.source_height
     ? [zoom.crop_box[0] / zoom.source_width, zoom.crop_box[1] / zoom.source_height,
@@ -30,12 +42,12 @@ function CropEditor({ token, sessionId, zoom, index, revision, detections, onSav
     let url = "";
     setSrc("");
     setError("");
-    fetchOriginalZoom(token, sessionId, index, detectionId || undefined).then(blob => {
+    fetchOriginalZoom(token, sessionId, index, detectionId || undefined, revision).then(blob => {
       if (!active) return;
       url = URL.createObjectURL(blob); setSrc(url);
     }).catch(e => { if (active) setError(e instanceof Error ? e.message : "Photo indisponible"); });
     return () => { active = false; if (url) URL.revokeObjectURL(url); };
-  }, [token, sessionId, index, detectionId]);
+  }, [token, sessionId, index, detectionId, revision]);
 
   function chooseDetection(id: string) {
     setDetectionId(id);
@@ -54,19 +66,29 @@ function CropEditor({ token, sessionId, zoom, index, revision, detections, onSav
       : [x, y, clamp(w + dx, .08, 1 - x), clamp(h + dy, .08, 1 - y)]);
   }
 
-  async function save() {
-    setError(""); setSaving(true);
-    try { await saveReportCrop(token, sessionId, index, revision, rect, detectionId || undefined); await onSaved(); }
-    catch (e) { setError(e instanceof Error ? e.message : "Cadrage refusé"); }
-    finally { setSaving(false); }
+  function remove() {
+    if (window.confirm(`Supprimer le zoom « ${zoom.title} » du rapport ?`)) {
+      void runEdit(() => deleteReportZoom(token, sessionId, index, revision));
+    }
   }
 
   return <div className="rounded-xl border border-slate-200 p-4">
     <h4 className="font-semibold">{zoom.title} · signal {zoom.signal_id || "inconnu"}</h4>
     <p className="mb-3 text-xs text-slate-500">{zoom.source_photo} · {zoom.crop_method === "anatomical_approximation" ? "Zone anatomique approximative" : zoom.crop_method === "manual" ? "Cadrage manuel" : "Coordonnées fournisseur"}</p>
+    <fieldset className="mb-4 grid gap-2 sm:grid-cols-2" disabled={busy || !!selected}>
+      <legend className="mb-2 text-sm font-medium">Renommer ou préciser l’observation</legend>
+      {zoomTextFields.map(([field, label]) => <label className="block text-sm" key={field}>
+        {label}
+        <input className="mt-1 block w-full rounded border p-2" value={texts[field]} maxLength={2500}
+          onChange={event => setTexts({ ...texts, [field]: event.target.value })} />
+      </label>)}
+      <p className="text-xs text-slate-500 sm:col-span-2">Décrivez la caractéristique indiquée ci-dessus. Pour en choisir une autre, remplacez la preuve.</p>
+      <div className="sm:col-span-2"><button type="button" className="action-button" disabled={!textChanges.length}
+        onClick={() => runEdit(() => saveReportText(token, sessionId, revision, textChanges))}>Enregistrer les textes du zoom</button></div>
+    </fieldset>
     {detections.length > 0 && <label className="mb-3 block text-sm">
-      Détection Zyla du zoom {index + 1}
-      <select className="ml-2 rounded border p-1" value={detectionId} disabled={saving}
+      Preuve photographique du zoom {index + 1}
+      <select className="ml-2 rounded border p-1" value={detectionId} disabled={busy}
         onChange={event => chooseDetection(event.target.value)}>
         <option value="">Conserver la preuve actuelle</option>
         {["face", "side"].map(view => <optgroup key={view} label={view === "face" ? "Face" : "Profil"}>
@@ -76,6 +98,8 @@ function CropEditor({ token, sessionId, zoom, index, revision, detections, onSav
         </optgroup>)}
       </select>
     </label>}
+    {selected && selected.source_photo === zoom.source_photo && <button type="button" className="action-button mb-2"
+      disabled={busy} onClick={() => setRect(initial)}>Reprendre le cadrage actuel</button>}
     {src && <div className="max-w-xl">
       <div className="relative inline-block max-w-full overflow-hidden touch-none" onPointerMove={move} onPointerUp={() => gesture.current = null} onPointerCancel={() => gesture.current = null}>
         <img ref={img} src={src} alt={`Photo originale : ${photo}`} className="block max-h-[520px] max-w-full select-none" draggable={false} />
@@ -94,8 +118,12 @@ function CropEditor({ token, sessionId, zoom, index, revision, detections, onSav
       <div className="mt-2 w-64 overflow-hidden rounded border bg-slate-100 relative" style={{ aspectRatio: `${rect[2] * (selected?.source_width || zoom.source_width || 1)} / ${rect[3] * (selected?.source_height || zoom.source_height || 1)}` }}>
         <img src={src} alt="Aperçu du recadrage" className="absolute max-w-none" style={{ width: `${100 / rect[2]}%`, height: `${100 / rect[3]}%`, left: `${-rect[0] / rect[2] * 100}%`, top: `${-rect[1] / rect[3] * 100}%` }} />
       </div>
-      <button type="button" className="action-button mt-3" disabled={saving} onClick={save}>{saving ? "Actualisation du PDF…" : "Enregistrer ce cadrage"}</button>
+      <button type="button" className="action-button mt-3" disabled={busy}
+        onClick={() => runEdit(() => saveReportCrop(token, sessionId, index, revision, rect, detectionId || undefined))}>
+        {selected ? "Enregistrer le remplacement" : "Enregistrer ce cadrage"}
+      </button>
     </div>}
+    <button type="button" className="action-button mt-3 text-red-700" disabled={busy} onClick={remove}>Supprimer ce zoom</button>
     {error && <p role="alert" className="mt-2 text-sm text-red-700">{error}</p>}
   </div>;
 }
@@ -107,44 +135,60 @@ export default function ReportEditor({ token, sessionId, onSaved }: { token: str
   const [notice, setNotice] = useState("");
   const [preview, setPreview] = useState<Blob | null>(null);
   const [busy, setBusy] = useState(false);
+  const saving = useRef(false);
   const key = (path: Array<string | number>) => JSON.stringify(path);
 
-  async function load() {
-    try {
-      const result = await fetchReportEditing(token, sessionId);
-      setData(result);
-      setValues(Object.fromEntries(result.fields.map(field => [key(field.path), field.value])));
-      setError("");
-      return result;
-    } catch (e) { setError(e instanceof Error ? e.message : "Édition indisponible"); throw e; }
+  function applyEditing(result: ReportEditing, preserveDraft: boolean) {
+    const fields = result.fields.filter(field => field.path[0] !== "overview" || field.path[1] !== "zooms");
+    setValues(current => Object.fromEntries(fields.map(field => {
+      const id = key(field.path);
+      const previous = data?.fields.find(item => key(item.path) === id);
+      const dirty = previous && current[id] !== previous.value;
+      return [id, preserveDraft && dirty ? current[id] : field.value];
+    })));
+    setData({ ...result, fields });
   }
-  useEffect(() => { void load().catch(() => {}); }, [token, sessionId]);
 
-  async function refresh(expectedRevision?: string) {
-    const current = await load();
-    await onSaved();
-    if (expectedRevision && current.review_revision !== expectedRevision) throw new Error("Le rapport a changé entre l’enregistrement et l’aperçu. Rechargez la session.");
-    const blob = await fetchAdminArtifact(token, sessionId, "pdf");
-    setPreview(blob);
-    setNotice("Nouvelle version générée. Vérifiez-la avant approbation ; aucun email n’a été envoyé.");
-  }
-  async function save() {
+  useEffect(() => {
+    let active = true;
+    fetchReportEditing(token, sessionId)
+      .then(result => { if (active) applyEditing(result, false); })
+      .catch(e => { if (active) setError(e instanceof Error ? e.message : "Édition indisponible"); });
+    return () => { active = false; };
+  }, [token, sessionId]);
+
+  const runEdit: RunEdit = async (write, preserveDraft = true) => {
+    if (saving.current) return;
+    saving.current = true;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    let committed = false;
+    try {
+      const saved = await write();
+      committed = true;
+      setPreview(null);
+      const current = await fetchReportEditing(token, sessionId);
+      applyEditing(current, preserveDraft);
+      await onSaved();
+      if (current.review_revision !== saved.review_revision) {
+        throw new Error("Le rapport a changé depuis l’enregistrement. La version actuelle est affichée.");
+      }
+      setPreview(await fetchAdminArtifact(token, sessionId, "pdf", saved.review_revision));
+      setNotice("Nouvelle version générée. Vérifiez-la avant approbation.");
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Correction refusée";
+      setError(committed ? `Version enregistrée. Actualisation de l’aperçu incomplète. ${message}` : message);
+    } finally {
+      saving.current = false;
+      setBusy(false);
+    }
+  };
+  function save() {
     if (!data) return;
     const changes = data.fields.filter(field => values[key(field.path)] !== field.value)
       .map(field => ({ path: field.path, value: values[key(field.path)] }));
-    if (!changes.length) { setNotice("Aucun texte modifié. Le cadrage s’enregistre séparément."); return; }
-    setBusy(true); setError("");
-    setNotice("");
-    try { const saved = await saveReportText(token, sessionId, data.review_revision, changes); await refresh(saved.review_revision); }
-    catch (e) { setError(e instanceof Error ? e.message : "Correction refusée"); }
-    finally { setBusy(false); }
-  }
-  async function restore(revision: number) {
-    if (!data) return;
-    setBusy(true); setError("");
-    try { const saved = await revertReport(token, sessionId, revision, data.review_revision); await refresh(saved.review_revision); }
-    catch (e) { setError(e instanceof Error ? e.message : "Retour impossible"); }
-    finally { setBusy(false); }
+    if (changes.length) void runEdit(() => saveReportText(token, sessionId, data.review_revision, changes), false);
   }
 
   if (!data) return <p className="text-sm text-slate-500">{error || "Chargement des sections…"}</p>;
@@ -156,17 +200,22 @@ export default function ReportEditor({ token, sessionId, onSaved }: { token: str
       <h3 className="mb-3 font-semibold capitalize">{section.replace(/_/g, " ")}</h3>
       <div className="grid gap-3 md:grid-cols-2">{data.fields.filter(field => field.section === section).map(field => <label key={key(field.path)} className="block text-sm font-medium text-slate-700">
         {field.label} <span className="font-normal text-slate-400">{field.path.filter(x => typeof x === "number").map(x => `#${Number(x) + 1}`).join(" ")}</span>
-        <textarea className="mt-1 block min-h-20 w-full rounded border border-slate-300 p-2 font-normal" value={values[key(field.path)] || ""}
+        <textarea className="mt-1 block min-h-20 w-full rounded border border-slate-300 p-2 font-normal" value={values[key(field.path)] || ""} disabled={busy}
           onChange={e => setValues(current => ({ ...current, [key(field.path)]: e.target.value }))} />
       </label>)}</div>
     </section>)}
     <button type="button" className="primary-button disabled:opacity-50" disabled={busy || !hasTextChanges} onClick={save}>{busy ? "Reconstruction HTML/PDF…" : "Enregistrer et reconstruire HTML/PDF"}</button>
     {!hasTextChanges && <p className="text-sm text-slate-500">Modifiez un texte pour activer ce bouton. Les recadrages s’enregistrent séparément.</p>}
-    {data.zooms.length > 0 && <section><h3 className="mb-3 font-semibold">Recadrages photographiques</h3><div className="space-y-3">{data.zooms.map((zoom, index) =>
-      <CropEditor key={`${data.review_revision}-${index}`} token={token} sessionId={sessionId} zoom={zoom} index={index} detections={data.detections || []} revision={data.review_revision} onSaved={refresh} />)}</div></section>}
+    <section><h3 className="mb-3 font-semibold">Recadrages photographiques</h3>
+      {data.zooms.length === 0 && <p role="status" className="text-sm text-amber-800">Aucune preuve photographique affichée dans ce rapport.</p>}
+      <div className="space-y-3">{data.zooms.map((zoom, index) =>
+        <CropEditor key={`${data.review_revision}-${index}`} token={token} sessionId={sessionId} zoom={zoom} index={index}
+          detections={data.detections || []} revision={data.review_revision} busy={busy} runEdit={runEdit} />)}</div>
+    </section>
     {data.history.length > 0 && <section className="rounded-xl border p-4"><h3 className="font-semibold">Historique des versions</h3><div className="mt-3 space-y-2">{data.history.map(item =>
-      <div key={item.revision} className="flex items-center justify-between gap-3 text-sm"><span>Version {item.revision} · {item.reason}</span><button type="button" className="action-button" disabled={busy} onClick={() => restore(item.revision)}>Restaurer</button></div>)}</div></section>}
-    {notice && <p className="rounded bg-blue-50 p-3 text-sm text-blue-800">{notice}</p>}
+      <div key={item.revision} className="flex items-center justify-between gap-3 text-sm"><span>Version {item.revision} · {item.reason}</span><button type="button" className="action-button" disabled={busy} onClick={() => runEdit(() => revertReport(token, sessionId, item.revision, data.review_revision), false)}>Restaurer</button></div>)}</div></section>}
+    {busy && <p role="status" className="text-sm">Reconstruction ou chargement du rapport…</p>}
+    {notice && <p role="status" className="rounded bg-blue-50 p-3 text-sm text-blue-800">{notice}</p>}
     {error && <p role="alert" className="rounded bg-red-50 p-3 text-sm text-red-700">{error}</p>}
     {preview && <Suspense fallback={<p>Chargement de l’aperçu PDF…</p>}><PdfPreview blob={preview} /></Suspense>}
   </div>;
