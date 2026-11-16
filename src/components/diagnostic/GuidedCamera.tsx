@@ -14,7 +14,6 @@ import {
   getVideoGuidanceResult,
   isTolerableSharpnessDrop,
   readRegionFromSource,
-  type FaceBox,
   type CameraGuidanceState,
   type CameraStep,
 } from "./cameraGuidance";
