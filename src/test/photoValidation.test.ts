@@ -99,6 +99,11 @@ describe("photo face validation", () => {
     expect(validatePhotoFile(jpeg)).toEqual([]);
     expect(validatePhotoFile(png).some((issue) => issue.code === "bad_format")).toBe(true);
   });
+
+  it("applies the strict 5 MB Zyla file limit", () => {
+    const oversized = new File([new Uint8Array(5_000_001)], "large.jpg", { type: "image/jpeg" });
+    expect(validatePhotoFile(oversized).some((issue) => issue.code === "file_too_large")).toBe(true);
+  });
 });
 
 const makeLandmarks = (noseX = 0.5, shiftX = 0, faceWidth = 0.4, faceHeight = 0.8) => {

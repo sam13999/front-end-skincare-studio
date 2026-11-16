@@ -34,22 +34,30 @@ rejetée comme réellement floue.
   celles-ci sont demandées à `takePhoto()`. Si les paramètres sont refusés, un
   second essai `takePhoto()` sans paramètres reste une photographie native.
 - L’orientation EXIF est appliquée par `createImageBitmap`.
-- Le crop conserve le ratio exact de la prévisualisation et vise un visage à
-  environ 58 % de la hauteur pour préserver front, joues, nez et menton.
+- La photo fixe conserve son propre ratio de capteur. Le recadrage autour du
+  visage, si nécessaire, vise environ 58 % de hauteur sans imposer le ratio
+  plus étroit de l'aperçu vidéo, qui pourrait écarter joues et tempes.
 - La plus grande dimension reste limitée à 4095 px conformément au contrat
   fournisseur, sans upscale.
 - La sortie JPEG tente d'abord les qualités 0,95 à 0,80, **à pixels constants**.
+  Un encodeur qui renvoie un autre format est refusé.
   Le rééchantillonnage n'intervient que si toutes les tentatives dépassent 5 Mo.
   Chaque tentative repart de l'image source décodée, jamais d'un JPEG déjà compressé.
   Un JPEG ne garantit pas une conservation strictement sans perte des détails fins.
 - Les photos importées sont conservées octet pour octet lorsqu'elles sont déjà
-  conformes ; sinon elles utilisent la même normalisation.
+  conformes ; sinon elles utilisent la même normalisation. Le sélecteur accepte
+  les images HEIC lorsque le navigateur sait les décoder ; une conversion
+  impossible produit une erreur explicite.
+- La limite de 5 Mo est interprétée prudemment comme 5 000 000 octets. La
+  validation avertit lorsque le petit côté du visage détecté est ≤ 400 px,
+  seuil indicatif mentionné par Zyla.
 - Le backend conserve ensuite le JPEG octet pour octet s’il est déjà conforme.
-- La prévisualisation affiche un volet « Détails techniques de la photo » :
+- Le paramètre local `?photoDiagnostics` révèle un volet « Détails techniques de la photo » :
   résolution du flux, maximum annoncé par le navigateur lorsqu'il existe,
   résolution native capturée, recadrage, dimensions JPEG, poids, qualité et réduction.
   Ces métriques ne prouvent pas l'accès à la résolution physique absolue du capteur
-  et ne sont pas enregistrées en backend.
+  et ne sont pas enregistrées en backend. La résolution demandée n'est jamais
+  qualifiée de résolution maximale physiquement atteinte.
 
 ## Contrôle sur appareils réels
 

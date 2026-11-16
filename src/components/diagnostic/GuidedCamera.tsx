@@ -19,6 +19,8 @@ import {
 } from "./cameraGuidance";
 import {
   encodeJpegWithinLimit,
+  captureFailureReason,
+  PROVIDER_MAX_BYTES,
   readBlobAsDataUrl,
   selectMaximumPhotoSize,
   type NativeCaptureDiagnostics,
@@ -42,7 +44,7 @@ const EMPTY_STATE: CameraGuidanceState = buildCameraGuidanceState({
 });
 
 const CAMERA_CAPTURE_MAX_DIMENSION = 4095;
-const CAMERA_CAPTURE_MAX_BYTES = 5 * 1024 * 1024;
+const CAMERA_CAPTURE_MAX_BYTES = PROVIDER_MAX_BYTES;
 
 type NativeImageCapture = {
   takePhoto: (settings?: RequestedPhotoSize) => Promise<Blob>;
@@ -328,14 +330,16 @@ export const GuidedCamera = ({ step, onCapture, onClose, onFallbackFile }: Guide
         if (!photoBlob.size) throw new Error("native_photo_empty");
         const bitmap = await decodeNativePhoto(photoBlob);
         try {
-          let nativeCrop = calculateCoverCrop(bitmap.width, bitmap.height, displayWidth, displayHeight);
+          // Keep the still camera's field of view. The narrower video preview
+          // may omit cheeks/temples and has a different sensor aspect ratio.
+          let nativeCrop = calculateCoverCrop(bitmap.width, bitmap.height, bitmap.width, bitmap.height);
           try {
             const landmarker = await getImageFaceLandmarker();
             const result = landmarker.detect(bitmap);
             const faceBox = result.faceLandmarks.length === 1 ? getFaceBox(result.faceLandmarks[0]) : null;
             if (faceBox) {
               nativeCrop = calculateFaceFocusedCrop(
-                bitmap.width, bitmap.height, displayWidth, displayHeight, faceBox,
+                bitmap.width, bitmap.height, bitmap.width, bitmap.height, faceBox,
               );
             }
           } catch {
@@ -348,14 +352,16 @@ export const GuidedCamera = ({ step, onCapture, onClose, onFallbackFile }: Guide
             browserMaxWidth: requestedSize?.imageWidth ?? null,
             browserMaxHeight: requestedSize?.imageHeight ?? null,
             requestedMaxResolution,
+            browser: navigator.userAgent,
+            limitation: requestedSize && !requestedMaxResolution ? "photo_size_settings_rejected" : null,
           }, nativeCrop);
         } finally {
           bitmap.close();
         }
       } catch (captureError) {
         // Never silently replace a real photo with a lower-quality video frame.
-        console.warn("[SkinView camera] native still capture failed", captureError);
-        setError("La photo haute résolution a échoué. Utilisez l’appareil photo du téléphone ou réessayez.");
+        // Do not log exception objects: browser errors can contain device metadata.
+        setError(`La prise de vue a échoué (${captureFailureReason(captureError)}). Réessayez ou utilisez l’appareil photo du téléphone.`);
       } finally {
         capturingRef.current = false;
         setCapturing(false);
@@ -407,7 +413,7 @@ export const GuidedCamera = ({ step, onCapture, onClose, onFallbackFile }: Guide
       <input
         ref={nativeFileRef}
         type="file"
-        accept="image/jpeg,.jpg,.jpeg"
+        accept="image/*"
         capture="user"
         className="svd-hidden-input"
         aria-label="Prendre une photo native"

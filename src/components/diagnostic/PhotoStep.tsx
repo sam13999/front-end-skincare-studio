@@ -1,9 +1,8 @@
 import { useCallback, useRef, useState } from "react";
 import { AlertCircle, Camera, Check, CheckCircle2, Loader2, Upload } from "lucide-react";
 import { GuidedCamera } from "./GuidedCamera";
-import { encodeJpegWithinLimit, readBlobAsDataUrl, type NativeCaptureDiagnostics } from "./cameraCapture";
+import { encodeJpegWithinLimit, hasJpegSignature, readBlobAsDataUrl, PROVIDER_MAX_BYTES, type NativeCaptureDiagnostics } from "./cameraCapture";
 import {
-  ACCEPTED_FILE_TYPES,
   createRejectedResult,
   validatePhoto,
   validatePhotoFile,
@@ -104,7 +103,8 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
       try {
         const isJpeg = ["image/jpeg", "image/jpg"].includes(file.type.toLowerCase());
         const isAlreadyCompliant = isJpeg
-          && file.size <= 5 * 1024 * 1024
+          && await hasJpegSignature(file)
+          && file.size <= PROVIDER_MAX_BYTES
           && Math.max(bitmap.width, bitmap.height) <= 4095;
         if (!isAlreadyCompliant) {
           const result = await encodeJpegWithinLimit(
@@ -143,17 +143,26 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
           jpegQuality,
           outputBytes: prepared.size,
           resizedForByteLimit,
+          browser: navigator.userAgent,
+          limitation: null,
         });
         void processPhoto(dataUrl, prepared.size);
       } finally {
         bitmap.close();
       }
     })().catch(() => {
-      if (preparationId === validationIdRef.current) rejectUnexpectedError();
+      if (preparationId === validationIdRef.current) {
+        setQuality("insufficient");
+        setValidation(createRejectedResult([{
+          code: "image_decode_unavailable",
+          message: "Ce format photo ne peut pas être lu sur cet appareil. Choisissez une photo JPEG ou réessayez avec l’appareil photo.",
+          severity: "critical",
+        }]));
+      }
     }).finally(() => {
       if (preparationId === validationIdRef.current) setAnalyzing(false);
     });
-  }, [onPhotoChange, processPhoto, rejectUnexpectedError]);
+  }, [onPhotoChange, processPhoto]);
 
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -235,12 +244,13 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
         </div>
       )}
 
-      {preview && captureDiagnostics && (
+      {preview && captureDiagnostics && new URLSearchParams(window.location.search).has("photoDiagnostics") && (
         <details className="svd-photo-technical">
           <summary>Détails techniques de la photo</summary>
           <p>Mode : {captureDiagnostics.method === "native-photo"
             ? "photo native SkinView, sans extraction vidéo"
             : "photo fournie par l’appareil ou la galerie, sans extraction vidéo"}.</p>
+          <p>Navigateur : {captureDiagnostics.browser}. Limitation : {captureDiagnostics.limitation ?? "aucune signalée"}.</p>
           <p>Flux de guidage : {captureDiagnostics.streamWidth ?? "?"} × {captureDiagnostics.streamHeight ?? "?"} px.</p>
           <p>
             Maximum annoncé par le navigateur : {captureDiagnostics.browserMaxWidth !== null
@@ -249,7 +259,7 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
             {" "}Demande de résolution maximale : {captureDiagnostics.method === "imported-photo"
               ? "non applicable" : captureDiagnostics.requestedMaxResolution ? "oui" : "non (réglages indisponibles ou refusés)"}.
           </p>
-          <p>Photographie native : {captureDiagnostics.sourceWidth} × {captureDiagnostics.sourceHeight} px.</p>
+          <p>Image effectivement reçue : {captureDiagnostics.sourceWidth} × {captureDiagnostics.sourceHeight} px.</p>
           <p>Zone recadrée : {captureDiagnostics.cropWidth} × {captureDiagnostics.cropHeight} px.</p>
           <p>
             JPEG final : {captureDiagnostics.outputWidth} × {captureDiagnostics.outputHeight} px,
@@ -286,7 +296,7 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
         </button>
       )}
 
-      <input ref={fileInputRef} type="file" accept={ACCEPTED_FILE_TYPES} className="svd-hidden-input" onChange={handleInputChange} />
+      <input ref={fileInputRef} type="file" accept="image/*" className="svd-hidden-input" onChange={handleInputChange} />
 
       <div className="svd-checklist">
         <h3>Pour une analyse fiable, vérifiez que :</h3>

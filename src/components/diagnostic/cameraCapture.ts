@@ -15,6 +15,8 @@ export interface NativeCaptureDiagnostics {
   jpegQuality: number | null;
   outputBytes: number;
   resizedForByteLimit: boolean;
+  browser: string;
+  limitation: string | null;
 }
 
 type ResolutionRange = { max?: number };
@@ -24,6 +26,8 @@ export type NativePhotoCapabilities = {
 };
 
 export type RequestedPhotoSize = { imageWidth: number; imageHeight: number };
+// Zyla says 5 MB without defining MiB; use the stricter decimal interpretation.
+export const PROVIDER_MAX_BYTES = 5_000_000;
 
 export const JPEG_QUALITY_STEPS = [0.95, 0.93, 0.91, 0.89, 0.87, 0.85, 0.82, 0.80] as const;
 
@@ -61,6 +65,27 @@ export interface EncodedStillPhoto {
   resizedForByteLimit: boolean;
 }
 
+export function isJpegBlob(blob: Blob): boolean {
+  return blob.type.toLowerCase() === "image/jpeg";
+}
+
+export async function hasJpegSignature(blob: Blob): Promise<boolean> {
+  const header = new Uint8Array(await new Promise<ArrayBuffer>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => reader.result instanceof ArrayBuffer
+      ? resolve(reader.result) : reject(new Error("capture_header_read_failed"));
+    reader.onerror = () => reject(new Error("capture_header_read_failed"));
+    reader.readAsArrayBuffer(blob.slice(0, 3));
+  }));
+  return header.length === 3 && header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff;
+}
+
+export function captureFailureReason(error: unknown): string {
+  if (error instanceof DOMException) return error.name;
+  if (error instanceof Error && /^(capture_|native_photo_)/.test(error.message)) return error.message;
+  return "unknown_capture_error";
+}
+
 /**
  * Encode from the original decoded still source at every attempt.
  * Try all JPEG quality levels at unchanged dimensions before dropping pixels.
@@ -69,7 +94,7 @@ export async function encodeJpegWithinLimit(
   source: CanvasImageSource,
   rectangle: { x: number; y: number; width: number; height: number },
   maxDimension = 4095,
-  maxBytes = 5 * 1024 * 1024,
+  maxBytes = PROVIDER_MAX_BYTES,
 ): Promise<EncodedStillPhoto> {
   let { width, height } = sizeUnderDimensionLimit(
     Math.round(rectangle.width), Math.round(rectangle.height), maxDimension,
@@ -97,6 +122,7 @@ export async function encodeJpegWithinLimit(
           "image/jpeg", quality,
         );
       });
+      if (!isJpegBlob(blob)) throw new Error("capture_jpeg_encoder_unavailable");
       smallestAttemptBytes = blob.size;
       if (blob.size > 0 && blob.size <= maxBytes) {
         return {
