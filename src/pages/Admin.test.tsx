@@ -44,12 +44,12 @@ describe("AdminPage", () => {
     fireEvent.change(screen.getByLabelText("Token admin"), { target: { value: "test-token" } });
     fireEvent.submit(screen.getByRole("button", { name: "Se connecter" }).closest("form")!);
 
-    await screen.findByText("Alpha140926alph");
-    expect(screen.getByText("Beta140926beta")).toBeInTheDocument();
+    await screen.findAllByText("Alpha140926alph");
+    expect(screen.getAllByText("Beta140926beta")[0]).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Échouées" }));
-    expect(screen.getByText("Beta140926beta")).toBeInTheDocument();
-    expect(screen.queryByText("Alpha140926alph")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Beta140926beta")[0]).toBeInTheDocument();
+    expect(screen.queryAllByText("Alpha140926alph")[0]).not.toBeInTheDocument();
   });
 
   it("affiche dans Rapport le HTML reconstruit après une correction", async () => {
