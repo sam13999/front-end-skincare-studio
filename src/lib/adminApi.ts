@@ -25,6 +25,14 @@ export interface AdminSessionSummary {
   failed_stage?: string | null;
   payment: PaymentInfo;
   email_status?: Record<string, unknown>;
+  delivery?: {
+    recipient?: string; html_status?: string; resend_status?: string; pdf_status?: string;
+    link_active?: boolean; history?: Array<Record<string, unknown>>;
+    attempts?: Record<string, { state?: string; started_at?: string; accepted_at?: string;
+      provider?: string; message_id?: string; failure_reason?: string; count?: number; next_retry_at?: string }>;
+  } | null;
+  delivery_issue?: string | null;
+  rerun_active?: string | null;
   html_available: boolean;
   pdf_available: boolean;
 }
@@ -158,6 +166,13 @@ export async function rerunAdminSession(token: string, sessionId: string, reason
   });
 }
 
+export async function commandAdminDelivery(token: string, sessionId: string, action: "send" | "resend", revision?: string) {
+  return adminFetch<Record<string, unknown>>(token, `/v1/admin/session/${encodeURIComponent(sessionId)}/delivery`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, expected_revision: revision, request_id: action === "resend" ? crypto.randomUUID() : undefined }),
+  });
+}
+
 export async function resendAdminEmail(token: string, sessionId: string): Promise<Record<string, unknown>> {
   return adminFetch<Record<string, unknown>>(token, `/v1/admin/session/${encodeURIComponent(sessionId)}/resend-email`, {
     method: "POST",
@@ -250,7 +265,7 @@ export interface RoutineView {
   initial_route_id: string;
   initial_frequencies: RoutineFrequency[];
   frequencies: RoutineFrequency[];
-  products: Array<{ id_produit: string; name: string; moments: Partial<Record<RoutineMoment, Partial<FrequencyPlan>>> }>;
+  products: Array<{ id_produit: string; name: string; allowed_moments?: RoutineMoment[]; moments: Partial<Record<RoutineMoment, Partial<FrequencyPlan>>> }>;
   warnings: RoutineWarning[];
   texts_to_review: string[];
   routes: Array<{
