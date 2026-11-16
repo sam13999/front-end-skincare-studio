@@ -13,7 +13,6 @@ import {
   getVideoFaceLandmarker,
   getVideoGuidanceResult,
   isTolerableSharpnessDrop,
-  mapFaceBoxToVisibleViewport,
   readRegionFromSource,
   type FaceBox,
   type CameraGuidanceState,
