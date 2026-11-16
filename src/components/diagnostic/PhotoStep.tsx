@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { AlertCircle, Camera, Check, CheckCircle2, Loader2, Upload } from "lucide-react";
 import { GuidedCamera } from "./GuidedCamera";
+import type { NativeCaptureDiagnostics } from "./cameraCapture";
 import {
   ACCEPTED_FILE_TYPES,
   createRejectedResult,
@@ -41,6 +42,7 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [captureDiagnostics, setCaptureDiagnostics] = useState<NativeCaptureDiagnostics | null>(null);
 
   const checklist = type === "face" ? faceChecklist : profileChecklist;
   const title = type === "face" ? "Photo de face" : "Vue 3/4";
@@ -81,6 +83,7 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
   }, [onPhotoChange, rejectUnexpectedError, type]);
 
   const handleFile = useCallback((file: File) => {
+    setCaptureDiagnostics(null);
     const fileIssues = validatePhotoFile(file);
     if (fileIssues.some((issue) => issue.severity === "critical")) {
       validationIdRef.current += 1;
@@ -108,6 +111,7 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
   };
 
   const handleRetake = () => {
+    setCaptureDiagnostics(null);
     validationIdRef.current += 1;
     setPreview(null);
     onPhotoChange(null);
@@ -116,7 +120,8 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
     setAnalyzing(false);
   };
 
-  const handleGuidedCapture = useCallback((dataUrl: string, fileSize: number) => {
+  const handleGuidedCapture = useCallback((dataUrl: string, fileSize: number, diagnostics: NativeCaptureDiagnostics) => {
+    setCaptureDiagnostics(diagnostics);
     setCameraOpen(false);
     void processPhoto(dataUrl, fileSize);
   }, [processPhoto]);
@@ -127,9 +132,9 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
         step={type}
         onCapture={handleGuidedCapture}
         onClose={() => setCameraOpen(false)}
-        onFallback={() => {
+        onFallbackFile={(file) => {
           setCameraOpen(false);
-          fileInputRef.current?.click();
+          handleFile(file);
         }}
       />
     );
@@ -177,6 +182,31 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
             </div>
           )}
         </div>
+      )}
+
+      {preview && captureDiagnostics && (
+        <details className="svd-photo-technical">
+          <summary>Détails techniques de la photo</summary>
+          <p>Mode : photographie native (aucune image extraite de la vidéo).</p>
+          <p>Flux de guidage : {captureDiagnostics.streamWidth ?? "?"} × {captureDiagnostics.streamHeight ?? "?"} px.</p>
+          <p>
+            Maximum annoncé par le navigateur : {captureDiagnostics.browserMaxWidth !== null
+              ? `${captureDiagnostics.browserMaxWidth} × ${captureDiagnostics.browserMaxHeight} px`
+              : "non communiqué"}.
+            {" "}Demande de résolution maximale : {captureDiagnostics.requestedMaxResolution ? "oui" : "non (réglages indisponibles ou refusés)"}.
+          </p>
+          <p>Photographie native : {captureDiagnostics.sourceWidth} × {captureDiagnostics.sourceHeight} px.</p>
+          <p>Zone recadrée : {captureDiagnostics.cropWidth} × {captureDiagnostics.cropHeight} px.</p>
+          <p>
+            JPEG final : {captureDiagnostics.outputWidth} × {captureDiagnostics.outputHeight} px,
+            {" "}{(captureDiagnostics.outputBytes / (1024 * 1024)).toFixed(2)} Mo,
+            {" "}qualité {Math.round(captureDiagnostics.jpegQuality * 100)} %.
+          </p>
+          <p>
+            Réduction supplémentaire pour respecter 5 Mo : {captureDiagnostics.resizedForByteLimit ? "oui" : "non"}.
+            {" "}Ces valeurs reflètent les possibilités exposées par le navigateur, pas nécessairement toute la résolution physique du capteur.
+          </p>
+        </details>
       )}
 
       {!preview ? (
