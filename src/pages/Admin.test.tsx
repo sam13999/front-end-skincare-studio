@@ -72,11 +72,11 @@ describe("AdminPage", () => {
         fields: [{ ...field, value: revision === "initiale" ? "Texte initial" : "Texte corrigé" }],
         review_revision: revision, zooms: [], history: [],
       });
-      if (url.endsWith("/artifact/html")) {
+      if (url.includes("/artifact/html?")) {
         const blob = new window.Blob([html], { type: "text/html" });
         return { ok: true, blob: async () => blob } as Response;
       }
-      if (url.endsWith("/artifact/pdf")) return new Response("PDF");
+      if (url.includes("/artifact/pdf?")) return new Response("PDF");
       if (url.endsWith(`/session/${sessionId}`)) return json({
         summary: { ...listResponse.items[0], review_revision: revision },
         user: { questionnaire: {}, photos: [] }, analysis: {}, prompts: {},
@@ -93,12 +93,11 @@ describe("AdminPage", () => {
       fireEvent.change(screen.getByLabelText("Token admin"), { target: { value: "test-token" } });
       fireEvent.submit(screen.getByRole("button", { name: "Se connecter" }).closest("form")!);
       fireEvent.click(await screen.findByRole("button", { name: "Rapport" }));
-      fireEvent.click(screen.getByRole("button", { name: "Voir HTML" }));
       expect(await screen.findByTitle("Aperçu du rapport HTML")).toHaveAttribute("src", "blob:initial");
-      fireEvent.click(screen.getByRole("button", { name: "Corriger le rapport" }));
+      fireEvent.click(screen.getByRole("button", { name: "Modifier le rapport" }));
       expect(revokeUrl).toHaveBeenCalledWith("blob:initial");
       fireEvent.change(await screen.findByLabelText("Résumé"), { target: { value: "Texte corrigé" } });
-      fireEvent.click(screen.getByRole("button", { name: "Enregistrer et reconstruire HTML/PDF" }));
+      fireEvent.click(screen.getByRole("button", { name: "Enregistrer les modifications" }));
       await screen.findByText(/Nouvelle version générée/);
       fireEvent.click(screen.getByRole("button", { name: "Rapport" }));
       expect(await screen.findByTitle("Aperçu du rapport HTML")).toHaveAttribute("src", "blob:corrige");
@@ -109,8 +108,9 @@ describe("AdminPage", () => {
         reader.readAsText(createUrl.mock.calls[1][0]);
       });
       expect(renderedText).toBe("<p>Texte corrigé</p>");
-      const htmlCalls = fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/artifact/html"));
-      expect(htmlCalls).toHaveLength(2);
+      const htmlCalls = fetchMock.mock.calls.filter(([url]) => String(url).includes("/artifact/html?"));
+      expect(htmlCalls).toHaveLength(3);
+      expect(new URL(String(htmlCalls[1][0])).searchParams.get("revision")).toBe("corrigée");
       expect(htmlCalls[1][1]).toMatchObject({ cache: "no-store" });
     } finally {
       cleanup();
