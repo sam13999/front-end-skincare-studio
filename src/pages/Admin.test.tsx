@@ -49,7 +49,7 @@ describe("AdminPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Échouées" }));
     expect(screen.getAllByText("Beta140926beta")[0]).toBeInTheDocument();
-    expect(screen.queryAllByText("Alpha140926alph")[0]).not.toBeInTheDocument();
+    expect(screen.queryAllByText("Alpha140926alph")).toHaveLength(0);
   });
 
   it("affiche dans Rapport le HTML reconstruit après une correction", async () => {
