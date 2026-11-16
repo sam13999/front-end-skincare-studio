@@ -385,8 +385,7 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
     try {
       const result = await reviewAdminReport(token, summary.session_id, action, summary.review_revision || "", reason);
       setNotice(action === "approve"
-        ? result.delivery_error ? `Rapport approuvé, livraison non lancée : ${String(result.delivery_error)}`
-          : "Rapport approuvé. Envoi déclenché ; vérifiez le statut fournisseur."
+        ? "Rapport approuvé. Utilisez « Envoyer le lien » pour déclencher l’envoi."
         : "Rapport à corriger. L’accès client est bloqué.");
       onRefresh();
     } catch (err) { setNotice(err instanceof Error ? err.message : "Validation impossible."); }
@@ -539,7 +538,7 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
               || summary.delivery?.html_status === "unknown"
               || (summary.delivery?.html_status === "accepted" && !summary.delivery?.link_active)}
               className="action-button disabled:opacity-40" onClick={resend}><Mail className="h-3.5 w-3.5" />
-              {summary.delivery?.html_status === "accepted" ? "Renvoyer le lien" : "Relancer l’envoi"}</button>
+              {summary.delivery?.html_status === "accepted" ? "Renvoyer le lien" : summary.delivery?.html_status === "rejected" ? "Relancer l’envoi" : "Envoyer le lien"}</button>
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <Info label="Destinataire" value={summary.delivery?.recipient || summary.email || "—"} />
