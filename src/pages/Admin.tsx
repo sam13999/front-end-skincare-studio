@@ -32,7 +32,7 @@ import {
   fetchAdminSession,
   fetchAdminSessions,
   PromptRun,
-  resendAdminEmail,
+  commandAdminDelivery,
   reviewAdminReport,
   rerunAdminSession,
 } from "@/lib/adminApi";
@@ -42,7 +42,7 @@ const RoutineEditor = lazy(() => import("@/components/admin/RoutineEditor"));
 const TOKEN_KEY = "skinview_admin_token";
 
 const statusLabels: Record<string, string> = {
-  pending_review: "À vérifier", needs_correction: "À corriger", approved: "Approuvé", sent: "Envoyé",
+  pending_review: "À vérifier", needs_correction: "À corriger", approved: "Approuvé", sent: "Accepté fournisseur",
   completed: "Complète",
   in_progress: "En cours",
   failed: "Échouée",
@@ -355,6 +355,12 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
   const [htmlPreviewRequest, setHtmlPreviewRequest] = useState(0);
 
   const { summary } = detail;
+  const htmlAttempt = summary.delivery?.attempts?.html;
+  useEffect(() => {
+    if (!summary.rerun_active) return;
+    const timer = window.setInterval(() => { void onRefresh(); }, 5000);
+    return () => window.clearInterval(timer);
+  }, [summary.rerun_active, onRefresh]);
   const raw = detail.raw_session || {};
   const products = raw.products_retained || raw.produits_retenus || raw.selected_products;
   const routine = raw.routine_finale || raw.final_routine || raw.routine;
@@ -377,8 +383,10 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
   async function review(action: "approve" | "reject") {
     setBusy("review"); setNotice("");
     try {
-      await reviewAdminReport(token, summary.session_id, action, summary.review_revision || "", reason);
-      setNotice(action === "approve" ? "Rapport approuvé. Vous pouvez maintenant l’envoyer." : "Rapport à corriger. L’accès client est bloqué.");
+      const result = await reviewAdminReport(token, summary.session_id, action, summary.review_revision || "", reason);
+      setNotice(action === "approve"
+        ? "Rapport approuvé. Utilisez « Envoyer le lien » pour déclencher l’envoi."
+        : "Rapport à corriger. L’accès client est bloqué.");
       onRefresh();
     } catch (err) { setNotice(err instanceof Error ? err.message : "Validation impossible."); }
     finally { setBusy(""); }
@@ -388,8 +396,9 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
     setBusy("email");
     setNotice("");
     try {
-      await resendAdminEmail(token, summary.session_id);
-      setNotice("Email envoyé avec succès.");
+      await commandAdminDelivery(token, summary.session_id,
+        summary.delivery?.html_status === "accepted" ? "resend" : "send", summary.review_revision);
+      setNotice("Demande enregistrée. Vérifiez l’acceptation du fournisseur ci-dessous.");
       onRefresh();
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Envoi impossible.");
@@ -407,7 +416,7 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
         onRefresh();
         throw new Error(String(response.error || "La reprise a échoué. Consultez les diagnostics de la session."));
       }
-      setNotice(`Reprise ${String(response.run || "")} terminée : ${String(response.status || "ok")}.`);
+      setNotice(`Reprise ${String(response.run || "")} démarrée. Suivi actualisé automatiquement.`);
       setRerunOpen(false);
       setReason("");
       onRefresh();
@@ -436,7 +445,7 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
         <button type="button" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-950" onClick={onBack}><ArrowLeft className="h-4 w-4" /> Toutes les sessions</button>
         <div className="flex flex-wrap gap-2">
           <button type="button" className="action-button" onClick={onRefresh}><RefreshCw className="h-3.5 w-3.5" /> Actualiser</button>
-          <button type="button" className="primary-button" onClick={() => setRerunOpen(true)}><Play className="h-3.5 w-3.5" /> Reprendre la session</button>
+          <button type="button" className="primary-button" disabled={!!summary.rerun_active} onClick={() => setRerunOpen(true)}><Play className="h-3.5 w-3.5" /> Reprendre la session</button>
         </div>
       </div>
 
@@ -465,6 +474,8 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
 
       {tab === "summary" && <div className="grid gap-4 lg:grid-cols-2">
         <InfoCard title="État du traitement">
+          {summary.delivery_issue && <p role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-800">Livraison : {summary.delivery_issue}</p>}
+          {summary.rerun_active && <p role="status" className="mb-3 rounded-lg bg-blue-50 p-3 text-sm text-blue-800">Reprise {summary.rerun_active} en cours · étape {summary.current_stage || "démarrage"}. Actualisation automatique.</p>}
           {summary.failed_stage && ["failed", "partial"].includes(summary.status) && <p role="alert" className="mb-3 text-sm font-semibold text-red-700">Échec à l’étape {summary.failed_stage}. Consultez l’onglet Prompts pour la cause et la sortie rejetée.</p>}
           <Info label="Statut global" value={statusLabels[summary.status]} /><Info label="Dernière étape réussie" value={summary.last_successful_stage || "—"} /><Info label="Étape ayant échoué" value={summary.failed_stage || "—"} /><Info label="Email envoyé" value={pretty((summary.email_status || {}).sent)} />
         </InfoCard>
@@ -523,9 +534,25 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
             <button type="button" disabled={!summary.html_available} className="primary-button disabled:opacity-40" onClick={() => setHtmlPreviewRequest(request => request + 1)}><ExternalLink className="h-3.5 w-3.5" /> Voir HTML</button>
             <button type="button" disabled={!summary.pdf_available || busy === "pdf"} className="action-button disabled:opacity-40" onClick={() => downloadArtifact("pdf", "rapport.pdf")}><Download className="h-3.5 w-3.5" /> Télécharger PDF</button>
             <button type="button" className="action-button" onClick={() => downloadArtifact("pipeline_snapshot.json", "session-final.json")}><FileJson className="h-3.5 w-3.5" /> Snapshot de génération</button>
-            <button type="button" disabled={!!busy || summary.review_status !== "approved"} className="action-button disabled:opacity-40" onClick={resend}><Mail className="h-3.5 w-3.5" /> Envoyer le rapport approuvé</button>
+            <button type="button" disabled={!!busy || !["approved", "sent"].includes(summary.review_status || "")
+              || summary.delivery?.html_status === "unknown"
+              || (summary.delivery?.html_status === "accepted" && !summary.delivery?.link_active)}
+              className="action-button disabled:opacity-40" onClick={resend}><Mail className="h-3.5 w-3.5" />
+              {summary.delivery?.html_status === "accepted" ? "Renvoyer le lien" : summary.delivery?.html_status === "rejected" ? "Relancer l’envoi" : "Envoyer le lien"}</button>
           </div>
-          <div className="mt-5 grid gap-3 sm:grid-cols-3"><Info label="Statut email" value={pretty((summary.email_status || {}).sent)} /><Info label="Destinataire" value={summary.email || "—"} /><Info label="Montant" value={formatAmount(summary.payment.payment_amount, summary.payment.payment_currency || "EUR")} /></div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <Info label="Destinataire" value={summary.delivery?.recipient || summary.email || "—"} />
+            <Info label="Transport HTML" value={summary.delivery?.html_status || "En attente"} />
+            <Info label="Tentative" value={htmlAttempt?.started_at ? formatDate(htmlAttempt.started_at) : "—"} />
+            <Info label="Acceptation fournisseur" value={htmlAttempt?.accepted_at ? formatDate(htmlAttempt.accepted_at) : "Non confirmée"} />
+            <Info label="Fournisseur / référence" value={[htmlAttempt?.provider, htmlAttempt?.message_id].filter(Boolean).join(" · ") || "—"} />
+            <Info label="Échec" value={htmlAttempt?.failure_reason || summary.delivery_issue || "—"} />
+          </div>
+          <p className="mt-2 text-xs text-slate-500">Accepté par Brevo signifie pris en charge pour l’envoi, sans confirmation de réception en boîte.</p>
+          {!!summary.delivery?.history?.length && <details className="mt-3 rounded-xl border p-3 text-sm"><summary className="cursor-pointer font-semibold">Historique des tentatives et renvois</summary>
+            <ul className="mt-2 space-y-1">{summary.delivery.history.map((event, index) =>
+              <li key={index}>{formatDate(String(event.at || ""))} · {String(event.event || "")} · {String(event.reference || event.message_id || "")}
+                {event.reason ? ` · ${String(event.reason)}` : ""}</li>)}</ul></details>}
           {summary.html_available && htmlPreviewRequest > 0 && <HtmlReportPreview
             key={`${summary.session_id}:${summary.review_revision}:${htmlPreviewRequest}`}
             token={token} sessionId={summary.session_id} />}
@@ -657,7 +684,17 @@ function AdminPage() {
         <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="flex flex-col gap-3 lg:flex-row"><div className="relative flex-1"><Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} className="h-10 w-full rounded-xl border border-slate-300 pl-9 pr-3 text-sm outline-none focus:border-slate-950" placeholder="Rechercher un prénom, email, session ou identifiant…" /></div><div className="flex gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1">{filters.map(([key, label]) => <button key={key} type="button" onClick={() => setFilter(key)} className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold ${filter === key ? "bg-white text-slate-950 shadow-sm" : "text-slate-500"}`}>{label}</button>)}</div></div>
           {error && <div className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
-          <div className="mt-5 overflow-x-auto"><table className="w-full min-w-[760px] text-left"><thead><tr className="border-b border-slate-200 text-[11px] uppercase tracking-[0.1em] text-slate-400"><th className="px-3 py-3 font-semibold">Session</th><th className="px-3 py-3 font-semibold">Date</th><th className="px-3 py-3 font-semibold">Email</th><th className="px-3 py-3 font-semibold">Statut</th><th className="px-3 py-3 font-semibold">Paiement</th><th className="px-3 py-3 font-semibold">Montant</th><th className="px-3 py-3" /></tr></thead><tbody>{filtered.map((item) => <tr key={item.session_id} className="cursor-pointer border-b border-slate-100 transition hover:bg-slate-50" onClick={() => { setDetail(null); navigate(`/admin/session/${item.session_id}`); }}><td className="px-3 py-4"><p className="font-semibold text-slate-900">{item.display_name}</p><p className="mt-1 font-mono text-[10px] text-slate-400">{item.session_id}</p></td><td className="whitespace-nowrap px-3 py-4 text-sm text-slate-600">{formatDate(item.created_at)}</td><td className="px-3 py-4 text-sm text-slate-600">{item.email || "—"}</td><td className="px-3 py-4"><StatusBadge value={item.review_status || item.status} /></td><td className="px-3 py-4"><StatusBadge value={item.payment.payment_status} /></td><td className="px-3 py-4 text-sm font-semibold text-slate-800">{formatAmount(item.payment.payment_amount, item.payment.payment_currency || "EUR")}</td><td className="px-3 py-4 text-right"><ChevronRight className="ml-auto h-4 w-4 text-slate-300" /></td></tr>)}</tbody></table>{!loading && filtered.length === 0 && <Empty text="Aucune session ne correspond aux critères." />}</div>
+          <div className="mt-5 space-y-2 md:hidden">{filtered.map(item =>
+            <button type="button" key={item.session_id}
+              className="w-full rounded-xl border border-slate-200 p-3 text-left"
+              onClick={() => { setDetail(null); navigate(`/admin/session/${item.session_id}`); }}>
+              <span className="block font-semibold">{item.display_name}</span>
+              <span className="block break-all text-xs text-slate-600">{item.email || "—"}</span>
+              <span className="mt-2 inline-block text-xs">{statusLabels[item.review_status || item.status] || item.status}</span>
+              {item.delivery_issue && <span className="mt-1 block text-xs font-semibold text-red-700">Incident livraison</span>}
+              {item.rerun_active && <span className="mt-1 block text-xs text-blue-700">Reprise en cours</span>}
+            </button>)}</div>
+          <div className="mt-5 hidden overflow-x-auto md:block"><table className="w-full min-w-[760px] text-left"><thead><tr className="border-b border-slate-200 text-[11px] uppercase tracking-[0.1em] text-slate-400"><th className="px-3 py-3 font-semibold">Session</th><th className="px-3 py-3 font-semibold">Date</th><th className="px-3 py-3 font-semibold">Email</th><th className="px-3 py-3 font-semibold">Statut</th><th className="px-3 py-3 font-semibold">Paiement</th><th className="px-3 py-3 font-semibold">Montant</th><th className="px-3 py-3" /></tr></thead><tbody>{filtered.map((item) => <tr key={item.session_id} className="cursor-pointer border-b border-slate-100 transition hover:bg-slate-50" onClick={() => { setDetail(null); navigate(`/admin/session/${item.session_id}`); }}><td className="px-3 py-4"><p className="font-semibold text-slate-900">{item.display_name}</p><p className="mt-1 font-mono text-[10px] text-slate-400">{item.session_id}</p></td><td className="whitespace-nowrap px-3 py-4 text-sm text-slate-600">{formatDate(item.created_at)}</td><td className="px-3 py-4 text-sm text-slate-600">{item.email || "—"}{item.delivery_issue && <p role="alert" className="mt-1 text-xs font-semibold text-red-700">Incident livraison</p>}</td><td className="px-3 py-4"><StatusBadge value={item.review_status || item.status} /></td><td className="px-3 py-4"><StatusBadge value={item.payment.payment_status} /></td><td className="px-3 py-4 text-sm font-semibold text-slate-800">{formatAmount(item.payment.payment_amount, item.payment.payment_currency || "EUR")}</td><td className="px-3 py-4 text-right"><ChevronRight className="ml-auto h-4 w-4 text-slate-300" /></td></tr>)}</tbody></table>{!loading && filtered.length === 0 && <Empty text="Aucune session ne correspond aux critères." />}</div>
         </section>
       </div>
     </main>

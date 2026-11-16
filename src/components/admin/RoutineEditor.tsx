@@ -113,7 +113,7 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
     return JSON.stringify(plans[pid]) !== JSON.stringify(initial[pid]) ? [{ id_produit: pid, moments: plans[pid] }] : [];
   });
   const valid = changes.every(change => Object.values(change.moments).length > 0 && Object.values(change.moments).every(plan =>
-    plan.initial_per_week !== null && plan.maximum_per_week !== null && plan.initial_per_week >= 0
+    plan.initial_per_week !== null && plan.maximum_per_week !== null && Number.isInteger(plan.initial_per_week) && Number.isInteger(plan.maximum_per_week) && plan.initial_per_week >= 0
     && plan.maximum_per_week >= plan.initial_per_week && plan.maximum_per_week <= 7));
   const candidate = view.candidate;
   const disabled = !view.editable || !!busy;
@@ -149,6 +149,7 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
             <legend className="sr-only">Moments et fréquence de {product.name}</legend>
             {routineMoments.map(moment => {
               const plan = plans[pid]?.[moment];
+              if (!plan && product.allowed_moments && !product.allowed_moments.includes(moment)) return null;
               return <div key={moment} className="space-y-2 rounded-md border p-3">
                 <label className="flex min-h-9 items-center gap-2 font-medium">
                   <input type="checkbox" checked={!!plan} onChange={e => update(pid, moment, e.target.checked ? defaultPlan() : undefined)} />
