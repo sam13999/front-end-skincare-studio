@@ -1,6 +1,6 @@
 // Technical capture metrics only: no image contents or biometric landmarks.
 export interface NativeCaptureDiagnostics {
-  method: "native-photo";
+  method: "native-photo" | "imported-photo";
   streamWidth: number | null;
   streamHeight: number | null;
   browserMaxWidth: number | null;
@@ -12,7 +12,7 @@ export interface NativeCaptureDiagnostics {
   cropHeight: number;
   outputWidth: number;
   outputHeight: number;
-  jpegQuality: number;
+  jpegQuality: number | null;
   outputBytes: number;
   resizedForByteLimit: boolean;
 }
