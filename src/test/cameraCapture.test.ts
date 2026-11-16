@@ -14,7 +14,7 @@ describe("native photo capture quality constraints", () => {
   });
   it("tries JPEG compression before removing pixels and keeps a quality floor", () => {
     expect(JPEG_QUALITY_STEPS[0]).toBe(0.95);
-    expect(JPEG_QUALITY_STEPS.at(-1)).toBeGreaterThanOrEqual(0.8);
+    expect(JPEG_QUALITY_STEPS[JPEG_QUALITY_STEPS.length - 1]).toBeGreaterThanOrEqual(0.8);
     const next = nextSizeForByteLimit(4095, 3071, 7 * 1024 * 1024, 5 * 1024 * 1024);
     expect(next.width).toBeLessThan(4095);
     expect(next.height).toBeLessThan(3071);
