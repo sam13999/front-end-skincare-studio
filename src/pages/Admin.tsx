@@ -553,7 +553,7 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
           {!!summary.delivery?.history?.length && <details className="mt-3 rounded-xl border p-3 text-sm"><summary className="cursor-pointer font-semibold">Historique des tentatives et renvois</summary>
             <ul className="mt-2 space-y-1">{summary.delivery.history.map((event, index) =>
               <li key={index}>{formatDate(String(event.at || ""))} · {String(event.event || "")} · {String(event.reference || event.message_id || "")}
-                {event.reason ? ` · ${String(event.reason)}` : ""}</li>)}</ul></details>
+                {event.reason ? ` · ${String(event.reason)}` : ""}</li>)}</ul></details>}
           {summary.html_available && htmlPreviewRequest > 0 && <HtmlReportPreview
             key={`${summary.session_id}:${summary.review_revision}:${htmlPreviewRequest}`}
             token={token} sessionId={summary.session_id} />}
