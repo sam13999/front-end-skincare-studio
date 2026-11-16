@@ -99,6 +99,8 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
       let prepared: Blob = file;
       let jpegQuality: number | null = null;
       let resizedForByteLimit = false;
+      let outputWidth = bitmap.width;
+      let outputHeight = bitmap.height;
       try {
         const isJpeg = ["image/jpeg", "image/jpg"].includes(file.type.toLowerCase());
         const isAlreadyCompliant = isJpeg
@@ -111,6 +113,8 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
           prepared = result.blob;
           jpegQuality = result.jpegQuality;
           resizedForByteLimit = result.resizedForByteLimit;
+          outputWidth = result.outputWidth;
+          outputHeight = result.outputHeight;
         }
         const preparedFile = new File([prepared], "photo.jpg", { type: "image/jpeg" });
         const fileIssues = validatePhotoFile(preparedFile);
@@ -134,8 +138,8 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
           sourceHeight: bitmap.height,
           cropWidth: bitmap.width,
           cropHeight: bitmap.height,
-          outputWidth: jpegQuality === null ? bitmap.width : Math.min(bitmap.width, 4095),
-          outputHeight: jpegQuality === null ? bitmap.height : Math.min(bitmap.height, 4095),
+          outputWidth,
+          outputHeight,
           jpegQuality,
           outputBytes: prepared.size,
           resizedForByteLimit,
