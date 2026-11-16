@@ -18,10 +18,9 @@ import {
   type CameraStep,
 } from "./cameraGuidance";
 import {
-  JPEG_QUALITY_STEPS,
-  nextSizeForByteLimit,
+  encodeJpegWithinLimit,
+  readBlobAsDataUrl,
   selectMaximumPhotoSize,
-  sizeUnderDimensionLimit,
   type NativeCaptureDiagnostics,
   type NativePhotoCapabilities,
   type RequestedPhotoSize,
@@ -275,67 +274,25 @@ export const GuidedCamera = ({ step, onCapture, onClose, onFallbackFile }: Guide
       cropOverride?: ReturnType<typeof calculateCoverCrop>,
     ): Promise<void> => {
       const crop = cropOverride ?? calculateCoverCrop(sourceWidth, sourceHeight, displayWidth, displayHeight);
-      const originalCropWidth = Math.round(crop.sourceWidth);
-      const originalCropHeight = Math.round(crop.sourceHeight);
-      let { width, height } = sizeUnderDimensionLimit(originalCropWidth, originalCropHeight, CAMERA_CAPTURE_MAX_DIMENSION);
-      const firstWidth = width;
-      const firstHeight = height;
-      const canvas = document.createElement("canvas");
-      const context = canvas.getContext("2d");
-      if (!context) throw new Error("capture_canvas_unavailable");
-
-      // Each JPEG attempt is encoded from the same decoded native still photo.
-      // Never recompress a previous JPEG; reduce pixel dimensions only if
-      // every full-resolution quality level exceeds the provider's byte limit.
-      for (let pass = 0; pass < 8; pass += 1) {
-        canvas.width = width;
-        canvas.height = height;
-        context.imageSmoothingEnabled = true;
-        context.imageSmoothingQuality = "high";
-        context.drawImage(
-          source, crop.sourceX, crop.sourceY, crop.sourceWidth, crop.sourceHeight,
-          0, 0, width, height,
-        );
-        let smallestAttemptBytes = 0;
-        for (const quality of JPEG_QUALITY_STEPS) {
-          const blob = await new Promise<Blob>((resolve, reject) => {
-            canvas.toBlob(
-              (result) => result ? resolve(result) : reject(new Error("capture_blob_unavailable")),
-              "image/jpeg", quality,
-            );
-          });
-          smallestAttemptBytes = blob.size;
-          if (blob.size > CAMERA_CAPTURE_MAX_BYTES) continue;
-          const dataUrl = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => typeof reader.result === "string"
-              ? resolve(reader.result) : reject(new Error("capture_data_url_unavailable"));
-            reader.onerror = () => reject(new Error("capture_file_read_failed"));
-            reader.readAsDataURL(blob);
-          });
-          onCapture(dataUrl, blob.size, {
-            ...photoInfo,
-            sourceWidth,
-            sourceHeight,
-            cropWidth: originalCropWidth,
-            cropHeight: originalCropHeight,
-            outputWidth: width,
-            outputHeight: height,
-            jpegQuality: quality,
-            outputBytes: blob.size,
-            resizedForByteLimit: width < firstWidth || height < firstHeight,
-          });
-          return;
-        }
-        if (!smallestAttemptBytes) throw new Error("capture_invalid_blob");
-        const next = nextSizeForByteLimit(width, height, smallestAttemptBytes, CAMERA_CAPTURE_MAX_BYTES);
-        if (next.width >= width || next.height >= height || Math.min(next.width, next.height) < 201) {
-          throw new Error("capture_size_limit_unreachable");
-        }
-        width = next.width;
-        height = next.height;
-      }
-      throw new Error("capture_size_limit_unreachable");
+      const result = await encodeJpegWithinLimit(source, {
+        x: crop.sourceX,
+        y: crop.sourceY,
+        width: crop.sourceWidth,
+        height: crop.sourceHeight,
+      }, CAMERA_CAPTURE_MAX_DIMENSION, CAMERA_CAPTURE_MAX_BYTES);
+      const dataUrl = await readBlobAsDataUrl(result.blob);
+      onCapture(dataUrl, result.blob.size, {
+        ...photoInfo,
+        sourceWidth,
+        sourceHeight,
+        cropWidth: Math.round(crop.sourceWidth),
+        cropHeight: Math.round(crop.sourceHeight),
+        outputWidth: result.outputWidth,
+        outputHeight: result.outputHeight,
+        jpegQuality: result.jpegQuality,
+        outputBytes: result.blob.size,
+        resizedForByteLimit: result.resizedForByteLimit,
+      });
     };
 
     const captureNativePhoto = async () => {
