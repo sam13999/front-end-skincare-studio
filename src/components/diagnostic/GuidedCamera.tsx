@@ -13,18 +13,26 @@ import {
   getVideoFaceLandmarker,
   getVideoGuidanceResult,
   isTolerableSharpnessDrop,
-  mapFaceBoxToVisibleViewport,
   readRegionFromSource,
-  type FaceBox,
   type CameraGuidanceState,
   type CameraStep,
 } from "./cameraGuidance";
+import {
+  encodeJpegWithinLimit,
+  captureFailureReason,
+  PROVIDER_MAX_BYTES,
+  readBlobAsDataUrl,
+  selectMaximumPhotoSize,
+  type NativeCaptureDiagnostics,
+  type NativePhotoCapabilities,
+  type RequestedPhotoSize,
+} from "./cameraCapture";
 
 interface GuidedCameraProps {
   step: CameraStep;
-  onCapture: (dataUrl: string, fileSize: number) => void;
+  onCapture: (dataUrl: string, fileSize: number, diagnostics: NativeCaptureDiagnostics) => void;
   onClose: () => void;
-  onFallback: () => void;
+  onFallbackFile: (file: File) => void;
 }
 
 const EMPTY_STATE: CameraGuidanceState = buildCameraGuidanceState({
@@ -36,11 +44,11 @@ const EMPTY_STATE: CameraGuidanceState = buildCameraGuidanceState({
 });
 
 const CAMERA_CAPTURE_MAX_DIMENSION = 4095;
-const CAMERA_CAPTURE_MAX_BYTES = 5 * 1024 * 1024;
-const CAMERA_CAPTURE_JPEG_QUALITY = 0.95;
+const CAMERA_CAPTURE_MAX_BYTES = PROVIDER_MAX_BYTES;
 
 type NativeImageCapture = {
-  takePhoto: () => Promise<Blob>;
+  takePhoto: (settings?: RequestedPhotoSize) => Promise<Blob>;
+  getPhotoCapabilities?: () => Promise<NativePhotoCapabilities>;
 };
 
 type NativeImageCaptureConstructor = new (track: MediaStreamTrack) => NativeImageCapture;
@@ -49,8 +57,6 @@ type NativeBitmapFactory = (
   blob: Blob,
   options?: { imageOrientation?: "none" | "from-image" },
 ) => Promise<ImageBitmap>;
-
-type CaptureMethod = "native" | "fallback-video";
 
 function createNativeImageCapture(track: MediaStreamTrack): NativeImageCapture | null {
   const browserWindow = window as unknown as { ImageCapture?: NativeImageCaptureConstructor };
@@ -82,8 +88,10 @@ function Indicator({ label, value }: { label: string; value: boolean | null }) {
   );
 }
 
-export const GuidedCamera = ({ step, onCapture, onClose, onFallback }: GuidedCameraProps) => {
+export const GuidedCamera = ({ step, onCapture, onClose, onFallbackFile }: GuidedCameraProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const nativeFileRef = useRef<HTMLInputElement>(null);
+  const capturingRef = useRef(false);
   const brightnessCanvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<number | null>(null);
   const processingRef = useRef(false);
@@ -96,6 +104,7 @@ export const GuidedCamera = ({ step, onCapture, onClose, onFallback }: GuidedCam
   const [modelReady, setModelReady] = useState(false);
   const [stableFrames, setStableFrames] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [capturing, setCapturing] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -124,8 +133,10 @@ export const GuidedCamera = ({ step, onCapture, onClose, onFallback }: GuidedCam
           },
         });
         const videoTrack = stream.getVideoTracks()[0];
-        if (videoTrack) {
-          void videoTrack.getSettings();
+        if (!videoTrack || !createNativeImageCapture(videoTrack)) {
+          setError("La capture photo haute résolution n’est pas disponible dans ce navigateur. Utilisez l’appareil photo du téléphone.");
+          stream.getTracks().forEach((track) => track.stop());
+          return;
         }
         if (!active) {
           stream.getTracks().forEach((track) => track.stop());
@@ -242,7 +253,7 @@ export const GuidedCamera = ({ step, onCapture, onClose, onFallback }: GuidedCam
   const orientationStatus = state.faceDetected ? state.poseOk : false;
 
   const capture = () => {
-    if (!isStable) return;
+    if (!isStable || capturingRef.current) return;
     // Do not use a stale green frame if analysis was paused while the device
     // was moving or the tab was backgrounded.
     if (performance.now() - lastAnalysisRef.current > CAMERA_GUIDANCE_THRESHOLDS.analysisIntervalMs * 2) {
@@ -257,147 +268,103 @@ export const GuidedCamera = ({ step, onCapture, onClose, onFallback }: GuidedCam
     const displayWidth = videoRect.width || video.clientWidth || window.innerWidth;
     const displayHeight = videoRect.height || video.clientHeight || window.innerHeight;
 
-    const encodeCapture = (
-      source: HTMLVideoElement | ImageBitmap,
+    const encodeCapture = async (
+      source: ImageBitmap,
       sourceWidth: number,
       sourceHeight: number,
-      method: CaptureMethod,
+      photoInfo: Omit<NativeCaptureDiagnostics, "sourceWidth" | "sourceHeight" | "cropWidth" | "cropHeight" | "outputWidth" | "outputHeight" | "jpegQuality" | "outputBytes" | "resizedForByteLimit">,
       cropOverride?: ReturnType<typeof calculateCoverCrop>,
-      sourceFaceBox?: FaceBox | null,
-    ): Promise<void> => new Promise((resolve, reject) => {
+    ): Promise<void> => {
       const crop = cropOverride ?? calculateCoverCrop(sourceWidth, sourceHeight, displayWidth, displayHeight);
-      const scale = Math.min(
-        1,
-        CAMERA_CAPTURE_MAX_DIMENSION / Math.max(crop.sourceWidth, crop.sourceHeight),
-      );
-      const initialWidth = Math.max(1, Math.round(crop.sourceWidth * scale));
-      const initialHeight = Math.max(1, Math.round(crop.sourceHeight * scale));
-      const canvas = document.createElement("canvas");
-      const context = canvas.getContext("2d");
-      if (!context) {
-        reject(new Error("capture_canvas_unavailable"));
-        return;
-      }
-
-      const encode = (width: number, height: number) => {
-        canvas.width = width;
-        canvas.height = height;
-        context.imageSmoothingEnabled = true;
-        context.imageSmoothingQuality = "high";
-        try {
-          // Keep the same unmirrored source orientation as the former file-input flow.
-          context.drawImage(
-            source,
-            crop.sourceX,
-            crop.sourceY,
-            crop.sourceWidth,
-            crop.sourceHeight,
-            0,
-            0,
-            width,
-            height,
-          );
-        } catch (error) {
-          reject(error);
-          return;
-        }
-        canvas.toBlob((blob) => {
-          if (!blob) {
-            reject(new Error("capture_blob_unavailable"));
-            return;
-          }
-          if (blob.size > CAMERA_CAPTURE_MAX_BYTES && (width > 1 || height > 1)) {
-            const scaleToLimit = Math.sqrt(CAMERA_CAPTURE_MAX_BYTES / blob.size);
-            const nextWidth = Math.max(1, Math.min(width - 1, Math.floor(width * scaleToLimit)));
-            const nextHeight = Math.max(1, Math.min(height - 1, Math.floor(height * scaleToLimit)));
-            if (nextWidth < width || nextHeight < height) {
-              encode(nextWidth, nextHeight);
-              return;
-            }
-          }
-          const reader = new FileReader();
-          reader.onload = () => {
-            if (typeof reader.result !== "string") {
-              reject(new Error("capture_data_url_unavailable"));
-              return;
-            }
-            if (import.meta.env.DEV) {
-              const faceInOutput = sourceFaceBox
-                ? mapFaceBoxToVisibleViewport(sourceFaceBox, crop, sourceWidth, sourceHeight)
-                : null;
-              console.debug("[SkinView camera] capture geometry", {
-                method,
-                sourceWidth,
-                sourceHeight,
-                crop,
-                outputWidth: width,
-                outputHeight: height,
-                sourceFaceBox: sourceFaceBox
-                  ? { left: sourceFaceBox.left, top: sourceFaceBox.top, width: sourceFaceBox.width, height: sourceFaceBox.height }
-                  : null,
-                outputFaceRatio: faceInOutput
-                  ? { width: faceInOutput.width, height: faceInOutput.height }
-                  : null,
-              });
-            }
-            onCapture(reader.result, blob.size);
-            resolve();
-          };
-          reader.onerror = () => reject(new Error("capture_file_read_failed"));
-          reader.readAsDataURL(blob);
-        }, "image/jpeg", CAMERA_CAPTURE_JPEG_QUALITY);
-      };
-
-      encode(initialWidth, initialHeight);
-    });
-
-    const captureFromVideo = () => {
-      void encodeCapture(video, video.videoWidth, video.videoHeight, "fallback-video").catch(() => undefined);
+      const result = await encodeJpegWithinLimit(source, {
+        x: crop.sourceX,
+        y: crop.sourceY,
+        width: crop.sourceWidth,
+        height: crop.sourceHeight,
+      }, CAMERA_CAPTURE_MAX_DIMENSION, CAMERA_CAPTURE_MAX_BYTES);
+      const dataUrl = await readBlobAsDataUrl(result.blob);
+      onCapture(dataUrl, result.blob.size, {
+        ...photoInfo,
+        sourceWidth,
+        sourceHeight,
+        cropWidth: Math.round(crop.sourceWidth),
+        cropHeight: Math.round(crop.sourceHeight),
+        outputWidth: result.outputWidth,
+        outputHeight: result.outputHeight,
+        jpegQuality: result.jpegQuality,
+        outputBytes: result.blob.size,
+        resizedForByteLimit: result.resizedForByteLimit,
+      });
     };
 
     const captureNativePhoto = async () => {
       const videoTrack = streamRef.current?.getVideoTracks()[0];
       if (!videoTrack || videoTrack.readyState !== "live") {
-        captureFromVideo();
+        setError("La caméra a été interrompue. Reprenez la photo avec l’appareil photo du téléphone.");
         return;
       }
       const imageCapture = createNativeImageCapture(videoTrack);
       if (!imageCapture) {
-        captureFromVideo();
+        setError("La capture photo haute résolution n’est pas disponible. Utilisez l’appareil photo du téléphone.");
         return;
       }
-
+      capturingRef.current = true;
+      setCapturing(true);
       try {
-        const photoBlob = await imageCapture.takePhoto();
+        const streamSettings = videoTrack.getSettings();
+        const capabilities = imageCapture.getPhotoCapabilities
+          ? await imageCapture.getPhotoCapabilities().catch(() => null)
+          : null;
+        const requestedSize = selectMaximumPhotoSize(capabilities);
+        let requestedMaxResolution = false;
+        let photoBlob: Blob;
+        try {
+          photoBlob = await imageCapture.takePhoto(requestedSize ?? undefined);
+          requestedMaxResolution = requestedSize !== null;
+        } catch (firstError) {
+          if (!requestedSize) throw firstError;
+          // A browser can expose capabilities without accepting explicit sizes.
+          // Retry with takePhoto() itself, never with a frame from the video stream.
+          photoBlob = await imageCapture.takePhoto();
+        }
         if (!photoBlob.size) throw new Error("native_photo_empty");
         const bitmap = await decodeNativePhoto(photoBlob);
         try {
-          let nativeCrop = calculateCoverCrop(bitmap.width, bitmap.height, displayWidth, displayHeight);
-          let nativeFaceBox: FaceBox | null = null;
+          // Keep the still camera's field of view. The narrower video preview
+          // may omit cheeks/temples and has a different sensor aspect ratio.
+          let nativeCrop = calculateCoverCrop(bitmap.width, bitmap.height, bitmap.width, bitmap.height);
           try {
             const landmarker = await getImageFaceLandmarker();
             const result = landmarker.detect(bitmap);
             const faceBox = result.faceLandmarks.length === 1 ? getFaceBox(result.faceLandmarks[0]) : null;
             if (faceBox) {
-              nativeFaceBox = faceBox;
               nativeCrop = calculateFaceFocusedCrop(
-                bitmap.width,
-                bitmap.height,
-                displayWidth,
-                displayHeight,
-                faceBox,
+                bitmap.width, bitmap.height, bitmap.width, bitmap.height, faceBox,
               );
             }
           } catch {
-            // Keep the native high-resolution photo and deterministic preview
-            // crop if the optional native-frame measurement is unavailable.
+            // Keep the native still photo if face-focused cropping cannot run.
           }
-          await encodeCapture(bitmap, bitmap.width, bitmap.height, "native", nativeCrop, nativeFaceBox);
+          await encodeCapture(bitmap, bitmap.width, bitmap.height, {
+            method: "native-photo",
+            streamWidth: streamSettings.width ?? null,
+            streamHeight: streamSettings.height ?? null,
+            browserMaxWidth: requestedSize?.imageWidth ?? null,
+            browserMaxHeight: requestedSize?.imageHeight ?? null,
+            requestedMaxResolution,
+            browser: navigator.userAgent,
+            limitation: requestedSize && !requestedMaxResolution ? "photo_size_settings_rejected" : null,
+          }, nativeCrop);
         } finally {
           bitmap.close();
         }
-      } catch {
-        captureFromVideo();
+      } catch (captureError) {
+        // Never silently replace a real photo with a lower-quality video frame.
+        // Do not log exception objects: browser errors can contain device metadata.
+        setError(`La prise de vue a échoué (${captureFailureReason(captureError)}). Réessayez ou utilisez l’appareil photo du téléphone.`);
+      } finally {
+        capturingRef.current = false;
+        setCapturing(false);
       }
     };
 
@@ -435,14 +402,27 @@ export const GuidedCamera = ({ step, onCapture, onClose, onFallback }: GuidedCam
           {!cameraReady && !error ? "Activation de la caméra…" : !modelReady && !error ? "Préparation de la détection…" : error || state.guidanceMessage}
         </p>
         {error ? (
-          <button type="button" className="svd-primary svd-camera-fallback" onClick={onFallback}>Importer une photo</button>
+          <button type="button" className="svd-primary svd-camera-fallback" onClick={() => nativeFileRef.current?.click()}>Prendre une photo avec le téléphone</button>
         ) : (
-          <button type="button" className="svd-camera-capture" onClick={capture} disabled={!isStable}>
+          <button type="button" className="svd-camera-capture" onClick={capture} disabled={!isStable || capturing}>
             <span className="svd-camera-capture-ring"><Check aria-hidden="true" /></span>
-            <span>{isStable ? "Prendre la photo" : "Cadrez votre visage"}</span>
+            <span>{capturing ? "Capture haute qualité…" : isStable ? "Prendre la photo" : "Cadrez votre visage"}</span>
           </button>
         )}
       </div>
+      <input
+        ref={nativeFileRef}
+        type="file"
+        accept="image/*"
+        capture="user"
+        className="svd-hidden-input"
+        aria-label="Prendre une photo native"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) onFallbackFile(file);
+          event.target.value = "";
+        }}
+      />
     </div>
   );
 };

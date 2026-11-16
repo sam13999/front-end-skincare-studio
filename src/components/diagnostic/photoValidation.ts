@@ -1,4 +1,5 @@
 import type { Detection, FaceDetector as MediaPipeFaceDetector } from "@mediapipe/tasks-vision";
+import { PROVIDER_MAX_BYTES } from "./cameraCapture";
 import {
   analyzeLuma,
   analyzeSharpness,
@@ -34,7 +35,7 @@ export const faceConfig: PhotoValidationConfig = {
   minResolution: 201,
   maxResolution: 4095,
   minFileSizeKB: 100,
-  maxFileSizeKB: 5 * 1024,
+  maxFileSizeKB: PROVIDER_MAX_BYTES / 1024,
   minVisibleFaceRatio: FACE_FRAMING_THRESHOLDS.minVisibleFaceRatio,
 };
 
@@ -298,6 +299,14 @@ export async function validatePhoto(
       ]);
     }
     issues.push(...evaluateFaceObservations(faceObservations, img.naturalWidth, img.naturalHeight, config));
+    if (faceObservations.length === 1 && faceObservations[0].box
+        && Math.min(faceObservations[0].box.width, faceObservations[0].box.height) <= 400) {
+      issues.push({
+        code: "low_face_pixels",
+        message: "Le visage occupe peu de pixels. Rapprochez-vous pour améliorer l’analyse des détails fins.",
+        severity: "warning",
+      });
+    }
 
     // Imported images use the same landmark and pose gates as live captures;
     // otherwise a file picker could bypass the 10–29° requirement.

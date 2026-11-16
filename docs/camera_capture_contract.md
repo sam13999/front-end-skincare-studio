@@ -26,13 +26,45 @@ rejetée comme réellement floue.
 
 ## Image finale
 
-- La capture native haute résolution est préférée ; la frame vidéo est le fallback.
+- Le flux vidéo sert **uniquement au guidage**. Aucune frame vidéo ne devient une photo client.
+- La capture via `ImageCapture.takePhoto()` est obligatoire dans la caméra guidée.
+  Si elle échoue ou est indisponible, la caméra propose une vraie prise de vue
+  via l'appareil natif du téléphone (`input capture="user"`), sans substitution silencieuse.
+- Lorsque `getPhotoCapabilities()` renvoie des dimensions maximales exploitables,
+  celles-ci sont demandées à `takePhoto()`. Si les paramètres sont refusés, un
+  second essai `takePhoto()` sans paramètres reste une photographie native.
 - L’orientation EXIF est appliquée par `createImageBitmap`.
-- Le crop conserve le ratio exact de la prévisualisation et vise un visage à
-  environ 58 % de la hauteur, au lieu de 70 %, pour éviter un cadrage final trop
-  serré et préserver front, joues, nez et menton.
+- La photo fixe conserve son propre ratio de capteur. Le recadrage autour du
+  visage, si nécessaire, vise environ 58 % de hauteur sans imposer le ratio
+  plus étroit de l'aperçu vidéo, qui pourrait écarter joues et tempes.
 - La plus grande dimension reste limitée à 4095 px conformément au contrat
   fournisseur, sans upscale.
-- Le JPEG est produit une fois à qualité 0,95 avec rééchantillonnage haute qualité.
-- Le backend conserve ensuite le JPEG octet pour octet s’il est déjà conforme,
-  ce qui supprime le double encodage historique.
+- La sortie JPEG tente d'abord les qualités 0,95 à 0,80, **à pixels constants**.
+  Un encodeur qui renvoie un autre format est refusé.
+  Le rééchantillonnage n'intervient que si toutes les tentatives dépassent 5 Mo.
+  Chaque tentative repart de l'image source décodée, jamais d'un JPEG déjà compressé.
+  Un JPEG ne garantit pas une conservation strictement sans perte des détails fins.
+- Les photos importées sont conservées octet pour octet lorsqu'elles sont déjà
+  conformes ; sinon elles utilisent la même normalisation. Le sélecteur accepte
+  les images HEIC lorsque le navigateur sait les décoder ; une conversion
+  impossible produit une erreur explicite.
+- La limite de 5 Mo est interprétée prudemment comme 5 000 000 octets. La
+  validation avertit lorsque le petit côté du visage détecté est ≤ 400 px,
+  seuil indicatif mentionné par Zyla.
+- Le backend conserve ensuite le JPEG octet pour octet s’il est déjà conforme.
+- Le paramètre local `?photoDiagnostics` révèle un volet « Détails techniques de la photo » :
+  résolution du flux, maximum annoncé par le navigateur lorsqu'il existe,
+  résolution native capturée, recadrage, dimensions JPEG, poids, qualité et réduction.
+  Ces métriques ne prouvent pas l'accès à la résolution physique absolue du capteur
+  et ne sont pas enregistrées en backend. La résolution demandée n'est jamais
+  qualifiée de résolution maximale physiquement atteinte.
+
+## Contrôle sur appareils réels
+
+- Photographier la même personne dans les mêmes conditions via SkinView et l'appareil photo natif.
+- Comparer les dimensions de l'image brute (avant crop) et les détails fins à
+  100 % : pores, texture, ridules, sans filtres de beauté.
+- Tester Safari iOS récent, Android Chrome, et le parcours « appareil photo natif »
+  après indisponibilité/échec de `takePhoto()`.
+- Vérifier que les deux prises de vue respectent le contrat Zyla (JPEG, 5 Mo,
+  dimensions 201 à 4095 px) et que les erreurs de capture ne génèrent aucune frame vidéo.
