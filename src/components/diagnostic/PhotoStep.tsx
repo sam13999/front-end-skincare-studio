@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { AlertCircle, Camera, Check, CheckCircle2, Loader2, Upload } from "lucide-react";
 import { GuidedCamera } from "./GuidedCamera";
-import type { NativeCaptureDiagnostics } from "./cameraCapture";
+import { encodeJpegWithinLimit, readBlobAsDataUrl, type NativeCaptureDiagnostics } from "./cameraCapture";
 import {
   ACCEPTED_FILE_TYPES,
   createRejectedResult,
@@ -83,25 +83,72 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
   }, [onPhotoChange, rejectUnexpectedError, type]);
 
   const handleFile = useCallback((file: File) => {
+    const preparationId = ++validationIdRef.current;
+    setPreview(null);
+    setQuality("none");
+    setValidation(null);
     setCaptureDiagnostics(null);
-    const fileIssues = validatePhotoFile(file);
-    if (fileIssues.some((issue) => issue.severity === "critical")) {
-      validationIdRef.current += 1;
-      setPreview(null);
-      setQuality("insufficient");
-      setValidation(createRejectedResult(fileIssues, Math.round(file.size / 1024)));
-      setAnalyzing(false);
-      onPhotoChange(null);
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result;
-      if (typeof result === "string") processPhoto(result, file.size);
-      else rejectUnexpectedError();
-    };
-    reader.onerror = rejectUnexpectedError;
-    reader.readAsDataURL(file);
+    setAnalyzing(true);
+    onPhotoChange(null);
+
+    void (async () => {
+      if (!file.size) throw new Error("empty_image_file");
+      // Keep compliant JPEG bytes unchanged. Normalize only when the provider
+      // would reject its format, dimensions or file size.
+      const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+      let prepared: Blob = file;
+      let jpegQuality: number | null = null;
+      let resizedForByteLimit = false;
+      try {
+        const isJpeg = ["image/jpeg", "image/jpg"].includes(file.type.toLowerCase());
+        const isAlreadyCompliant = isJpeg
+          && file.size <= 5 * 1024 * 1024
+          && Math.max(bitmap.width, bitmap.height) <= 4095;
+        if (!isAlreadyCompliant) {
+          const result = await encodeJpegWithinLimit(
+            bitmap, { x: 0, y: 0, width: bitmap.width, height: bitmap.height },
+          );
+          prepared = result.blob;
+          jpegQuality = result.jpegQuality;
+          resizedForByteLimit = result.resizedForByteLimit;
+        }
+        const preparedFile = new File([prepared], "photo.jpg", { type: "image/jpeg" });
+        const fileIssues = validatePhotoFile(preparedFile);
+        if (fileIssues.some((issue) => issue.severity === "critical")) {
+          if (preparationId === validationIdRef.current) {
+            setQuality("insufficient");
+            setValidation(createRejectedResult(fileIssues, Math.round(prepared.size / 1024)));
+          }
+          return;
+        }
+        const dataUrl = await readBlobAsDataUrl(prepared);
+        if (preparationId !== validationIdRef.current) return;
+        setCaptureDiagnostics({
+          method: "imported-photo",
+          streamWidth: null,
+          streamHeight: null,
+          browserMaxWidth: null,
+          browserMaxHeight: null,
+          requestedMaxResolution: false,
+          sourceWidth: bitmap.width,
+          sourceHeight: bitmap.height,
+          cropWidth: bitmap.width,
+          cropHeight: bitmap.height,
+          outputWidth: jpegQuality === null ? bitmap.width : Math.min(bitmap.width, 4095),
+          outputHeight: jpegQuality === null ? bitmap.height : Math.min(bitmap.height, 4095),
+          jpegQuality,
+          outputBytes: prepared.size,
+          resizedForByteLimit,
+        });
+        void processPhoto(dataUrl, prepared.size);
+      } finally {
+        bitmap.close();
+      }
+    })().catch(() => {
+      if (preparationId === validationIdRef.current) rejectUnexpectedError();
+    }).finally(() => {
+      if (preparationId === validationIdRef.current) setAnalyzing(false);
+    });
   }, [onPhotoChange, processPhoto, rejectUnexpectedError]);
 
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -187,20 +234,24 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
       {preview && captureDiagnostics && (
         <details className="svd-photo-technical">
           <summary>Détails techniques de la photo</summary>
-          <p>Mode : photographie native (aucune image extraite de la vidéo).</p>
+          <p>Mode : {captureDiagnostics.method === "native-photo"
+            ? "photo native SkinView, sans extraction vidéo"
+            : "photo fournie par l’appareil ou la galerie, sans extraction vidéo"}.</p>
           <p>Flux de guidage : {captureDiagnostics.streamWidth ?? "?"} × {captureDiagnostics.streamHeight ?? "?"} px.</p>
           <p>
             Maximum annoncé par le navigateur : {captureDiagnostics.browserMaxWidth !== null
               ? `${captureDiagnostics.browserMaxWidth} × ${captureDiagnostics.browserMaxHeight} px`
               : "non communiqué"}.
-            {" "}Demande de résolution maximale : {captureDiagnostics.requestedMaxResolution ? "oui" : "non (réglages indisponibles ou refusés)"}.
+            {" "}Demande de résolution maximale : {captureDiagnostics.method === "imported-photo"
+              ? "non applicable" : captureDiagnostics.requestedMaxResolution ? "oui" : "non (réglages indisponibles ou refusés)"}.
           </p>
           <p>Photographie native : {captureDiagnostics.sourceWidth} × {captureDiagnostics.sourceHeight} px.</p>
           <p>Zone recadrée : {captureDiagnostics.cropWidth} × {captureDiagnostics.cropHeight} px.</p>
           <p>
             JPEG final : {captureDiagnostics.outputWidth} × {captureDiagnostics.outputHeight} px,
             {" "}{(captureDiagnostics.outputBytes / (1024 * 1024)).toFixed(2)} Mo,
-            {" "}qualité {Math.round(captureDiagnostics.jpegQuality * 100)} %.
+            {" "}qualité {captureDiagnostics.jpegQuality === null
+              ? "du fichier original, non réencodé" : `${Math.round(captureDiagnostics.jpegQuality * 100)} %`}.
           </p>
           <p>
             Réduction supplémentaire pour respecter 5 Mo : {captureDiagnostics.resizedForByteLimit ? "oui" : "non"}.
