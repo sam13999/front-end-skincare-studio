@@ -27,3 +27,14 @@ jobs:
         run: npx tsc --noEmit -p tsconfig.app.json
       - name: Production build
         run: npm run build
+
+      - name: Install Chromium for dashboard checks
+        run: npx playwright install --with-deps chromium
+      - name: Dashboard desktop and mobile
+        run: npm run test:mobile
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dashboard-mobile-demo
+          path: test-results/
+          retention-days: 14

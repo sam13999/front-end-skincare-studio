@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import ReportEditor from "@/components/admin/ReportEditor";
+import RouteDiagnostics from "@/components/admin/RouteDiagnostics";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -491,6 +492,7 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
       </div>}
 
       {tab === "analysis" && <div className="space-y-4">
+        <RouteDiagnostics token={token} sessionId={summary.session_id} diagnostics={detail.analysis.routine_diagnostics} onSaved={onRefresh} />
         {detail.analysis.photo_evidence_limit && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           {String((detail.analysis.photo_evidence_limit as { message?: string }).message || "Preuves photographiques limitées.")}
           <span className="ml-1">({String((detail.analysis.photo_evidence_limit as { available_count?: number }).available_count ?? "?")} signal(s) admissible(s))</span>

@@ -71,6 +71,7 @@ export interface AdminDetailResponse {
   analysis: Record<string, unknown> & {
     zyla_raw?: unknown;
     zyla_normalized?: unknown;
+    routine_diagnostics?: RoutineDiagnostics;
     zyla_maps?: Array<{ photo: string; name: string }>;
   };
   prompts: Record<string, PromptRun[]>;
@@ -311,3 +312,55 @@ export async function fetchRoutineCandidatePdf(token: string, sessionId: string,
   if (!response.ok) throw new Error("Aperçu de la proposition indisponible.");
   return response.blob();
 }
+
+export interface RouteDiagnostic {
+  route_id: string;
+  status: "valid" | "needs_correction" | "unavailable";
+  reason?: string;
+  issues: RoutineWarning[];
+  missing_required_levers: string[];
+  attempts: Array<{ method: string; error?: string; validation?: { status: string; issues?: RoutineWarning[] } }>;
+  levers: Array<{
+    id: string; role: string; required: boolean; needs: string[]; subcategories: string[];
+    moments: RoutineMoment[]; products: Array<{ id: string; name: string }>;
+    excluded?: Array<{ id: string; name?: string; reason: string; representative?: string }>;
+    outside_requested_subcategories?: number;
+  }>;
+}
+
+export interface RoutineDiagnostics {
+  routes: RouteDiagnostic[];
+  files: string[];
+  shortlist_issues: RoutineWarning[];
+}
+
+export interface RouteSchedule {
+  cadence: "daily" | "weekly" | "as_needed";
+  initial_per_week: number; maximum_per_week: number; replaces_product_id: string;
+  days: number[]; excluded_days: number[]; alternate_with: string[]; pair_with: string[];
+}
+export interface RouteLine {
+  id_produit: string; levier_id: string; moment: RoutineMoment; schedule: RouteSchedule; reason: string;
+}
+export interface RouteEditorData {
+  review_revision: string; route_id: string; editable: boolean; status: RouteDiagnostic["status"];
+  levers: Array<{ levier_id: string; role: string; moments: RoutineMoment[]; besoins_couverts: string[] }>;
+  products: Array<{ id: string; name: string; brand?: string; subcategory: string; moments: RoutineMoment[] }>;
+  items: RouteLine[]; draft_revision: string | null; history: string[]; issues: RoutineWarning[];
+  candidate?: RoutineCandidate | null;
+}
+
+const routeEditorPath = (sessionId: string, routeId: string) =>
+  `${routinePath(sessionId)}/routes/${encodeURIComponent(routeId)}`;
+export const fetchRouteEditor = (token: string, sessionId: string, routeId: string) =>
+  adminFetch<RouteEditorData>(token, routeEditorPath(sessionId, routeId), { cache: "no-store" });
+export const saveRouteEditor = (token: string, sessionId: string, routeId: string, data: {
+  expected_revision: string; draft_revision: string | null; items: RouteLine[];
+  arbitrate: boolean; restore_revision?: string;
+}) => adminFetch<{
+  id: string; items: RouteLine[];
+  validation: { status: string; issues: RoutineWarning[] };
+  candidate?: RoutineCandidate; arbitration_error?: string;
+}>(token, routeEditorPath(sessionId, routeId), {
+  method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data),
+});
