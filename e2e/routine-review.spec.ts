@@ -74,12 +74,12 @@ test("réviser une stratégie conservée et contrôler ses étapes", async ({ pa
   await page.getByText("route_1 · À corriger", { exact: true }).click();
   await expect(page.getByText("Créneau initial à corriger. La stratégie reste disponible.", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Modifier cette stratégie" }).click();
-  await page.getByLabel("Produit", { exact: true }).selectOption("alternative");
-  await page.getByLabel("Moment", { exact: true }).selectOption("soir");
+  await page.getByRole("combobox", { name: "Produit", exact: true }).selectOption("alternative");
+  await page.getByRole("combobox", { name: "Moment", exact: true }).selectOption("soir");
   await page.getByLabel("Applications initiales par semaine").fill("2");
   await page.getByRole("button", { name: "Ajouter une étape" }).click();
-  await page.getByLabel("Produit", { exact: true }).nth(1).selectOption("support");
-  await page.getByLabel("Moment", { exact: true }).nth(1).selectOption("matin");
+  await page.getByRole("combobox", { name: "Produit", exact: true }).nth(1).selectOption("support");
+  await page.getByRole("combobox", { name: "Moment", exact: true }).nth(1).selectOption("matin");
   await page.getByLabel("Justification de la sélection").nth(1).fill("Fonction complémentaire documentée");
   await page.getByRole("button", { name: "Enregistrer et vérifier" }).click();
   await expect(page.getByText("Brouillon enregistré et contrôlé.")).toBeVisible();
@@ -92,5 +92,5 @@ test("réviser une stratégie conservée et contrôler ses étapes", async ({ pa
   expect(overflow).toBe(false);
   await page.screenshot({ path: testInfo.outputPath("dashboard-revision.png"), fullPage: true });
   await page.getByRole("button", { name: "Supprimer l’étape" }).nth(1).click();
-  await expect(page.getByLabel("Produit", { exact: true })).toHaveCount(1);
+  await expect(page.getByRole("combobox", { name: "Produit", exact: true })).toHaveCount(1);
 });
