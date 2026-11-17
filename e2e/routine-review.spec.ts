@@ -72,7 +72,7 @@ test("réviser une stratégie conservée et contrôler ses étapes", async ({ pa
   await page.getByRole("button", { name: "Analyse", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Filtrage et validation des routines" })).toBeVisible();
   await page.getByText("route_1 · À corriger", { exact: true }).click();
-  await expect(page.getByText("Créneau initial à corriger. La stratégie reste disponible.")).toBeVisible();
+  await expect(page.getByText("Créneau initial à corriger. La stratégie reste disponible.", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Modifier cette stratégie" }).click();
   await page.getByLabel("Produit", { exact: true }).selectOption("alternative");
   await page.getByLabel("Moment", { exact: true }).selectOption("soir");
