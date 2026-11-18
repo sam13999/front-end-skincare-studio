@@ -6,7 +6,7 @@ import RoutineEditor from "./RoutineEditor";
 
 vi.mock("@/lib/adminApi", () => ({
   routineMoments: ["matin", "soir", "hebdomadaire"],
-  fetchRoutine: vi.fn(), saveFrequencyDraft: vi.fn(), saveFrequencies: vi.fn(), rerunPrompt4: vi.fn(),
+  fetchRoutine: vi.fn(), saveFrequencyDraft: vi.fn(), discardFrequencyDraft: vi.fn(), saveFrequencies: vi.fn(), rerunPrompt4: vi.fn(),
   decideRoutineCandidate: vi.fn(), fetchAdminArtifact: vi.fn(), fetchRoutineCandidatePdf: vi.fn(),
 }));
 vi.mock("./PdfPreview", () => ({ default: () => <p>Aperçu PDF chargé</p> }));
@@ -92,6 +92,11 @@ describe("Révision de la routine", () => {
     expect(morning.value).toBe("6");
     expect(api.saveFrequencies).not.toHaveBeenCalled();
     expect(api.saveFrequencyDraft).toHaveBeenCalledOnce();
+    vi.mocked(api.discardFrequencyDraft).mockResolvedValue({ review_revision: initial });
+    fireEvent.click(button("Abandonner le brouillon"));
+    await screen.findByText("Brouillon abandonné. Le rapport actif est conservé.");
+    expect(morning.value).toBe("7");
+    expect(api.discardFrequencyDraft).toHaveBeenCalledWith("test", "session", initial, "00000001");
   });
 
   it("affiche le rejet API et garde la saisie", async () => {
