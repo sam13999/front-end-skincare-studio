@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   decideRoutineCandidate, fetchAdminArtifact, fetchRoutine, fetchRoutineCandidatePdf,
-  rerunPrompt4, routineMoments, saveFrequencies,
+  rerunPrompt4, routineMoments, saveFrequencies, saveFrequencyDraft, discardFrequencyDraft,
   type FrequencyPlan, type RoutineFrequency, type RoutineMoment, type RoutineView, type RoutineWarning,
 } from "@/lib/adminApi";
 
@@ -67,7 +67,11 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
 
   function install(result: RoutineView) {
     setView(result);
-    setPlans(schedules(result));
+    const next = schedules(result);
+    if (result.frequency_draft && !result.frequency_draft.applied) {
+      for (const change of result.frequency_draft.changes) next[change.id_produit] = change.moments;
+    }
+    setPlans(next);
   }
 
   useEffect(() => {
@@ -201,6 +205,27 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
           </fieldset>
         </details>;
       })}
+      <button type="button" className="action-button min-h-11" disabled={disabled || !changes.length || !changes.every(change =>
+        Object.values(change.moments).every(plan => Number.isInteger(plan.initial_per_week) && Number.isInteger(plan.maximum_per_week)
+          && plan.initial_per_week >= 0 && plan.initial_per_week <= 7 && plan.maximum_per_week >= 0 && plan.maximum_per_week <= 7))}
+        onClick={() => run("Enregistrement du brouillon…", async () => {
+          const draft = await saveFrequencyDraft(token, sessionId, view.review_revision,
+            view.frequency_draft?.id || null, changes);
+          setView({ ...view, frequency_draft: draft });
+          setNotice("Brouillon enregistré. Le rapport actif reste inchangé ; corrigez les anomalies avant de l’appliquer.");
+          onSaved();
+        })}>Enregistrer le brouillon</button>
+      {view.frequency_draft && !view.frequency_draft.applied && <>
+        <p className="text-sm">Brouillon conservé · {view.frequency_draft.validation.status === "ok" ? "Prêt à appliquer" : "À corriger"}. L’approbation reste suspendue tant qu’il n’est pas appliqué.</p>
+        <Warnings issues={view.frequency_draft.validation.issues} />
+        <button type="button" className="action-button min-h-11" disabled={disabled}
+          onClick={() => run("Abandon du brouillon…", async () => {
+            await discardFrequencyDraft(token, sessionId, view.review_revision, view.frequency_draft!.id);
+            await reload(view.review_revision);
+            onSaved();
+            setNotice("Brouillon abandonné. Le rapport actif est conservé.");
+          })}>Abandonner le brouillon</button>
+      </>}
       <button type="button" className="primary-button disabled:opacity-50" disabled={disabled || !changes.length || !valid}
         onClick={() => run("Reconstruction HTML/PDF…", async () => {
           const saved = await saveFrequencies(token, sessionId, view.review_revision, changes);
@@ -208,8 +233,8 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
           setPreview(null);
           onSaved();
           await reload(saved.review_revision);
-        })}>Enregistrer les fréquences</button>
-      {!!changes.length && !valid && <p className="text-sm text-amber-900">Conservez au moins un créneau valide par produit.</p>}
+        })}>Appliquer et reconstruire</button>
+      {!!changes.length && !valid && <p className="text-sm text-amber-900">Vous pouvez enregistrer ce brouillon. Corrigez les fréquences avant de l’appliquer.</p>}
     </section>
 
     <section className="space-y-3 rounded-xl border p-3">

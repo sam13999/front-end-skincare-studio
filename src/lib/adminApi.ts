@@ -257,9 +257,15 @@ export interface RoutineCandidate {
   texts_to_review: string[];
   stale: boolean;
 }
+export interface FrequencyDraft {
+  id: string; base_revision: string; applied: boolean;
+  changes: Array<{ id_produit: string; moments: Partial<Record<RoutineMoment, FrequencyPlan>> }>;
+  validation: { status: string; issues: RoutineWarning[] };
+}
 export interface RoutineView {
   review_revision: string;
   active_version: number | null;
+  frequency_draft?: FrequencyDraft | null;
   source: "initial" | "prompt_4";
   adjusted_products: string[];
   route_id: string;
@@ -300,6 +306,13 @@ function routinePost<T>(token: string, sessionId: string, action: string, revisi
 export const saveFrequencies = (token: string, sessionId: string, revision: string,
   changes: Array<{ id_produit: string; moments: Partial<Record<RoutineMoment, FrequencyPlan>> }>) =>
   routinePost<{ review_revision: string }>(token, sessionId, "frequencies", revision, { changes });
+export const saveFrequencyDraft = (token: string, sessionId: string, revision: string,
+  draftRevision: string | null, changes: FrequencyDraft["changes"]) =>
+  routinePost<FrequencyDraft>(token, sessionId, "frequencies/draft", revision,
+    { changes, draft_revision: draftRevision });
+export const discardFrequencyDraft = (token: string, sessionId: string, revision: string, draftRevision: string) =>
+  routinePost<{ review_revision: string }>(token, sessionId, "frequencies/draft/discard", revision,
+    { draft_revision: draftRevision });
 export const rerunPrompt4 = (token: string, sessionId: string, revision: string, routeId: string | null) =>
   routinePost<RoutineCandidate>(token, sessionId, "prompt4", revision, { route_id: routeId });
 export const decideRoutineCandidate = (token: string, sessionId: string, revision: string, candidateId: string, accept: boolean) =>

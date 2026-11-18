@@ -6,7 +6,7 @@ import RoutineEditor from "./RoutineEditor";
 
 vi.mock("@/lib/adminApi", () => ({
   routineMoments: ["matin", "soir", "hebdomadaire"],
-  fetchRoutine: vi.fn(), saveFrequencies: vi.fn(), rerunPrompt4: vi.fn(),
+  fetchRoutine: vi.fn(), saveFrequencyDraft: vi.fn(), discardFrequencyDraft: vi.fn(), saveFrequencies: vi.fn(), rerunPrompt4: vi.fn(),
   decideRoutineCandidate: vi.fn(), fetchAdminArtifact: vi.fn(), fetchRoutineCandidatePdf: vi.fn(),
 }));
 vi.mock("./PdfPreview", () => ({ default: () => <p>Aperçu PDF chargé</p> }));
@@ -62,7 +62,7 @@ describe("Révision de la routine", () => {
     const excluded = product.getByText("Jours à exclure").closest("fieldset")!;
     fireEvent.click(within(excluded).getByLabelText("Lun"));
     fireEvent.change(product.getByLabelText("Exfoliant"), { target: { value: "alternate_with" } });
-    fireEvent.click(button("Enregistrer les fréquences"));
+    fireEvent.click(button("Appliquer et reconstruire"));
     await screen.findByText("Fréquences enregistrées. Le rapport attend votre validation.");
     expect(api.saveFrequencies).toHaveBeenCalledWith("test", "session", initial, [{
       id_produit: "serum", moments: { soir: {
@@ -74,13 +74,38 @@ describe("Révision de la routine", () => {
     expect(await screen.findByText("Ajusté")).toBeInTheDocument();
   });
 
+  it("conserve un calendrier incohérent en brouillon et affiche ses anomalies", async () => {
+    vi.mocked(api.saveFrequencyDraft).mockResolvedValue({ id: "00000001", base_revision: initial,
+      applied: false, changes: [], validation: { status: "fail", issues: [
+        { code: "calendar", message: "Le maximum est inférieur à la fréquence initiale." },
+      ] } });
+    const { container } = renderEditor();
+    await screen.findByText("Vérifier les 12 applications.");
+    const morning = container.querySelector<HTMLInputElement>("input[type=number]")!;
+    fireEvent.change(morning, { target: { value: "6" } });
+    const maximum = container.querySelectorAll<HTMLInputElement>("input[type=number]")[1];
+    fireEvent.change(maximum, { target: { value: "2" } });
+    expect(button("Appliquer et reconstruire")).toBeDisabled();
+    expect(button("Enregistrer le brouillon")).toBeEnabled();
+    fireEvent.click(button("Enregistrer le brouillon"));
+    await screen.findByText("Le maximum est inférieur à la fréquence initiale.");
+    expect(morning.value).toBe("6");
+    expect(api.saveFrequencies).not.toHaveBeenCalled();
+    expect(api.saveFrequencyDraft).toHaveBeenCalledOnce();
+    vi.mocked(api.discardFrequencyDraft).mockResolvedValue({ review_revision: initial });
+    fireEvent.click(button("Abandonner le brouillon"));
+    await screen.findByText("Brouillon abandonné. Le rapport actif est conservé.");
+    expect(morning.value).toBe("7");
+    expect(api.discardFrequencyDraft).toHaveBeenCalledWith("test", "session", initial, "00000001");
+  });
+
   it("affiche le rejet API et garde la saisie", async () => {
     vi.mocked(api.saveFrequencies).mockRejectedValue(new Error("La version a changé."));
     const { container } = renderEditor();
     await screen.findByText("Vérifier les 12 applications.");
     const morning = container.querySelector<HTMLInputElement>("input[type=number]")!;
     fireEvent.change(morning, { target: { value: "6" } });
-    fireEvent.click(button("Enregistrer les fréquences"));
+    fireEvent.click(button("Appliquer et reconstruire"));
     expect(await screen.findByRole("alert")).toHaveTextContent("La version a changé.");
     expect(morning.value).toBe("6");
     expect(screen.queryByText(/Fréquences enregistrées/)).not.toBeInTheDocument();
