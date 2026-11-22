@@ -6,11 +6,29 @@ import * as api from "@/lib/adminApi";
 vi.mock("./PdfPreview", () => ({ default: () => <div aria-label="Aperçu PDF actualisé">Lecteur PDF</div> }));
 
 vi.mock("@/lib/adminApi", () => ({
-  fetchReportEditing: vi.fn(), saveReportText: vi.fn(), fetchAdminArtifact: vi.fn(),
+  fetchReportEditing: vi.fn(), saveReportText: vi.fn(), fetchAdminArtifact: vi.fn(() => Promise.resolve(new Blob(["HTML"]))),
   saveReportCrop: vi.fn(), fetchOriginalZoom: vi.fn(), revertReport: vi.fn(),
 }));
 
 describe("ReportEditor", () => {
+  it("organise les textes par chapitres et garde une suppression facultative entre deux chapitres", async () => {
+    const fields = [
+      { path: ["overview", "summary_sentence"], label: "Résumé", section: "overview", section_id: "glance", value: "Texte photo" },
+      { path: ["strategy", "advice"], label: "Conseil de démarrage", section: "strategy", section_id: "why", optional: true, value: "Phrase facultative" },
+    ];
+    vi.mocked(api.fetchReportEditing).mockResolvedValue({ review_revision: "a".repeat(64), zooms: [], history: [], fields });
+    vi.mocked(api.saveReportText).mockResolvedValue({ review_revision: "b".repeat(64) });
+    render(<ReportEditor token="admin" sessionId="session" onSaved={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "La stratégie SkinView" }));
+    fireEvent.click(screen.getByRole("button", { name: "Masquer ce bloc" }));
+    fireEvent.click(screen.getByRole("button", { name: "Votre peau en un coup d’œil" }));
+    fireEvent.click(screen.getByRole("button", { name: "La stratégie SkinView" }));
+    expect(screen.getByLabelText("Conseil de démarrage")).toHaveValue("");
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer et reconstruire HTML/PDF" }));
+    await waitFor(() => expect(api.saveReportText).toHaveBeenCalledWith("admin", "session", "a".repeat(64), [
+      { path: ["strategy", "advice"], value: "" },
+    ]));
+  });
   it("explique le bouton inactif quand aucun texte n'a changé", async () => {
     vi.mocked(api.fetchReportEditing).mockResolvedValue({ review_revision: "a".repeat(64), zooms: [], history: [], fields: [
       { path: ["overview", "summary_sentence"], label: "Résumé", section: "overview", value: "Initial" },
@@ -45,7 +63,7 @@ describe("ReportEditor", () => {
     fireEvent.change(await screen.findByLabelText("Stratégie"), { target: { value: "Nouveau" } });
     fireEvent.click(screen.getByRole("button", { name: "Enregistrer et reconstruire HTML/PDF" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("objectif incohérent");
-    expect(api.fetchAdminArtifact).not.toHaveBeenCalled();
+    expect(vi.mocked(api.fetchAdminArtifact).mock.calls.some(([, , kind]) => kind === "pdf")).toBe(false);
   });
   it("borne le voile à la photo et garde historique et aperçu utilisables après recadrage", async () => {
     const editing = { review_revision: "c".repeat(64),
