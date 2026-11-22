@@ -237,17 +237,24 @@ export default function ReportEditor({ token, sessionId, onSaved }: { token: str
         {currentField && <section className={`rounded-xl border bg-white p-3 sm:p-5 ${view === "apercu" ? "hidden lg:block" : ""}`}>
           <label className="block text-sm font-semibold" htmlFor="report-field">{currentField.label}</label>
           {currentField.context && <p className="text-sm text-slate-600">{currentField.context}</p>}
-          <textarea id="report-field" ref={editor} className="mt-2 block min-h-28 w-full resize-y rounded-lg border border-slate-300 p-3 text-base"
+          <textarea id="report-field" ref={editor} disabled={busy} className="mt-2 block min-h-28 w-full resize-y rounded-lg border border-slate-300 p-3 text-base"
             value={values[fieldKey(currentField)] ?? ""} onChange={e => setValues(current => ({ ...current, [fieldKey(currentField)]: e.target.value }))} />
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" className="action-button min-h-11" disabled={busy || values[fieldKey(currentField)] === currentField.value}
               onClick={() => setValues(current => ({ ...current, [fieldKey(currentField)]: currentField.value }))}>Annuler la modification</button>
+            {currentField.original_value !== undefined && currentField.original_value !== currentField.value &&
+              <button type="button" className="action-button min-h-11" disabled={busy} onClick={() =>
+                setValues(current => ({ ...current, [fieldKey(currentField)]: currentField.original_value! }))}>Restaurer le texte initial</button>}
             {currentField.optional && <button type="button" className="action-button min-h-11" disabled={busy || values[fieldKey(currentField)] === ""}
               onClick={() => setValues(current => ({ ...current, [fieldKey(currentField)]: "" }))}>Masquer ce bloc</button>}
             {data.history.length > 0 && <button type="button" className="action-button min-h-11" disabled={busy}
               onClick={() => restore(0)}>Restaurer le rapport initial</button>}
           </div>
           {currentField.path[0] === "report" && currentField.path[1] === "disclaimer" && <p className="mt-2 text-sm text-amber-800">Mention légale obligatoire.</p>}
+          {currentField.original_value !== undefined && currentField.original_value !== currentField.value &&
+            <details className="mt-3 text-sm"><summary className="cursor-pointer">Comparer au texte initial</summary>
+              <p className="mt-2 whitespace-pre-wrap rounded bg-slate-50 p-3">{currentField.original_value || "(champ initialement vide)"}</p>
+            </details>}
         </section>}
         <div className="sticky bottom-2 z-10 rounded-xl border bg-white p-3 shadow-lg">
           <button type="button" className="primary-button min-h-11 disabled:opacity-50" disabled={busy || !hasTextChanges} onClick={save}>{busy ? "Reconstruction HTML/PDF…" : "Enregistrer et reconstruire HTML/PDF"}</button>
