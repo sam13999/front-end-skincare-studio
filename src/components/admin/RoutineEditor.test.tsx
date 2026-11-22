@@ -45,12 +45,34 @@ describe("Révision de la routine", () => {
     vi.mocked(api.fetchRoutine).mockResolvedValue(makeView());
   });
 
+  it("enregistre sept soirs distincts avec récupération et repos minimal", async () => {
+    const view = makeView();
+    view.products[0].moments.soir = { initial_per_week: 1, maximum_per_week: 2 };
+    vi.mocked(api.fetchRoutine).mockResolvedValue(view);
+    vi.mocked(api.saveFrequencies).mockResolvedValue({ review_revision: revised });
+    renderEditor();
+    const initial = await screen.findByRole("combobox", { name: "Sam · départ" });
+    expect(screen.getAllByRole("combobox", { name: /· départ/ })).toHaveLength(7);
+    expect(screen.getAllByRole("combobox", { name: /· progression/ })).toHaveLength(7);
+    fireEvent.change(initial, { target: { value: "rest" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Dim · départ" }), { target: { value: "recovery" } });
+    fireEvent.click(screen.getByRole("button", { name: "Appliquer et reconstruire" }));
+    await waitFor(() => expect(api.saveFrequencies).toHaveBeenCalled());
+    const plan = vi.mocked(api.saveFrequencies).mock.calls[0][4];
+    expect(plan?.initial.map(night => night.status)).toEqual(["active", "recovery", "recovery", "recovery", "recovery", "rest", "recovery"]);
+    expect(plan?.progressed.filter(night => night.status === "active")).toHaveLength(2);
+    expect(plan?.progressed.filter(night => night.status === "recovery")).toHaveLength(4);
+    expect(plan?.progressed.filter(night => night.status === "rest")).toHaveLength(1);
+  });
+
   it("enregistre les fréquences, les exclusions et l’alternance entre créneaux", async () => {
     vi.mocked(api.saveFrequencies).mockResolvedValue({ review_revision: revised });
-    const view = makeView();
+    const baseline = makeView();
+    baseline.products[0].moments.soir = { initial_per_week: 7, maximum_per_week: 7 };
+    const view = structuredClone(baseline);
     view.review_revision = revised;
     view.adjusted_products = ["serum"];
-    vi.mocked(api.fetchRoutine).mockResolvedValueOnce(makeView()).mockResolvedValueOnce(view);
+    vi.mocked(api.fetchRoutine).mockResolvedValueOnce(baseline).mockResolvedValueOnce(view);
     const { container } = renderEditor();
     await screen.findByText("Vérifier les 12 applications.");
     const product = within(Array.from(container.querySelectorAll("details")).find(
@@ -69,7 +91,7 @@ describe("Révision de la routine", () => {
         initial_per_week: 3, maximum_per_week: 4, days: [], excluded_days: [0],
         alternate_with: ["exfol"], pair_with: [], progression: "",
       } },
-    }]);
+    }], undefined);
     expect(api.rerunPrompt4).not.toHaveBeenCalled();
     expect(await screen.findByText("Ajusté")).toBeInTheDocument();
   });
