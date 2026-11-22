@@ -73,6 +73,12 @@ test("édite un rapport et ses sept soirs sur mobile et ordinateur", async ({ pa
   await expect(page.getByRole("navigation", { name: "Chapitres du rapport" })).toBeVisible();
   await page.getByRole("button", { name: "La stratégie SkinView" }).click();
   await expect(page.getByLabel("Conseil de démarrage")).toBeVisible();
+  await page.getByRole("button", { name: "Page de couverture" }).click();
+  await page.getByText("Aperçu HTML du rapport complet").click();
+  await page.frameLocator('iframe[title="Aperçu HTML du rapport"]')
+    .locator('[data-slot="strategy.advice"]').click();
+  await expect(page.getByLabel("Conseil de démarrage")).toBeVisible();
+  await page.getByText("Aperçu HTML du rapport complet").click();
   await page.screenshot({ path: testInfo.outputPath("edition-rapport.png"), fullPage: true });
   await page.getByRole("button", { name: "Masquer ce bloc" }).click();
   await page.getByRole("button", { name: "Votre peau en un coup d’œil" }).click();
