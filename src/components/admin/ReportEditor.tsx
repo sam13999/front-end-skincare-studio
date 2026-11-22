@@ -187,10 +187,12 @@ export default function ReportEditor({ token, sessionId, onSaved }: { token: str
     const doc = frame.contentDocument;
     if (!doc || !data) return;
     doc.addEventListener("click", event => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      const slot = target.closest("[data-slot]")?.getAttribute("data-slot");
-      const value = target.textContent?.trim();
+      // The preview lives in a separate window: parent-window instanceof Element fails.
+      const target = event.target as Node | null;
+      if (!target || target.nodeType !== 1) return;
+      const element = target as Element;
+      const slot = element.closest("[data-slot]")?.getAttribute("data-slot");
+      const value = element.textContent?.trim();
       const match = data.fields.find(field =>
         (slot && field.path.join(".") === slot) ||
         (value && value.length > 8 && field.value.trim() === value));
