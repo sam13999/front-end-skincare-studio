@@ -102,7 +102,7 @@ export interface ZylaDetection {
 export interface ReportEditing {
   detections?: ZylaDetection[];
   fields: Array<{ path: EditPath; label: string; section: string; section_id?: string;
-    context?: string; optional?: boolean; value: string }>;
+    context?: string; optional?: boolean; value: string; original_value?: string }>;
   zooms: Array<{ signal_id: string; source_photo: string; crop_box: number[]; crop_method: string; source_width: number; source_height: number; title: string }>;
   history: Array<{ revision: number; action: string; reason: string; snapshot: string }>;
   review_revision: string;
