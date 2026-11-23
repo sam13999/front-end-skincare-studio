@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   decideRoutineCandidate, fetchAdminArtifact, fetchRoutine, fetchRoutineCandidatePdf,
-  rerunPrompt4, routineMoments, saveFrequencies, saveFrequencyDraft, discardFrequencyDraft,
+  rerunPrompt4, routineMoments, saveFrequencies, saveFrequencyDraft, discardFrequencyDraft, saveApplicationOrder,
   type FrequencyPlan, type RoutineFrequency, type RoutineMoment, type RoutineView, type RoutineWarning,
   type WeeklyPlan, type WeeklyNight,
 } from "@/lib/adminApi";
@@ -131,6 +131,7 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
   const [view, setView] = useState<RoutineView | null>(null);
   const [plans, setPlans] = useState<Plans>({});
   const [week, setWeek] = useState<WeeklyPlan | null>(null);
+  const [order, setOrder] = useState<Record<RoutineMoment, string[]>>({ matin: [], soir: [], hebdomadaire: [] });
   const [route, setRoute] = useState("");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -140,6 +141,8 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
 
   function install(result: RoutineView) {
     setView(result);
+    setOrder(result.application_order || Object.fromEntries(routineMoments.map(moment => [moment,
+      result.products.filter(product => product.moments[moment]).map(product => product.id_produit)])) as Record<RoutineMoment, string[]>);
     const next = schedules(result);
     if (result.frequency_draft && !result.frequency_draft.applied) {
       for (const change of result.frequency_draft.changes) next[change.id_produit] = change.moments;
@@ -197,6 +200,7 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
 
   if (!view) return <p role={error ? "alert" : "status"} className="text-sm">{error || "Chargement de la routine…"}</p>;
   const initial = schedules(view);
+  const orderChanged = !!view.application_order && JSON.stringify(order) !== JSON.stringify(view.application_order);
   const weekChanged = !!week && JSON.stringify(week) !== JSON.stringify(view.weekly_plan || suggestedWeek(view));
   const finalPlans = weekChanged && week ? alignWeekDays(view, plans, week) : plans;
   const changes = view.products.flatMap(product => {
@@ -245,6 +249,38 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
         <FrequencySummary rows={view.initial_frequencies} />
       </details>
       <TextsToReview fields={view.texts_to_review} />
+    </section>
+
+    <section className="space-y-3 rounded-xl border border-slate-200 p-3" aria-label="Ordre d’application des produits">
+      <h3 className="font-semibold">Ordre d’application des produits</h3>
+      <p className="text-sm text-slate-700">Déplacez chaque soin avec les boutons. Le produit et sa fréquence restent inchangés.</p>
+      {routineMoments.map(moment => <div key={moment} className="space-y-2">
+        <h4 className="font-medium">{moment === "hebdomadaire" ? "Soins hebdomadaires" : `Routine du ${moment}`}</h4>
+        {!order[moment].length && <p className="text-sm text-slate-500">Aucun produit.</p>}
+        <ol className="space-y-2">{order[moment].map((id, index) => <li key={id} className="flex min-w-0 items-center justify-between gap-2 rounded-lg border bg-white p-2 text-sm">
+          <span className="min-w-0 break-words">{index + 1}. {view.products.find(product => product.id_produit === id)?.name || id}</span>
+          <span className="flex shrink-0 gap-1">
+            {([-1, 1] as const).map(direction => <button key={direction} type="button" className="action-button min-h-11 px-2"
+              aria-label={`${direction === -1 ? "Monter" : "Descendre"} ${view.products.find(product => product.id_produit === id)?.name || id}`}
+              disabled={disabled || index + direction < 0 || index + direction >= order[moment].length}
+              onClick={() => setOrder(current => {
+                const next = [...current[moment]];
+                [next[index], next[index + direction]] = [next[index + direction], next[index]];
+                return { ...current, [moment]: next };
+              })}>{direction === -1 ? "↑" : "↓"}</button>)}
+          </span>
+        </li>)}</ol>
+      </div>)}
+      {orderChanged && <p role="status" className="text-sm text-amber-800">Ordre modifié, non enregistré.</p>}
+      <button type="button" className="primary-button disabled:opacity-50" disabled={disabled || !orderChanged || !!changes.length || weekChanged}
+        onClick={() => run("Reconstruction HTML/PDF…", async () => {
+          const saved = await saveApplicationOrder(token, sessionId, view.review_revision, order);
+          setNotice("Ordre enregistré dans le rapport. La validation humaine reste requise.");
+          setPreview(null);
+          onSaved();
+          await reload(saved.review_revision);
+        })}>Enregistrer l’ordre et reconstruire</button>
+      {(!!changes.length || weekChanged) && orderChanged && <p className="text-sm text-amber-800">Enregistrez d’abord vos changements de fréquence et de calendrier.</p>}
     </section>
 
     <section className="space-y-3">

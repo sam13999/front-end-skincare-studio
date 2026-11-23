@@ -4,6 +4,7 @@ test("édite un rapport et ses sept soirs sur mobile et ordinateur", async ({ pa
   const sessionId = "demo-report";
   let revision = "a".repeat(64);
   let advice = "Introduisez un nouveau soin à la fois.";
+  let morningOrder = ["SPF", "ST005"];
   const summary = () => ({
     session_id: sessionId, display_name: "Rapport de démonstration", first_name: "Anaïs",
     email: "demo@example.test", created_at: "2026-11-22T12:00:00Z", updated_at: "2026-11-22T12:00:00Z",
@@ -48,11 +49,15 @@ test("édite un rapport et ses sept soirs sur mobile et ordinateur", async ({ pa
     else if (path.endsWith("/editing/routine")) result = {
       review_revision: revision, active_version: null, source: "initial", adjusted_products: [],
       route_id: "", initial_route_id: "", initial_frequencies: [], frequencies: [],
-      products: [{ id_produit: "ST028", name: "Geek & Gorgeous – A-Game 5", calendar_role: "corrective", moments: {
+      application_order: { matin: morningOrder, soir: ["ST028", "ST005"], hebdomadaire: [] },
+      products: [{ id_produit: "SPF", name: "Protection solaire", calendar_role: "spf", moments: {
+        matin: { initial_per_week: 7, maximum_per_week: 7 } } },
+        { id_produit: "ST028", name: "Geek & Gorgeous – A-Game 5", calendar_role: "corrective", moments: {
         soir: { initial_per_week: 1, maximum_per_week: 2, days: [], excluded_days: [],
           alternate_with: [], pair_with: [], progression: "" },
       } }, { id_produit: "ST005", name: "Geek & Gorgeous – Stress Less", calendar_role: "soothing",
-        moments: { soir: { initial_per_week: 3, maximum_per_week: 3, days: [], excluded_days: [],
+        moments: { matin: { initial_per_week: 7, maximum_per_week: 7 },
+          soir: { initial_per_week: 3, maximum_per_week: 3, days: [], excluded_days: [],
           alternate_with: [], pair_with: [], progression: "" } } }],
       warnings: [], texts_to_review: [], routes: [], candidate: null, editable: true,
     };
@@ -63,6 +68,13 @@ test("édite un rapport et ses sept soirs sur mobile et ordinateur", async ({ pa
       expect(request.weekly_plan.initial.filter((night: { support_product_ids?: string[] }) =>
         night.support_product_ids?.includes("ST005"))).toHaveLength(3);
       revision = "c".repeat(64);
+      result = { review_revision: revision };
+    } else if (path.endsWith("/editing/routine/order")) {
+      const request = route.request().postDataJSON();
+      expect(request.order.matin).toEqual(["ST005", "SPF"]);
+      expect(request.order.soir).toEqual(["ST028", "ST005"]);
+      morningOrder = request.order.matin;
+      revision = "d".repeat(64);
       result = { review_revision: revision };
     } else if (path.endsWith(`/session/${sessionId}`)) result = {
       summary: summary(), user: { questionnaire: {}, photos: [] }, analysis: {}, prompts: {},
@@ -100,6 +112,11 @@ test("édite un rapport et ses sept soirs sur mobile et ordinateur", async ({ pa
   await page.getByRole("button", { name: "Enregistrer et reconstruire HTML/PDF" }).click();
   await expect(page.getByText(/Nouvelle version générée/)).toBeVisible();
   await page.getByRole("button", { name: "Routine", exact: true }).click();
+  await page.getByRole("button", { name: "Monter Geek & Gorgeous – Stress Less" }).first().click();
+  await expect(page.getByText("Ordre modifié, non enregistré.")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("ordre-produits-mobile.png"), fullPage: true });
+  await page.getByRole("button", { name: "Enregistrer l’ordre et reconstruire" }).click();
+  await expect(page.getByText("Ordre enregistré dans le rapport. La validation humaine reste requise.")).toBeVisible();
   await expect(page.getByRole("combobox", { name: /· départ/ })).toHaveCount(7);
   await page.getByRole("combobox", { name: "Sam · départ" }).selectOption("rest");
   await page.getByRole("combobox", { name: "Dim · départ" }).selectOption("recovery");

@@ -172,11 +172,19 @@ export async function fetchAdminArtifact(token: string, sessionId: string, kind:
   return response.blob();
 }
 
-export async function rerunAdminSession(token: string, sessionId: string, reason?: string): Promise<Record<string, unknown>> {
+export interface RerunPlan {
+  available: boolean; message?: string; full_pipeline_available: boolean;
+  last_validated?: string; resume_from?: string; reused?: string[];
+  recalculated?: string[]; llm_calls?: string[];
+}
+export const fetchRerunPlan = (token: string, sessionId: string) =>
+  adminFetch<RerunPlan>(token, `/v1/admin/session/${encodeURIComponent(sessionId)}/rerun/plan`, { cache: "no-store" });
+
+export async function rerunAdminSession(token: string, sessionId: string, reason?: string, stage: "resume" | "full_pipeline" = "full_pipeline"): Promise<Record<string, unknown>> {
   return adminFetch<Record<string, unknown>>(token, `/v1/admin/session/${encodeURIComponent(sessionId)}/rerun`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ stage: "full_pipeline", reason: reason || null }),
+    body: JSON.stringify({ stage, reason: reason || null }),
   });
 }
 
@@ -289,6 +297,7 @@ export interface RoutineView {
   initial_frequencies: RoutineFrequency[];
   frequencies: RoutineFrequency[];
   products: Array<{ id_produit: string; name: string; calendar_role?: "corrective" | "soothing" | "barrier" | "cleanser" | "spf" | "complement"; allowed_moments?: RoutineMoment[]; moments: Partial<Record<RoutineMoment, Partial<FrequencyPlan>>> }>;
+  application_order?: Record<RoutineMoment, string[]>;
   warnings: RoutineWarning[];
   texts_to_review: string[];
   routes: Array<{
@@ -323,6 +332,9 @@ export const saveFrequencies = (token: string, sessionId: string, revision: stri
   changes: Array<{ id_produit: string; moments: Partial<Record<RoutineMoment, FrequencyPlan>> }>,
   weeklyPlan?: WeeklyPlan) =>
   routinePost<{ review_revision: string }>(token, sessionId, "frequencies", revision, { changes, weekly_plan: weeklyPlan });
+export const saveApplicationOrder = (token: string, sessionId: string, revision: string,
+  order: Record<RoutineMoment, string[]>) =>
+  routinePost<{ review_revision: string }>(token, sessionId, "order", revision, { order });
 export const saveFrequencyDraft = (token: string, sessionId: string, revision: string,
   draftRevision: string | null, changes: FrequencyDraft["changes"]) =>
   routinePost<FrequencyDraft>(token, sessionId, "frequencies/draft", revision,
