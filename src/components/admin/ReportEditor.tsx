@@ -1,7 +1,29 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { fetchAdminArtifact, fetchOriginalZoom, fetchReportEditing, ReportEditing, ZylaDetection,
+import { AdminValidationError, AdminValidationIssue, fetchAdminArtifact, fetchOriginalZoom, fetchReportEditing, ReportEditing, ZylaDetection,
   revertReport, saveReportCrop, saveReportText } from "@/lib/adminApi";
 const PdfPreview = lazy(() => import("./PdfPreview"));
+
+const chapterNames: Record<string, string> = {
+  cover: "Page de couverture", glance: "Votre peau en un coup d’œil",
+  profile: "Votre profil", priorities: "À prioriser / à éviter",
+  goals: "Vos objectifs et repères de suivi", why: "La stratégie SkinView",
+  routine: "Votre routine personnalisée", "products-matin": "Les produits du matin",
+  "products-soir": "Les produits du soir", "products-hebdomadaire": "Soins hebdomadaires",
+  closing: "Conclusion et informations complémentaires",
+};
+const chapterOrder = Object.keys(chapterNames);
+type Field = ReportEditing["fields"][number];
+const fieldKey = (field: Field) => JSON.stringify(field.path);
+function chapter(field: Field): string {
+  if (field.section_id) return field.section_id;
+  const [root, key] = field.path;
+  if (root === "report") return key === "first_name" || key === "signature" ? "cover" : "closing";
+  if (root === "overview") return "glance";
+  if (root === "profile") return "profile";
+  if (root === "strategy") return key === "goals" ? "goals" : key === "prioritize" || key === "avoid" ? "priorities" : "why";
+  if (root === "routine_overview") return key === "follow_up" || key === "conclusion" ? "goals" : "routine";
+  return "products-soir";
+}
 
 type Rect = [number, number, number, number];
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -105,8 +127,16 @@ export default function ReportEditor({ token, sessionId, onSaved }: { token: str
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [issues, setIssues] = useState<AdminValidationIssue[]>([]);
+  const [pageByField, setPageByField] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<Blob | null>(null);
+  const [htmlPreview, setHtmlPreview] = useState("");
+  const [showHtml, setShowHtml] = useState(false);
+  const [chapterId, setChapterId] = useState("");
+  const [selected, setSelected] = useState("");
+  const [view, setView] = useState<"modifier" | "apercu">("modifier");
   const [busy, setBusy] = useState(false);
+  const editor = useRef<HTMLTextAreaElement>(null);
   const key = (path: Array<string | number>) => JSON.stringify(path);
 
   async function load() {
@@ -114,11 +144,23 @@ export default function ReportEditor({ token, sessionId, onSaved }: { token: str
       const result = await fetchReportEditing(token, sessionId);
       setData(result);
       setValues(Object.fromEntries(result.fields.map(field => [key(field.path), field.value])));
-      setError("");
+      const first = [...result.fields].sort((a, b) => chapterOrder.indexOf(chapter(a)) - chapterOrder.indexOf(chapter(b)))[0];
+      setChapterId(current => current || (first ? chapter(first) : "cover"));
+      setSelected(current => current || (first ? fieldKey(first) : ""));
+      setError(""); setIssues([]);
       return result;
     } catch (e) { setError(e instanceof Error ? e.message : "Édition indisponible"); throw e; }
   }
   useEffect(() => { void load().catch(() => {}); }, [token, sessionId]);
+  useEffect(() => {
+    if (!showHtml) return;
+    let alive = true;
+    let url = "";
+    fetchAdminArtifact(token, sessionId, "html").then(blob => {
+      if (alive) { url = URL.createObjectURL(blob); setHtmlPreview(url); }
+    }).catch(() => { if (alive) setHtmlPreview(""); });
+    return () => { alive = false; if (url) URL.revokeObjectURL(url); };
+  }, [token, sessionId, data?.review_revision, showHtml]);
 
   async function refresh(expectedRevision?: string) {
     const current = await load();
@@ -133,11 +175,53 @@ export default function ReportEditor({ token, sessionId, onSaved }: { token: str
     const changes = data.fields.filter(field => values[key(field.path)] !== field.value)
       .map(field => ({ path: field.path, value: values[key(field.path)] }));
     if (!changes.length) { setNotice("Aucun texte modifié. Le cadrage s’enregistre séparément."); return; }
-    setBusy(true); setError("");
+    setBusy(true); setError(""); setIssues([]);
     setNotice("");
     try { const saved = await saveReportText(token, sessionId, data.review_revision, changes); await refresh(saved.review_revision); }
-    catch (e) { setError(e instanceof Error ? e.message : "Correction refusée"); }
+    catch (e) {
+      setError(e instanceof Error ? e.message : "Correction refusée");
+      if (e instanceof AdminValidationError) setIssues(e.issues);
+    }
     finally { setBusy(false); }
+  }
+  function choose(field: Field) {
+    setChapterId(chapter(field)); setSelected(fieldKey(field)); setView("modifier");
+    requestAnimationFrame(() => editor.current?.focus());
+  }
+  function onHtmlLoad(frame: HTMLIFrameElement) {
+    const doc = frame.contentDocument;
+    if (!doc || !data) return;
+    const fields = new Map(data.fields.map(field => [fieldKey(field), field]));
+    const pages: Record<string, string> = {};
+    doc.querySelectorAll<HTMLElement>("[data-edit-path]").forEach(element => {
+      let field: Field | undefined;
+      try { field = fields.get(JSON.stringify(JSON.parse(element.dataset.editPath || ""))); }
+      catch { /* Never guess from the visible text. */ }
+      if (!field) { element.dataset.reviewOnly = "true"; return; }
+      element.style.cursor = "pointer";
+      element.title = `Modifier : ${field.label}`;
+      element.tabIndex = 0;
+      const page = element.closest("[data-sv-panel]")?.querySelector(".sv-foot__n")?.textContent?.trim();
+      if (page && !pages[fieldKey(field)]) pages[fieldKey(field)] = page;
+    });
+    setPageByField(pages);
+    doc.addEventListener("click", event => {
+      const target = event.target as Node | null;
+      if (!target || target.nodeType !== 1) return;
+      const element = (target as Element).closest<HTMLElement>("[data-edit-path]");
+      if (!element) return;
+      let field: Field | undefined;
+      try { field = fields.get(JSON.stringify(JSON.parse(element.dataset.editPath || ""))); }
+      catch { return; }
+      if (!field) return;
+      event.preventDefault();
+      choose(field);
+    });
+    doc.addEventListener("keydown", event => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      const target = event.target as HTMLElement | null;
+      if (target?.dataset.editPath) { event.preventDefault(); target.click(); }
+    });
   }
   async function restore(revision: number) {
     if (!data) return;
@@ -148,26 +232,92 @@ export default function ReportEditor({ token, sessionId, onSaved }: { token: str
   }
 
   if (!data) return <p className="text-sm text-slate-500">{error || "Chargement des sections…"}</p>;
-  const sections = [...new Set(data.fields.map(field => field.section))];
+  const sections = chapterOrder.filter(id => data.fields.some(field => chapter(field) === id));
   const hasTextChanges = data.fields.some(field => values[key(field.path)] !== field.value);
-  return <div className="space-y-5">
-    <p className="text-sm text-slate-600">Corrigez les textes affichés. Les fréquences se modifient dans l’onglet Routine. Chaque enregistrement reconstruit seulement le HTML et le PDF.</p>
-    {sections.map(section => <section key={section} className="rounded-xl border p-4">
-      <h3 className="mb-3 font-semibold capitalize">{section.replace(/_/g, " ")}</h3>
-      <div className="grid gap-3 md:grid-cols-2">{data.fields.filter(field => field.section === section).map(field => <label key={key(field.path)} className="block text-sm font-medium text-slate-700">
-        {field.label} <span className="font-normal text-slate-400">{field.path.filter(x => typeof x === "number").map(x => `#${Number(x) + 1}`).join(" ")}</span>
-        <textarea className="mt-1 block min-h-20 w-full rounded border border-slate-300 p-2 font-normal" value={values[key(field.path)] || ""}
-          onChange={e => setValues(current => ({ ...current, [key(field.path)]: e.target.value }))} />
-      </label>)}</div>
-    </section>)}
-    <button type="button" className="primary-button disabled:opacity-50" disabled={busy || !hasTextChanges} onClick={save}>{busy ? "Reconstruction HTML/PDF…" : "Enregistrer et reconstruire HTML/PDF"}</button>
-    {!hasTextChanges && <p className="text-sm text-slate-500">Modifiez un texte pour activer ce bouton. Les recadrages s’enregistrent séparément.</p>}
-    {data.zooms.length > 0 && <section><h3 className="mb-3 font-semibold">Recadrages photographiques</h3><div className="space-y-3">{data.zooms.map((zoom, index) =>
-      <CropEditor key={`${data.review_revision}-${index}`} token={token} sessionId={sessionId} zoom={zoom} index={index} detections={data.detections || []} revision={data.review_revision} onSaved={refresh} />)}</div></section>}
+  const currentFields = data.fields.filter(field => chapter(field) === chapterId);
+  const currentField = currentFields.find(field => fieldKey(field) === selected) || currentFields[0];
+  const currentPage = currentField && pageByField[fieldKey(currentField)];
+  return <div className="min-w-0 space-y-5">
+    <p className="text-sm text-slate-600">Choisissez un chapitre, puis touchez le texte à corriger. Les fréquences se modifient dans « Routine ».</p>
+    <label className="block text-sm font-semibold lg:hidden">Chapitre du rapport
+      <select className="mt-1 block min-h-11 w-full rounded-lg border bg-white p-2 text-base" value={chapterId}
+        onChange={event => { setChapterId(event.target.value); setSelected(""); }}>
+        {sections.map(id => <option key={id} value={id}>{chapterNames[id]}</option>)}
+      </select>
+    </label>
+    <div className="grid min-w-0 gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]">
+      <nav aria-label="Chapitres du rapport" className="hidden gap-2 lg:flex lg:flex-col">
+        {sections.map(id => <button key={id} type="button" onClick={() => { setChapterId(id); setSelected(""); }}
+          className={`min-h-11 shrink-0 rounded-xl border px-3 py-2 text-left text-sm lg:whitespace-normal ${chapterId === id ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white"}`}>
+          {chapterNames[id]}</button>)}
+      </nav>
+      <div className="min-w-0 space-y-4">
+        <div className="flex gap-2 lg:hidden">
+          <button type="button" className="action-button min-h-11" aria-pressed={view === "apercu"} onClick={() => { setView("apercu"); setShowHtml(true); }}>Aperçu</button>
+          <button type="button" className="action-button min-h-11" aria-pressed={view === "modifier"} onClick={() => setView("modifier")}>Modifier</button>
+        </div>
+        <section className={view === "apercu" ? "block" : "hidden lg:block"}>
+          <details className="rounded-xl border p-3" open={view === "apercu" ? true : undefined} onToggle={e => { if (e.currentTarget.open) setShowHtml(true); }}>
+            <summary className="min-h-11 cursor-pointer font-semibold">Aperçu HTML du rapport complet</summary>
+            {htmlPreview && <iframe title="Aperçu HTML du rapport" sandbox="allow-same-origin" src={htmlPreview} onLoad={e => onHtmlLoad(e.currentTarget)}
+              className="mt-2 h-[70vh] min-h-[400px] w-full rounded-lg border" />}
+          </details>
+        </section>
+        <section className={`min-w-0 rounded-xl border bg-white p-3 sm:p-5 ${view === "apercu" ? "hidden lg:block" : ""}`}>
+          <h3 className="mb-3 text-lg font-semibold">{chapterNames[chapterId] || "Votre rapport"}{currentPage && <span className="ml-2 text-sm font-normal text-slate-500">Page {currentPage}</span>}</h3>
+          <p className="mb-3 text-sm text-slate-500">Touchez un bloc pour ouvrir son édition.</p>
+          <div className="space-y-2">{currentFields.map(field => <button type="button" key={fieldKey(field)}
+            onClick={() => choose(field)} aria-pressed={currentField === field}
+            className={`block min-h-11 w-full rounded-xl border p-3 text-left ${currentField === field ? "border-slate-900 bg-slate-50" : "border-slate-200"}`}>
+            <span className="block text-sm font-semibold">{field.context ? `${field.context} · ` : ""}{field.label}</span>
+            <span className="mt-1 block whitespace-pre-wrap break-words text-sm font-normal text-slate-700">
+              {values[fieldKey(field)] === "" ? "Bloc masqué" : values[fieldKey(field)]}</span>
+          </button>)}</div>
+        </section>
+        {currentField && <section className={`rounded-xl border bg-white p-3 sm:p-5 ${view === "apercu" ? "hidden lg:block" : ""}`}>
+          <p className="text-sm text-slate-500">{chapterNames[chapterId]}{currentPage && ` · Page ${currentPage}`}</p>
+          <label className="block text-sm font-semibold" htmlFor="report-field">{currentField.label}</label>
+          {currentField.context && <p className="text-sm text-slate-600">{currentField.context}</p>}
+          <textarea id="report-field" ref={editor} disabled={busy} className={`mt-2 block w-full resize-y rounded-lg border border-slate-300 p-3 text-base ${(values[fieldKey(currentField)] || "").length < 100 ? "min-h-16" : "min-h-28"}`}
+            value={values[fieldKey(currentField)] ?? ""} onChange={e => setValues(current => ({ ...current, [fieldKey(currentField)]: e.target.value }))} />
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" className="action-button min-h-11" disabled={busy || values[fieldKey(currentField)] === currentField.value}
+              onClick={() => setValues(current => ({ ...current, [fieldKey(currentField)]: currentField.value }))}>Annuler la modification</button>
+            {currentField.original_value !== undefined && currentField.original_value !== currentField.value &&
+              <button type="button" className="action-button min-h-11" disabled={busy} onClick={() =>
+                setValues(current => ({ ...current, [fieldKey(currentField)]: currentField.original_value! }))}>Restaurer le texte initial</button>}
+            {currentField.optional && <button type="button" className="action-button min-h-11" disabled={busy || values[fieldKey(currentField)] === ""}
+              onClick={() => setValues(current => ({ ...current, [fieldKey(currentField)]: "" }))}>Masquer ce bloc</button>}
+            {data.history.length > 0 && <button type="button" className="action-button min-h-11" disabled={busy}
+              onClick={() => restore(0)}>Restaurer le rapport initial</button>}
+          </div>
+          {currentField.path[0] === "report" && currentField.path[1] === "disclaimer" && <p className="mt-2 text-sm text-amber-800">Mention légale obligatoire.</p>}
+          {currentField.original_value !== undefined && currentField.original_value !== currentField.value &&
+            <details className="mt-3 text-sm"><summary className="cursor-pointer">Comparer au texte initial</summary>
+              <p className="mt-2 whitespace-pre-wrap rounded bg-slate-50 p-3">{currentField.original_value || "(champ initialement vide)"}</p>
+            </details>}
+        </section>}
+        <div className="sticky bottom-2 z-10 rounded-xl border bg-white p-3 shadow-lg">
+          <button type="button" className="primary-button min-h-11 disabled:opacity-50" disabled={busy || !hasTextChanges} onClick={save}>{busy ? "Reconstruction HTML/PDF…" : "Enregistrer et reconstruire HTML/PDF"}</button>
+          <p role="status" className="mt-1 text-sm text-slate-600">{hasTextChanges ? "Modifications non enregistrées" : "Modifications enregistrées"}</p>
+          {!hasTextChanges && <p className="text-sm text-slate-500">Modifiez un texte pour activer ce bouton. Les recadrages s’enregistrent séparément.</p>}
+        </div>
+      </div>
+    </div>
+    {data.zooms.length > 0 && <details><summary className="min-h-11 cursor-pointer font-semibold">Recadrages photographiques</summary><div className="space-y-3">{data.zooms.map((zoom, index) =>
+      <CropEditor key={`${data.review_revision}-${index}`} token={token} sessionId={sessionId} zoom={zoom} index={index} detections={data.detections || []} revision={data.review_revision} onSaved={refresh} />)}</div></details>}
     {data.history.length > 0 && <section className="rounded-xl border p-4"><h3 className="font-semibold">Historique des versions</h3><div className="mt-3 space-y-2">{data.history.map(item =>
       <div key={item.revision} className="flex items-center justify-between gap-3 text-sm"><span>Version {item.revision} · {item.reason}</span><button type="button" className="action-button" disabled={busy} onClick={() => restore(item.revision)}>Restaurer</button></div>)}</div></section>}
     {notice && <p className="rounded bg-blue-50 p-3 text-sm text-blue-800">{notice}</p>}
-    {error && <p role="alert" className="rounded bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+    {error && <div role="alert" className="rounded bg-red-50 p-3 text-sm text-red-700">
+      <p>{error}</p>
+      {issues.length > 0 && <ul className="mt-2 space-y-2">{issues.map((issue, index) => {
+        const field = data.fields.find(item => JSON.stringify(item.path) === JSON.stringify(issue.path));
+        return <li key={index}>{field ? <button type="button" className="underline" onClick={() => choose(field)}>
+          Aller à {chapterNames[chapter(field)]} · {field.context ? field.context + " · " : ""}{field.label}
+        </button> : issue.message}</li>;
+      })}</ul>}
+    </div>}
     {preview && <Suspense fallback={<p>Chargement de l’aperçu PDF…</p>}><PdfPreview blob={preview} /></Suspense>}
   </div>;
 }

@@ -88,6 +88,16 @@ export interface AdminDetailResponse {
 }
 
 export type EditPath = Array<string | number>;
+export interface AdminValidationIssue {
+  code: string; message: string; severity: string; path?: EditPath;
+  section_id?: string; field_label?: string;
+}
+export class AdminValidationError extends Error {
+  constructor(message: string, public readonly issues: AdminValidationIssue[]) {
+    super(message);
+    this.name = "AdminValidationError";
+  }
+}
 export interface ZylaDetection {
   id: string;
   source_photo: string;
@@ -101,7 +111,8 @@ export interface ZylaDetection {
 
 export interface ReportEditing {
   detections?: ZylaDetection[];
-  fields: Array<{ path: EditPath; label: string; section: string; value: string }>;
+  fields: Array<{ path: EditPath; label: string; section: string; section_id?: string;
+    context?: string; optional?: boolean; value: string; original_value?: string }>;
   zooms: Array<{ signal_id: string; source_photo: string; crop_box: number[]; crop_method: string; source_width: number; source_height: number; title: string }>;
   history: Array<{ revision: number; action: string; reason: string; snapshot: string }>;
   review_revision: string;
@@ -125,7 +136,9 @@ async function adminFetch<T>(token: string, path: string, init?: RequestInit): P
     const validation = Array.isArray(body?.detail)
       ? body.detail.map((item: { msg?: string }) => item.msg?.replace(/^Value error, /, "")).filter(Boolean).join(" ")
       : "";
-    throw new Error(message || validation || (response.status === 401 ? "Token admin invalide." : "Erreur admin."));
+    const issues = Array.isArray(body?.detail?.issues) ? body.detail.issues as AdminValidationIssue[] : [];
+    const text = message || validation || (response.status === 401 ? "Token admin invalide." : "Erreur admin.");
+    throw issues.length ? new AdminValidationError(text, issues) : new Error(text);
   }
   return body as T;
 }
@@ -240,6 +253,8 @@ export interface FrequencyPlan {
   pair_with: string[];
   progression: string;
 }
+export type WeeklyNight = { status: "active" | "recovery" | "rest"; product_ids: string[]; support_product_ids?: string[] };
+export type WeeklyPlan = { initial: WeeklyNight[]; progressed: WeeklyNight[] };
 export interface RoutineFrequency {
   id_produit: string;
   name: string;
@@ -266,13 +281,14 @@ export interface RoutineView {
   review_revision: string;
   active_version: number | null;
   frequency_draft?: FrequencyDraft | null;
+  weekly_plan?: WeeklyPlan | null;
   source: "initial" | "prompt_4";
   adjusted_products: string[];
   route_id: string;
   initial_route_id: string;
   initial_frequencies: RoutineFrequency[];
   frequencies: RoutineFrequency[];
-  products: Array<{ id_produit: string; name: string; allowed_moments?: RoutineMoment[]; moments: Partial<Record<RoutineMoment, Partial<FrequencyPlan>>> }>;
+  products: Array<{ id_produit: string; name: string; calendar_role?: "corrective" | "soothing" | "barrier" | "cleanser" | "spf" | "complement"; allowed_moments?: RoutineMoment[]; moments: Partial<Record<RoutineMoment, Partial<FrequencyPlan>>> }>;
   warnings: RoutineWarning[];
   texts_to_review: string[];
   routes: Array<{
@@ -304,8 +320,9 @@ function routinePost<T>(token: string, sessionId: string, action: string, revisi
 }
 
 export const saveFrequencies = (token: string, sessionId: string, revision: string,
-  changes: Array<{ id_produit: string; moments: Partial<Record<RoutineMoment, FrequencyPlan>> }>) =>
-  routinePost<{ review_revision: string }>(token, sessionId, "frequencies", revision, { changes });
+  changes: Array<{ id_produit: string; moments: Partial<Record<RoutineMoment, FrequencyPlan>> }>,
+  weeklyPlan?: WeeklyPlan) =>
+  routinePost<{ review_revision: string }>(token, sessionId, "frequencies", revision, { changes, weekly_plan: weeklyPlan });
 export const saveFrequencyDraft = (token: string, sessionId: string, revision: string,
   draftRevision: string | null, changes: FrequencyDraft["changes"]) =>
   routinePost<FrequencyDraft>(token, sessionId, "frequencies/draft", revision,

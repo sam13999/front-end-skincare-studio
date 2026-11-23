@@ -3,6 +3,7 @@ import {
   decideRoutineCandidate, fetchAdminArtifact, fetchRoutine, fetchRoutineCandidatePdf,
   rerunPrompt4, routineMoments, saveFrequencies, saveFrequencyDraft, discardFrequencyDraft,
   type FrequencyPlan, type RoutineFrequency, type RoutineMoment, type RoutineView, type RoutineWarning,
+  type WeeklyPlan, type WeeklyNight,
 } from "@/lib/adminApi";
 
 const PdfPreview = lazy(() => import("./PdfPreview"));
@@ -32,6 +33,77 @@ function schedules(view: RoutineView): Plans {
 const toggle = <T,>(items: T[], value: T, on: boolean) => on ? [...items, value] : items.filter(item => item !== value);
 const control = "block min-h-11 w-full rounded-md border border-slate-300 bg-white px-2 text-base";
 
+function targeted(view: RoutineView) {
+  return view.products.filter(product => product.calendar_role === "corrective"
+    && (product.moments.soir?.initial_per_week ?? 7) > 0
+    && (product.moments.soir?.initial_per_week ?? 7) < 7);
+}
+function supporting(view: RoutineView) {
+  return view.products.filter(product => product.calendar_role !== "corrective"
+    && product.moments.soir && (product.moments.soir.initial_per_week ?? 7) < 7);
+}
+function suggestedWeek(view: RoutineView): WeeklyPlan {
+  const products = targeted(view);
+  const supports = supporting(view);
+  const nights = (progressed: boolean): WeeklyNight[] => {
+    const result: WeeklyNight[] = days.map(() => ({ status: "recovery", product_ids: [], support_product_ids: [] }));
+    for (const product of products) {
+      const schedule = product.moments.soir;
+      const count = (progressed ? schedule?.maximum_per_week : schedule?.initial_per_week) || 0;
+      const allowed = schedule?.days?.length ? schedule.days : [0, 3, 5, 1, 4, 2, 6];
+      let placed = 0;
+      for (const day of allowed) {
+        if (placed >= count) break;
+        if (schedule?.excluded_days?.includes(day)) continue;
+        if (result[day].product_ids.some(id => schedule?.alternate_with?.includes(id)
+          || view.products.find(other => other.id_produit === id)?.moments.soir?.alternate_with?.includes(product.id_produit))) continue;
+        result[day] = { ...result[day], status: "active",
+          product_ids: [...result[day].product_ids, product.id_produit] };
+        placed++;
+      }
+    }
+    const rest = [...result].map((night, index) => ({ night, index })).reverse().find(item => item.night.status === "recovery");
+    if (rest) result[rest.index] = { ...result[rest.index], status: "rest" };
+    for (const product of supports) {
+      const schedule = product.moments.soir;
+      const count = (progressed ? schedule?.maximum_per_week : schedule?.initial_per_week) || 0;
+      const allowed = schedule?.days?.length ? schedule.days : [1, 2, 4, 5, 6, 0, 3];
+      let placed = 0;
+      for (const day of allowed) {
+        if (placed >= count) break;
+        if (schedule?.excluded_days?.includes(day)) continue;
+        const ids = [...result[day].product_ids, ...(result[day].support_product_ids || [])];
+        if (ids.some(id => schedule?.alternate_with?.includes(id))) continue;
+        result[day] = { ...result[day], support_product_ids: [...(result[day].support_product_ids || []), product.id_produit] };
+        placed++;
+      }
+    }
+    return result;
+  };
+  return { initial: nights(false), progressed: nights(true) };
+}
+function alignWeekDays(view: RoutineView, plans: Plans, week: WeeklyPlan): Plans {
+  const next: Plans = { ...plans };
+  for (const product of [...targeted(view), ...supporting(view)]) {
+    const pid = product.id_produit;
+    const plan = plans[pid]?.soir;
+    if (!plan) continue;
+    const selected = days.map((_, index) => index).filter(day =>
+      [week.initial[day], week.progressed[day]].some(night =>
+        night.product_ids.includes(pid) || night.support_product_ids?.includes(pid)));
+    const rest = days.map((_, index) => index).filter(day =>
+      week.initial[day].status === "rest" || week.progressed[day].status === "rest");
+    const excluded = product.calendar_role === "corrective" ?
+      [...new Set([...plan.excluded_days, ...rest])] : plan.excluded_days;
+    const allowed = [...selected];
+    for (let day = 0; allowed.length < (plan.maximum_per_week || 0) && day < 7; day++) {
+      if (!allowed.includes(day) && !excluded.includes(day)) allowed.push(day);
+    }
+    next[pid] = { ...plans[pid], soir: { ...plan, days: allowed.sort(), excluded_days: [...excluded].sort() } };
+  }
+  return next;
+}
+
 function FrequencySummary({ rows }: { rows: RoutineFrequency[] }) {
   return <ul className="space-y-1 text-sm text-slate-700">
     {rows.map(row => <li key={row.id_produit}><strong>{row.name}</strong>{" · "}
@@ -58,6 +130,7 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
 }) {
   const [view, setView] = useState<RoutineView | null>(null);
   const [plans, setPlans] = useState<Plans>({});
+  const [week, setWeek] = useState<WeeklyPlan | null>(null);
   const [route, setRoute] = useState("");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -72,6 +145,15 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
       for (const change of result.frequency_draft.changes) next[change.id_produit] = change.moments;
     }
     setPlans(next);
+    const suggested = suggestedWeek(result);
+    setWeek(result.weekly_plan ? {
+      initial: result.weekly_plan.initial.map((night, day) => ({
+        ...night, support_product_ids: night.support_product_ids ?? suggested.initial[day].support_product_ids,
+      })),
+      progressed: result.weekly_plan.progressed.map((night, day) => ({
+        ...night, support_product_ids: night.support_product_ids ?? suggested.progressed[day].support_product_ids,
+      })),
+    } : suggested);
   }
 
   useEffect(() => {
@@ -109,18 +191,44 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
       return { ...current, [pid]: next };
     });
   }
+  function updateNight(phase: keyof WeeklyPlan, day: number, night: WeeklyNight) {
+    setWeek(current => current && ({ ...current, [phase]: current[phase].map((item, index) => index === day ? night : item) }));
+  }
 
   if (!view) return <p role={error ? "alert" : "status"} className="text-sm">{error || "Chargement de la routine…"}</p>;
   const initial = schedules(view);
+  const weekChanged = !!week && JSON.stringify(week) !== JSON.stringify(view.weekly_plan || suggestedWeek(view));
+  const finalPlans = weekChanged && week ? alignWeekDays(view, plans, week) : plans;
   const changes = view.products.flatMap(product => {
     const pid = product.id_produit;
-    return JSON.stringify(plans[pid]) !== JSON.stringify(initial[pid]) ? [{ id_produit: pid, moments: plans[pid] }] : [];
+    return JSON.stringify(finalPlans[pid]) !== JSON.stringify(initial[pid]) ? [{ id_produit: pid, moments: finalPlans[pid] }] : [];
   });
   const valid = changes.every(change => Object.values(change.moments).length > 0 && Object.values(change.moments).every(plan =>
     plan.initial_per_week !== null && plan.maximum_per_week !== null && Number.isInteger(plan.initial_per_week) && Number.isInteger(plan.maximum_per_week) && plan.initial_per_week >= 0
     && plan.maximum_per_week >= plan.initial_per_week && plan.maximum_per_week <= 7));
   const candidate = view.candidate;
   const disabled = !view.editable || !!busy;
+  const targetedProducts = targeted(view);
+  const supportiveProducts = supporting(view);
+  const weekValid = !week || (["initial", "progressed"] as const).every(phase => {
+    const nights = week[phase];
+    const all = [...targetedProducts, ...supportiveProducts];
+    return nights.length === 7 && nights.every(night => {
+      const ids = [...night.product_ids, ...(night.support_product_ids || [])];
+      return (night.status === "active") === (night.product_ids.length > 0)
+        && new Set(ids).size === ids.length
+        && night.product_ids.every(id => targetedProducts.some(product => product.id_produit === id))
+        && (night.support_product_ids || []).every(id => supportiveProducts.some(product => product.id_produit === id))
+        && ids.every(id => !ids.some(other => other !== id &&
+          all.find(product => product.id_produit === id)?.moments.soir?.alternate_with?.includes(other)));
+    }) && all.every(product => {
+        const count = nights.filter(night => [...night.product_ids, ...(night.support_product_ids || [])]
+          .includes(product.id_produit)).length;
+        const start = plans[product.id_produit]?.soir?.initial_per_week || 0;
+        const maximum = plans[product.id_produit]?.soir?.maximum_per_week || 0;
+        return phase === "initial" ? count === start : count >= start && count <= maximum;
+      });
+  });
   const currentPreview = () => run("Chargement du PDF…", async () => {
     setPreview({ label: "Rapport actif", blob: await fetchAdminArtifact(token, sessionId, "pdf") });
   });
@@ -140,7 +248,46 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
     </section>
 
     <section className="space-y-3">
-      <h3 className="font-semibold">Fréquences et avertissements</h3>
+      <h3 className="font-semibold">Calendrier et fréquences</h3>
+      {week && targetedProducts.length > 0 && <div className="space-y-4 rounded-xl border border-slate-200 p-3">
+        <h4 className="font-semibold">Les sept soirs de la semaine</h4>
+        <p className="text-sm text-slate-700">Récupération : soins de confort habituels. Repos minimal : conservez démaquillage et hydratation si nécessaire ; aucun soin ciblé. Les produits quotidiens restent appliqués selon leur fiche.</p>
+        {(["initial", "progressed"] as const).map(phase => <fieldset key={phase} disabled={disabled} className="space-y-2">
+          <legend className="font-medium">{phase === "initial" ? "Au départ" : "Après progression"}</legend>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-7">
+            {week[phase].map((night, index) => <div key={index} className="min-w-0 rounded-lg border bg-white p-2">
+              <label className="block text-sm font-semibold">{days[index]}
+                <select className={control} aria-label={`${days[index]} · ${phase === "initial" ? "départ" : "progression"}`}
+                  value={night.status} onChange={event => {
+                    const status = event.target.value as WeeklyNight["status"];
+                    updateNight(phase, index, { ...night, status, product_ids: status === "active" ?
+                      (night.product_ids.length ? night.product_ids : [targetedProducts[0].id_produit]) : [] });
+                  }}>
+                  <option value="active">Soin ciblé</option><option value="recovery">Récupération</option>
+                  <option value="rest">Repos minimal</option>
+                </select>
+              </label>
+              {night.status === "active" && targetedProducts.map(product => <label key={product.id_produit} className="mt-2 flex min-h-10 items-center gap-2 text-sm">
+                <input type="checkbox" checked={night.product_ids.includes(product.id_produit)}
+                  onChange={event => {
+                    const ids = toggle(night.product_ids, product.id_produit, event.target.checked);
+                    updateNight(phase, index, { ...night, status: ids.length ? "active" : "recovery", product_ids: ids });
+                  }} />{product.name}</label>)}
+              {supportiveProducts.length > 0 && <details className="mt-2 text-sm">
+                <summary className="min-h-10 cursor-pointer">Soins de confort</summary>
+                {supportiveProducts.map(product => <label key={product.id_produit} className="flex min-h-10 items-center gap-2">
+                  <input type="checkbox" checked={(night.support_product_ids || []).includes(product.id_produit)}
+                    onChange={event => updateNight(phase, index, { ...night,
+                      support_product_ids: toggle(night.support_product_ids || [], product.id_produit, event.target.checked),
+                    })} />{product.name}
+                </label>)}
+              </details>}
+            </div>)}
+          </div>
+        </fieldset>)}
+        {!weekValid && <p role="alert" className="text-sm text-amber-900">Vérifiez les sept soirs, la fréquence de chaque soin et les alternances indiquées.</p>}
+        {weekChanged && <p className="text-sm text-slate-700">Calendrier modifié, non enregistré.</p>}
+      </div>}
       <Warnings issues={view.warnings.filter(issue => !issue.id_produit && !issue.product_ids?.length)} />
       {view.products.map(product => {
         const pid = product.id_produit;
@@ -167,6 +314,7 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
                           onChange={e => update(pid, moment, { ...plan, [key]: e.target.value === "" ? null : e.target.valueAsNumber })} />
                       </label>)}
                   </div>
+                  <details><summary className="min-h-11 cursor-pointer text-sm">Jours autorisés pour ce produit</summary>
                   {([["days", "Jours possibles"], ["excluded_days", "Jours à exclure"]] as const).map(([key, label]) =>
                     <fieldset key={key} className="min-w-0">
                       <legend className="text-sm">{label}</legend>
@@ -177,7 +325,7 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
                           {day}
                         </label>)}
                       </div>
-                    </fieldset>)}
+                    </fieldset>)}</details>
                   <details>
                     <summary className="min-h-9 cursor-pointer text-sm">Coordonner avec un autre produit</summary>
                     {view.products.filter(other => other.id_produit !== pid && !!Object.keys(plans[other.id_produit] || {}).length).map(other =>
@@ -226,9 +374,10 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
             setNotice("Brouillon abandonné. Le rapport actif est conservé.");
           })}>Abandonner le brouillon</button>
       </>}
-      <button type="button" className="primary-button disabled:opacity-50" disabled={disabled || !changes.length || !valid}
+      <button type="button" className="primary-button disabled:opacity-50" disabled={disabled || (!changes.length && !weekChanged) || !valid || !weekValid}
         onClick={() => run("Reconstruction HTML/PDF…", async () => {
-          const saved = await saveFrequencies(token, sessionId, view.review_revision, changes);
+          const saved = await saveFrequencies(token, sessionId, view.review_revision, changes,
+            targetedProducts.length ? week || undefined : undefined);
           setNotice("Fréquences enregistrées. Le rapport attend votre validation.");
           setPreview(null);
           onSaved();
