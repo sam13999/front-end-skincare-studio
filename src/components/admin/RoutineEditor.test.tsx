@@ -20,7 +20,7 @@ const makeView = (): RoutineView => ({
   route_id: "a", initial_route_id: "a", initial_frequencies: [{ ...serum, moments: [...serum.moments] }],
   frequencies: [{ ...serum, moments: [...serum.moments] }],
   products: [
-    { id_produit: "serum", name: "Sérum correctif", moments: {
+    { id_produit: "serum", name: "Sérum correctif", calendar_role: "corrective", moments: {
       matin: { initial_per_week: 7, maximum_per_week: 7 }, soir: { initial_per_week: 5, maximum_per_week: 5 },
     } },
     { id_produit: "exfol", name: "Exfoliant", moments: { hebdomadaire: { initial_per_week: 1, maximum_per_week: 2 } } },
@@ -63,6 +63,26 @@ describe("Révision de la routine", () => {
     expect(plan?.progressed.filter(night => night.status === "active")).toHaveLength(2);
     expect(plan?.progressed.filter(night => night.status === "recovery")).toHaveLength(4);
     expect(plan?.progressed.filter(night => night.status === "rest")).toHaveLength(1);
+  });
+
+  it("garde un sérum apaisant trois soirs sans les transformer en traitements", async () => {
+    const view = makeView();
+    view.products[0].moments.soir = { initial_per_week: 1, maximum_per_week: 2 };
+    view.products.push({ id_produit: "ST005", name: "Stress Less", calendar_role: "soothing",
+      moments: { soir: { initial_per_week: 3, maximum_per_week: 3 } } });
+    vi.mocked(api.fetchRoutine).mockResolvedValue(view);
+    vi.mocked(api.saveFrequencies).mockResolvedValue({ review_revision: revised });
+    renderEditor();
+    await screen.findByRole("combobox", { name: "Lun · départ" });
+    fireEvent.change(screen.getByRole("combobox", { name: "Sam · départ" }), { target: { value: "rest" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Dim · départ" }), { target: { value: "recovery" } });
+    fireEvent.click(screen.getByRole("button", { name: "Appliquer et reconstruire" }));
+    await waitFor(() => expect(api.saveFrequencies).toHaveBeenCalled());
+    const plan = vi.mocked(api.saveFrequencies).mock.calls[0][4]!;
+    expect(plan.initial.filter(n => n.status === "active")).toHaveLength(1);
+    expect(plan.initial.filter(n => n.support_product_ids?.includes("ST005"))).toHaveLength(3);
+    expect(plan.progressed.filter(n => n.status === "active")).toHaveLength(2);
+    expect(plan.progressed.filter(n => n.support_product_ids?.includes("ST005"))).toHaveLength(3);
   });
 
   it("enregistre les fréquences, les exclusions et l’alternance entre créneaux", async () => {
