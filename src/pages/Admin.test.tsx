@@ -211,9 +211,14 @@ it.each([false, true])("affiche l’échec de Prompt 1 et ses diagnostics (ancie
     expect(screen.getByText("Sortie avant réparation")).toBeInTheDocument();
   }
 
+  vi.mocked(global.fetch).mockImplementationOnce(async () => ({ ok: true, status: 200, json: async () => ({
+    available: true, last_validated: "prompt_0", resume_from: "prompt_1", reused: ["prompt_0"],
+    recalculated: ["prompt_1"], llm_calls: ["prompt_1"],
+  }) } as Response));
+  fireEvent.click(screen.getByRole("button", { name: "Reprendre la session" }));
+  expect(await screen.findByText(/Reprise à :/)).toBeInTheDocument();
   let complete: (value: Response) => void = () => {};
   vi.mocked(global.fetch).mockImplementationOnce(() => new Promise<Response>(resolve => { complete = resolve; }));
-  fireEvent.click(screen.getByRole("button", { name: "Reprendre la session" }));
   fireEvent.click(screen.getByRole("button", { name: "Confirmer la reprise" }));
   expect(screen.getByRole("status")).toHaveTextContent("Reprise en cours");
   expect(screen.getByRole("button", { name: "Reprise…" })).toBeDisabled();
