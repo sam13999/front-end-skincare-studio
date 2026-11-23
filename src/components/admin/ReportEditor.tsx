@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { fetchAdminArtifact, fetchOriginalZoom, fetchReportEditing, ReportEditing, ZylaDetection,
+import { AdminValidationError, AdminValidationIssue, fetchAdminArtifact, fetchOriginalZoom, fetchReportEditing, ReportEditing, ZylaDetection,
   revertReport, saveReportCrop, saveReportText } from "@/lib/adminApi";
 const PdfPreview = lazy(() => import("./PdfPreview"));
 
@@ -127,6 +127,8 @@ export default function ReportEditor({ token, sessionId, onSaved }: { token: str
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [issues, setIssues] = useState<AdminValidationIssue[]>([]);
+  const [pageByField, setPageByField] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<Blob | null>(null);
   const [htmlPreview, setHtmlPreview] = useState("");
   const [showHtml, setShowHtml] = useState(false);
@@ -145,7 +147,7 @@ export default function ReportEditor({ token, sessionId, onSaved }: { token: str
       const first = [...result.fields].sort((a, b) => chapterOrder.indexOf(chapter(a)) - chapterOrder.indexOf(chapter(b)))[0];
       setChapterId(current => current || (first ? chapter(first) : "cover"));
       setSelected(current => current || (first ? fieldKey(first) : ""));
-      setError("");
+      setError(""); setIssues([]);
       return result;
     } catch (e) { setError(e instanceof Error ? e.message : "Édition indisponible"); throw e; }
   }
@@ -173,10 +175,13 @@ export default function ReportEditor({ token, sessionId, onSaved }: { token: str
     const changes = data.fields.filter(field => values[key(field.path)] !== field.value)
       .map(field => ({ path: field.path, value: values[key(field.path)] }));
     if (!changes.length) { setNotice("Aucun texte modifié. Le cadrage s’enregistre séparément."); return; }
-    setBusy(true); setError("");
+    setBusy(true); setError(""); setIssues([]);
     setNotice("");
     try { const saved = await saveReportText(token, sessionId, data.review_revision, changes); await refresh(saved.review_revision); }
-    catch (e) { setError(e instanceof Error ? e.message : "Correction refusée"); }
+    catch (e) {
+      setError(e instanceof Error ? e.message : "Correction refusée");
+      if (e instanceof AdminValidationError) setIssues(e.issues);
+    }
     finally { setBusy(false); }
   }
   function choose(field: Field) {
@@ -186,17 +191,36 @@ export default function ReportEditor({ token, sessionId, onSaved }: { token: str
   function onHtmlLoad(frame: HTMLIFrameElement) {
     const doc = frame.contentDocument;
     if (!doc || !data) return;
+    const fields = new Map(data.fields.map(field => [fieldKey(field), field]));
+    const pages: Record<string, string> = {};
+    doc.querySelectorAll<HTMLElement>("[data-edit-path]").forEach(element => {
+      let field: Field | undefined;
+      try { field = fields.get(JSON.stringify(JSON.parse(element.dataset.editPath || ""))); }
+      catch { /* Never guess from the visible text. */ }
+      if (!field) { element.dataset.reviewOnly = "true"; return; }
+      element.style.cursor = "pointer";
+      element.title = `Modifier : ${field.label}`;
+      element.tabIndex = 0;
+      const page = element.closest("[data-sv-panel]")?.querySelector(".sv-foot__n")?.textContent?.trim();
+      if (page && !pages[fieldKey(field)]) pages[fieldKey(field)] = page;
+    });
+    setPageByField(pages);
     doc.addEventListener("click", event => {
-      // The preview lives in a separate window: parent-window instanceof Element fails.
       const target = event.target as Node | null;
       if (!target || target.nodeType !== 1) return;
-      const element = target as Element;
-      const slot = element.closest("[data-slot]")?.getAttribute("data-slot");
-      const value = element.textContent?.trim();
-      const match = data.fields.find(field =>
-        (slot && field.path.join(".") === slot) ||
-        (value && value.length > 8 && field.value.trim() === value));
-      if (match) choose(match);
+      const element = (target as Element).closest<HTMLElement>("[data-edit-path]");
+      if (!element) return;
+      let field: Field | undefined;
+      try { field = fields.get(JSON.stringify(JSON.parse(element.dataset.editPath || ""))); }
+      catch { return; }
+      if (!field) return;
+      event.preventDefault();
+      choose(field);
+    });
+    doc.addEventListener("keydown", event => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      const target = event.target as HTMLElement | null;
+      if (target?.dataset.editPath) { event.preventDefault(); target.click(); }
     });
   }
   async function restore(revision: number) {
@@ -212,10 +236,17 @@ export default function ReportEditor({ token, sessionId, onSaved }: { token: str
   const hasTextChanges = data.fields.some(field => values[key(field.path)] !== field.value);
   const currentFields = data.fields.filter(field => chapter(field) === chapterId);
   const currentField = currentFields.find(field => fieldKey(field) === selected) || currentFields[0];
+  const currentPage = currentField && pageByField[fieldKey(currentField)];
   return <div className="min-w-0 space-y-5">
-    <p className="text-sm text-slate-600">Choisissez un chapitre puis un texte du rapport. Les fréquences se modifient dans « Routine ».</p>
+    <p className="text-sm text-slate-600">Choisissez un chapitre, puis touchez le texte à corriger. Les fréquences se modifient dans « Routine ».</p>
+    <label className="block text-sm font-semibold lg:hidden">Chapitre du rapport
+      <select className="mt-1 block min-h-11 w-full rounded-lg border bg-white p-2 text-base" value={chapterId}
+        onChange={event => { setChapterId(event.target.value); setSelected(""); }}>
+        {sections.map(id => <option key={id} value={id}>{chapterNames[id]}</option>)}
+      </select>
+    </label>
     <div className="grid min-w-0 gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]">
-      <nav aria-label="Chapitres du rapport" className="flex gap-2 overflow-x-auto pb-2 lg:flex-col">
+      <nav aria-label="Chapitres du rapport" className="hidden gap-2 lg:flex lg:flex-col">
         {sections.map(id => <button key={id} type="button" onClick={() => { setChapterId(id); setSelected(""); }}
           className={`min-h-11 shrink-0 rounded-xl border px-3 py-2 text-left text-sm lg:whitespace-normal ${chapterId === id ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white"}`}>
           {chapterNames[id]}</button>)}
@@ -225,8 +256,15 @@ export default function ReportEditor({ token, sessionId, onSaved }: { token: str
           <button type="button" className="action-button min-h-11" aria-pressed={view === "apercu"} onClick={() => { setView("apercu"); setShowHtml(true); }}>Aperçu</button>
           <button type="button" className="action-button min-h-11" aria-pressed={view === "modifier"} onClick={() => setView("modifier")}>Modifier</button>
         </div>
+        <section className={view === "apercu" ? "block" : "hidden lg:block"}>
+          <details className="rounded-xl border p-3" open={view === "apercu" ? true : undefined} onToggle={e => { if (e.currentTarget.open) setShowHtml(true); }}>
+            <summary className="min-h-11 cursor-pointer font-semibold">Aperçu HTML du rapport complet</summary>
+            {htmlPreview && <iframe title="Aperçu HTML du rapport" sandbox="allow-same-origin" src={htmlPreview} onLoad={e => onHtmlLoad(e.currentTarget)}
+              className="mt-2 h-[70vh] min-h-[400px] w-full rounded-lg border" />}
+          </details>
+        </section>
         <section className={`min-w-0 rounded-xl border bg-white p-3 sm:p-5 ${view === "apercu" ? "hidden lg:block" : ""}`}>
-          <h3 className="mb-3 text-lg font-semibold">{chapterNames[chapterId] || "Votre rapport"}</h3>
+          <h3 className="mb-3 text-lg font-semibold">{chapterNames[chapterId] || "Votre rapport"}{currentPage && <span className="ml-2 text-sm font-normal text-slate-500">Page {currentPage}</span>}</h3>
           <p className="mb-3 text-sm text-slate-500">Touchez un bloc pour ouvrir son édition.</p>
           <div className="space-y-2">{currentFields.map(field => <button type="button" key={fieldKey(field)}
             onClick={() => choose(field)} aria-pressed={currentField === field}
@@ -237,9 +275,10 @@ export default function ReportEditor({ token, sessionId, onSaved }: { token: str
           </button>)}</div>
         </section>
         {currentField && <section className={`rounded-xl border bg-white p-3 sm:p-5 ${view === "apercu" ? "hidden lg:block" : ""}`}>
+          <p className="text-sm text-slate-500">{chapterNames[chapterId]}{currentPage && ` · Page ${currentPage}`}</p>
           <label className="block text-sm font-semibold" htmlFor="report-field">{currentField.label}</label>
           {currentField.context && <p className="text-sm text-slate-600">{currentField.context}</p>}
-          <textarea id="report-field" ref={editor} disabled={busy} className="mt-2 block min-h-28 w-full resize-y rounded-lg border border-slate-300 p-3 text-base"
+          <textarea id="report-field" ref={editor} disabled={busy} className={`mt-2 block w-full resize-y rounded-lg border border-slate-300 p-3 text-base ${(values[fieldKey(currentField)] || "").length < 100 ? "min-h-16" : "min-h-28"}`}
             value={values[fieldKey(currentField)] ?? ""} onChange={e => setValues(current => ({ ...current, [fieldKey(currentField)]: e.target.value }))} />
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" className="action-button min-h-11" disabled={busy || values[fieldKey(currentField)] === currentField.value}
@@ -265,18 +304,20 @@ export default function ReportEditor({ token, sessionId, onSaved }: { token: str
         </div>
       </div>
     </div>
-    <details className="rounded-xl border p-3" open={view === "apercu" ? true : undefined} onToggle={e => { if (e.currentTarget.open) setShowHtml(true); }}>
-      <summary className="min-h-11 cursor-pointer font-semibold">Aperçu HTML du rapport complet</summary>
-      {htmlPreview &&
-      <iframe title="Aperçu HTML du rapport" sandbox="allow-same-origin" src={htmlPreview} onLoad={e => onHtmlLoad(e.currentTarget)}
-        className="mt-2 h-[70vh] min-h-[400px] w-full rounded-lg border" />}
-    </details>
     {data.zooms.length > 0 && <details><summary className="min-h-11 cursor-pointer font-semibold">Recadrages photographiques</summary><div className="space-y-3">{data.zooms.map((zoom, index) =>
       <CropEditor key={`${data.review_revision}-${index}`} token={token} sessionId={sessionId} zoom={zoom} index={index} detections={data.detections || []} revision={data.review_revision} onSaved={refresh} />)}</div></details>}
     {data.history.length > 0 && <section className="rounded-xl border p-4"><h3 className="font-semibold">Historique des versions</h3><div className="mt-3 space-y-2">{data.history.map(item =>
       <div key={item.revision} className="flex items-center justify-between gap-3 text-sm"><span>Version {item.revision} · {item.reason}</span><button type="button" className="action-button" disabled={busy} onClick={() => restore(item.revision)}>Restaurer</button></div>)}</div></section>}
     {notice && <p className="rounded bg-blue-50 p-3 text-sm text-blue-800">{notice}</p>}
-    {error && <p role="alert" className="rounded bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+    {error && <div role="alert" className="rounded bg-red-50 p-3 text-sm text-red-700">
+      <p>{error}</p>
+      {issues.length > 0 && <ul className="mt-2 space-y-2">{issues.map((issue, index) => {
+        const field = data.fields.find(item => JSON.stringify(item.path) === JSON.stringify(issue.path));
+        return <li key={index}>{field ? <button type="button" className="underline" onClick={() => choose(field)}>
+          Aller à {chapterNames[chapter(field)]} · {field.context ? field.context + " · " : ""}{field.label}
+        </button> : issue.message}</li>;
+      })}</ul>}
+    </div>}
     {preview && <Suspense fallback={<p>Chargement de l’aperçu PDF…</p>}><PdfPreview blob={preview} /></Suspense>}
   </div>;
 }
