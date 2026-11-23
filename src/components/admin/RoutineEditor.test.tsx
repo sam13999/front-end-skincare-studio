@@ -6,7 +6,7 @@ import RoutineEditor from "./RoutineEditor";
 
 vi.mock("@/lib/adminApi", () => ({
   routineMoments: ["matin", "soir", "hebdomadaire"],
-  fetchRoutine: vi.fn(), saveFrequencyDraft: vi.fn(), discardFrequencyDraft: vi.fn(), saveFrequencies: vi.fn(), rerunPrompt4: vi.fn(),
+  fetchRoutine: vi.fn(), saveFrequencyDraft: vi.fn(), discardFrequencyDraft: vi.fn(), saveFrequencies: vi.fn(), saveApplicationOrder: vi.fn(), rerunPrompt4: vi.fn(),
   decideRoutineCandidate: vi.fn(), fetchAdminArtifact: vi.fn(), fetchRoutineCandidatePdf: vi.fn(),
 }));
 vi.mock("./PdfPreview", () => ({ default: () => <p>Aperçu PDF chargé</p> }));
@@ -43,6 +43,22 @@ describe("Révision de la routine", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(api.fetchRoutine).mockResolvedValue(makeView());
+  });
+
+  it("déplace un sérum avant la crème puis persiste l’ordre structuré", async () => {
+    const view = makeView();
+    view.products.push({ id_produit: "cream", name: "Crème", calendar_role: "barrier",
+      moments: { matin: { initial_per_week: 7, maximum_per_week: 7 } } });
+    view.application_order = { matin: ["cream", "serum"], soir: ["serum"], hebdomadaire: ["exfol"] };
+    vi.mocked(api.fetchRoutine).mockResolvedValue(view);
+    vi.mocked(api.saveApplicationOrder).mockResolvedValue({ review_revision: revised });
+    renderEditor();
+    await screen.findByRole("button", { name: "Enregistrer l’ordre et reconstruire" });
+    fireEvent.click(screen.getAllByRole("button", { name: "Monter Sérum correctif" })[0]);
+    expect(screen.getByText("Ordre modifié, non enregistré.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer l’ordre et reconstruire" }));
+    await waitFor(() => expect(api.saveApplicationOrder).toHaveBeenCalledWith("test", "session", initial,
+      { matin: ["serum", "cream"], soir: ["serum"], hebdomadaire: ["exfol"] }));
   });
 
   it("enregistre sept soirs distincts avec récupération et repos minimal", async () => {
