@@ -34,45 +34,72 @@ const toggle = <T,>(items: T[], value: T, on: boolean) => on ? [...items, value]
 const control = "block min-h-11 w-full rounded-md border border-slate-300 bg-white px-2 text-base";
 
 function targeted(view: RoutineView) {
-  return view.products.filter(product => {
-    const count = product.moments.soir?.initial_per_week;
-    return typeof count === "number" && count > 0 && count < 7;
-  });
+  return view.products.filter(product => product.calendar_role === "corrective"
+    && (product.moments.soir?.initial_per_week ?? 7) > 0
+    && (product.moments.soir?.initial_per_week ?? 7) < 7);
+}
+function supporting(view: RoutineView) {
+  return view.products.filter(product => product.calendar_role !== "corrective"
+    && product.moments.soir && (product.moments.soir.initial_per_week ?? 7) < 7);
 }
 function suggestedWeek(view: RoutineView): WeeklyPlan {
   const products = targeted(view);
+  const supports = supporting(view);
   const nights = (progressed: boolean): WeeklyNight[] => {
-    const result: WeeklyNight[] = days.map(() => ({ status: "recovery", product_ids: [] }));
+    const result: WeeklyNight[] = days.map(() => ({ status: "recovery", product_ids: [], support_product_ids: [] }));
     for (const product of products) {
       const schedule = product.moments.soir;
       const count = (progressed ? schedule?.maximum_per_week : schedule?.initial_per_week) || 0;
       const allowed = schedule?.days?.length ? schedule.days : [0, 3, 5, 1, 4, 2, 6];
-      for (const day of allowed.slice(0, count)) {
-        result[day] = { status: "active", product_ids: [...result[day].product_ids, product.id_produit] };
+      let placed = 0;
+      for (const day of allowed) {
+        if (placed >= count) break;
+        if (schedule?.excluded_days?.includes(day)) continue;
+        if (result[day].product_ids.some(id => schedule?.alternate_with?.includes(id)
+          || view.products.find(other => other.id_produit === id)?.moments.soir?.alternate_with?.includes(product.id_produit))) continue;
+        result[day] = { ...result[day], status: "active",
+          product_ids: [...result[day].product_ids, product.id_produit] };
+        placed++;
       }
     }
     const rest = [...result].map((night, index) => ({ night, index })).reverse().find(item => item.night.status === "recovery");
-    if (rest) result[rest.index] = { status: "rest", product_ids: [] };
+    if (rest) result[rest.index] = { ...result[rest.index], status: "rest" };
+    for (const product of supports) {
+      const schedule = product.moments.soir;
+      const count = (progressed ? schedule?.maximum_per_week : schedule?.initial_per_week) || 0;
+      const allowed = schedule?.days?.length ? schedule.days : [1, 2, 4, 5, 6, 0, 3];
+      let placed = 0;
+      for (const day of allowed) {
+        if (placed >= count) break;
+        if (schedule?.excluded_days?.includes(day)) continue;
+        const ids = [...result[day].product_ids, ...(result[day].support_product_ids || [])];
+        if (ids.some(id => schedule?.alternate_with?.includes(id))) continue;
+        result[day] = { ...result[day], support_product_ids: [...(result[day].support_product_ids || []), product.id_produit] };
+        placed++;
+      }
+    }
     return result;
   };
   return { initial: nights(false), progressed: nights(true) };
 }
 function alignWeekDays(view: RoutineView, plans: Plans, week: WeeklyPlan): Plans {
   const next: Plans = { ...plans };
-  for (const product of targeted(view)) {
+  for (const product of [...targeted(view), ...supporting(view)]) {
     const pid = product.id_produit;
     const plan = plans[pid]?.soir;
     if (!plan) continue;
     const selected = days.map((_, index) => index).filter(day =>
-      week.initial[day].product_ids.includes(pid) || week.progressed[day].product_ids.includes(pid));
+      [week.initial[day], week.progressed[day]].some(night =>
+        night.product_ids.includes(pid) || night.support_product_ids?.includes(pid)));
     const rest = days.map((_, index) => index).filter(day =>
       week.initial[day].status === "rest" || week.progressed[day].status === "rest");
-    const excluded = [...new Set([...plan.excluded_days, ...rest])];
+    const excluded = product.calendar_role === "corrective" ?
+      [...new Set([...plan.excluded_days, ...rest])] : plan.excluded_days;
     const allowed = [...selected];
     for (let day = 0; allowed.length < (plan.maximum_per_week || 0) && day < 7; day++) {
       if (!allowed.includes(day) && !excluded.includes(day)) allowed.push(day);
     }
-    next[pid] = { ...plans[pid], soir: { ...plan, days: allowed.sort(), excluded_days: excluded.sort() } };
+    next[pid] = { ...plans[pid], soir: { ...plan, days: allowed.sort(), excluded_days: [...excluded].sort() } };
   }
   return next;
 }
@@ -118,7 +145,15 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
       for (const change of result.frequency_draft.changes) next[change.id_produit] = change.moments;
     }
     setPlans(next);
-    setWeek(result.weekly_plan || suggestedWeek(result));
+    const suggested = suggestedWeek(result);
+    setWeek(result.weekly_plan ? {
+      initial: result.weekly_plan.initial.map((night, day) => ({
+        ...night, support_product_ids: night.support_product_ids ?? suggested.initial[day].support_product_ids,
+      })),
+      progressed: result.weekly_plan.progressed.map((night, day) => ({
+        ...night, support_product_ids: night.support_product_ids ?? suggested.progressed[day].support_product_ids,
+      })),
+    } : suggested);
   }
 
   useEffect(() => {
@@ -174,12 +209,21 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
   const candidate = view.candidate;
   const disabled = !view.editable || !!busy;
   const targetedProducts = targeted(view);
+  const supportiveProducts = supporting(view);
   const weekValid = !week || (["initial", "progressed"] as const).every(phase => {
     const nights = week[phase];
-    return nights.length === 7 && nights.every(night => (night.status === "active") === (night.product_ids.length > 0)
-      && night.product_ids.every(id => targetedProducts.some(product => product.id_produit === id)))
-      && targetedProducts.every(product => {
-        const count = nights.filter(night => night.product_ids.includes(product.id_produit)).length;
+    const all = [...targetedProducts, ...supportiveProducts];
+    return nights.length === 7 && nights.every(night => {
+      const ids = [...night.product_ids, ...(night.support_product_ids || [])];
+      return (night.status === "active") === (night.product_ids.length > 0)
+        && new Set(ids).size === ids.length
+        && night.product_ids.every(id => targetedProducts.some(product => product.id_produit === id))
+        && (night.support_product_ids || []).every(id => supportiveProducts.some(product => product.id_produit === id))
+        && ids.every(id => !ids.some(other => other !== id &&
+          all.find(product => product.id_produit === id)?.moments.soir?.alternate_with?.includes(other)));
+    }) && all.every(product => {
+        const count = nights.filter(night => [...night.product_ids, ...(night.support_product_ids || [])]
+          .includes(product.id_produit)).length;
         const start = plans[product.id_produit]?.soir?.initial_per_week || 0;
         const maximum = plans[product.id_produit]?.soir?.maximum_per_week || 0;
         return phase === "initial" ? count === start : count >= start && count <= maximum;
@@ -216,7 +260,7 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
                 <select className={control} aria-label={`${days[index]} · ${phase === "initial" ? "départ" : "progression"}`}
                   value={night.status} onChange={event => {
                     const status = event.target.value as WeeklyNight["status"];
-                    updateNight(phase, index, { status, product_ids: status === "active" ?
+                    updateNight(phase, index, { ...night, status, product_ids: status === "active" ?
                       (night.product_ids.length ? night.product_ids : [targetedProducts[0].id_produit]) : [] });
                   }}>
                   <option value="active">Soin ciblé</option><option value="recovery">Récupération</option>
@@ -227,12 +271,21 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
                 <input type="checkbox" checked={night.product_ids.includes(product.id_produit)}
                   onChange={event => {
                     const ids = toggle(night.product_ids, product.id_produit, event.target.checked);
-                    updateNight(phase, index, { status: ids.length ? "active" : "recovery", product_ids: ids });
+                    updateNight(phase, index, { ...night, status: ids.length ? "active" : "recovery", product_ids: ids });
                   }} />{product.name}</label>)}
+              {supportiveProducts.length > 0 && <details className="mt-2 text-sm">
+                <summary className="min-h-10 cursor-pointer">Soins de confort</summary>
+                {supportiveProducts.map(product => <label key={product.id_produit} className="flex min-h-10 items-center gap-2">
+                  <input type="checkbox" checked={(night.support_product_ids || []).includes(product.id_produit)}
+                    onChange={event => updateNight(phase, index, { ...night,
+                      support_product_ids: toggle(night.support_product_ids || [], product.id_produit, event.target.checked),
+                    })} />{product.name}
+                </label>)}
+              </details>}
             </div>)}
           </div>
         </fieldset>)}
-        {!weekValid && <p role="alert" className="text-sm text-amber-900">Le nombre de soirs ciblés doit correspondre aux fréquences de chaque soin ; les sept jours doivent être définis.</p>}
+        {!weekValid && <p role="alert" className="text-sm text-amber-900">Vérifiez les sept soirs, la fréquence de chaque soin et les alternances indiquées.</p>}
         {weekChanged && <p className="text-sm text-slate-700">Calendrier modifié, non enregistré.</p>}
       </div>}
       <Warnings issues={view.warnings.filter(issue => !issue.id_produit && !issue.product_ids?.length)} />
