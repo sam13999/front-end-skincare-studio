@@ -88,6 +88,16 @@ export interface AdminDetailResponse {
 }
 
 export type EditPath = Array<string | number>;
+export interface AdminValidationIssue {
+  code: string; message: string; severity: string; path?: EditPath;
+  section_id?: string; field_label?: string;
+}
+export class AdminValidationError extends Error {
+  constructor(message: string, public readonly issues: AdminValidationIssue[]) {
+    super(message);
+    this.name = "AdminValidationError";
+  }
+}
 export interface ZylaDetection {
   id: string;
   source_photo: string;
@@ -126,7 +136,9 @@ async function adminFetch<T>(token: string, path: string, init?: RequestInit): P
     const validation = Array.isArray(body?.detail)
       ? body.detail.map((item: { msg?: string }) => item.msg?.replace(/^Value error, /, "")).filter(Boolean).join(" ")
       : "";
-    throw new Error(message || validation || (response.status === 401 ? "Token admin invalide." : "Erreur admin."));
+    const issues = Array.isArray(body?.detail?.issues) ? body.detail.issues as AdminValidationIssue[] : [];
+    const text = message || validation || (response.status === 401 ? "Token admin invalide." : "Erreur admin.");
+    throw issues.length ? new AdminValidationError(text, issues) : new Error(text);
   }
   return body as T;
 }
@@ -241,7 +253,7 @@ export interface FrequencyPlan {
   pair_with: string[];
   progression: string;
 }
-export type WeeklyNight = { status: "active" | "recovery" | "rest"; product_ids: string[] };
+export type WeeklyNight = { status: "active" | "recovery" | "rest"; product_ids: string[]; support_product_ids?: string[] };
 export type WeeklyPlan = { initial: WeeklyNight[]; progressed: WeeklyNight[] };
 export interface RoutineFrequency {
   id_produit: string;
@@ -276,7 +288,7 @@ export interface RoutineView {
   initial_route_id: string;
   initial_frequencies: RoutineFrequency[];
   frequencies: RoutineFrequency[];
-  products: Array<{ id_produit: string; name: string; allowed_moments?: RoutineMoment[]; moments: Partial<Record<RoutineMoment, Partial<FrequencyPlan>>> }>;
+  products: Array<{ id_produit: string; name: string; calendar_role?: "corrective" | "soothing" | "barrier" | "cleanser" | "spf" | "complement"; allowed_moments?: RoutineMoment[]; moments: Partial<Record<RoutineMoment, Partial<FrequencyPlan>>> }>;
   warnings: RoutineWarning[];
   texts_to_review: string[];
   routes: Array<{
