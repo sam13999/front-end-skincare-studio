@@ -18,7 +18,10 @@ test("édite un rapport et ses sept soirs sur mobile et ordinateur", async ({ pa
       return;
     }
     if (path.endsWith("/artifact/html")) {
-      await route.fulfill({ body: "<html><body><p data-slot='strategy.advice'>Introduisez un nouveau soin à la fois.</p></body></html>",
+      await route.fulfill({ body: `<html><body>
+        <section data-sv-panel><p data-edit-path='["overview","summary_sentence"]'>Introduisez un nouveau soin à la fois.</p><footer><span class="sv-foot__n">02 / 16</span></footer></section>
+        <section data-sv-panel><p data-edit-path='["strategy","advice"]'>Introduisez un nouveau soin à la fois.</p><footer><span class="sv-foot__n">09 / 16</span></footer></section>
+        </body></html>`,
         contentType: "text/html", headers: { "Access-Control-Allow-Origin": "*" } });
       return;
     }
@@ -37,7 +40,7 @@ test("édite un rapport et ses sept soirs sur mobile et ordinateur", async ({ pa
     } else if (path.endsWith("/editing")) result = {
       review_revision: revision, history: [], zooms: [], fields: [
         { path: ["report", "first_name"], label: "Prénom", section: "report", section_id: "cover", value: "Anaïs" },
-        { path: ["overview", "summary_sentence"], label: "Résumé", section: "overview", section_id: "glance", value: "Peau mixte." },
+        { path: ["overview", "summary_sentence"], label: "Résumé", section: "overview", section_id: "glance", value: "Introduisez un nouveau soin à la fois." },
         { path: ["strategy", "advice"], label: "Conseil de démarrage", section: "strategy", section_id: "why",
           optional: true, value: advice, original_value: "Introduisez un nouveau soin à la fois." },
       ],
@@ -45,16 +48,20 @@ test("édite un rapport et ses sept soirs sur mobile et ordinateur", async ({ pa
     else if (path.endsWith("/editing/routine")) result = {
       review_revision: revision, active_version: null, source: "initial", adjusted_products: [],
       route_id: "", initial_route_id: "", initial_frequencies: [], frequencies: [],
-      products: [{ id_produit: "ST028", name: "Geek & Gorgeous – A-Game 5", moments: {
+      products: [{ id_produit: "ST028", name: "Geek & Gorgeous – A-Game 5", calendar_role: "corrective", moments: {
         soir: { initial_per_week: 1, maximum_per_week: 2, days: [], excluded_days: [],
           alternate_with: [], pair_with: [], progression: "" },
-      } }],
+      } }, { id_produit: "ST005", name: "Geek & Gorgeous – Stress Less", calendar_role: "soothing",
+        moments: { soir: { initial_per_week: 3, maximum_per_week: 3, days: [], excluded_days: [],
+          alternate_with: [], pair_with: [], progression: "" } } }],
       warnings: [], texts_to_review: [], routes: [], candidate: null, editable: true,
     };
     else if (path.endsWith("/editing/routine/frequencies")) {
       const request = route.request().postDataJSON();
       expect(request.weekly_plan.initial).toHaveLength(7);
       expect(request.weekly_plan.progressed).toHaveLength(7);
+      expect(request.weekly_plan.initial.filter((night: { support_product_ids?: string[] }) =>
+        night.support_product_ids?.includes("ST005"))).toHaveLength(3);
       revision = "c".repeat(64);
       result = { review_revision: revision };
     } else if (path.endsWith(`/session/${sessionId}`)) result = {
@@ -70,19 +77,25 @@ test("édite un rapport et ses sept soirs sur mobile et ordinateur", async ({ pa
   });
   await page.goto(`/admin/session/${sessionId}`);
   await page.getByRole("button", { name: "Corriger le rapport" }).click();
-  await expect(page.getByRole("navigation", { name: "Chapitres du rapport" })).toBeVisible();
-  await page.getByRole("button", { name: "La stratégie SkinView" }).click();
+  const mobile = (page.viewportSize()?.width || 1280) < 1024;
+  const chapter = async (name: string) => {
+    if (mobile) await page.getByLabel("Chapitre du rapport").selectOption({ label: name });
+    else await page.getByRole("navigation", { name: "Chapitres du rapport" }).getByRole("button", { name }).click();
+  };
+  await chapter("La stratégie SkinView");
   await expect(page.getByLabel("Conseil de démarrage")).toBeVisible();
-  await page.getByRole("button", { name: "Page de couverture" }).click();
-  await page.getByText("Aperçu HTML du rapport complet").click();
+  await chapter("Page de couverture");
+  if (mobile) await page.getByRole("button", { name: "Aperçu", exact: true }).click();
+  else await page.getByText("Aperçu HTML du rapport complet").click();
   await page.frameLocator('iframe[title="Aperçu HTML du rapport"]')
-    .locator('[data-slot="strategy.advice"]').click();
+    .locator('[data-edit-path=\'["strategy","advice"]\']').click();
   await expect(page.getByLabel("Conseil de démarrage")).toBeVisible();
-  await page.getByText("Aperçu HTML du rapport complet").click();
+  await expect(page.getByText("Page 09 / 16").first()).toBeVisible();
+  if (!mobile) await page.getByText("Aperçu HTML du rapport complet").click();
   await page.screenshot({ path: testInfo.outputPath("edition-rapport.png"), fullPage: true });
   await page.getByRole("button", { name: "Masquer ce bloc" }).click();
-  await page.getByRole("button", { name: "Votre peau en un coup d’œil" }).click();
-  await page.getByRole("button", { name: "La stratégie SkinView" }).click();
+  await chapter("Votre peau en un coup d’œil");
+  await chapter("La stratégie SkinView");
   await expect(page.getByLabel("Conseil de démarrage")).toHaveValue("");
   await page.getByRole("button", { name: "Enregistrer et reconstruire HTML/PDF" }).click();
   await expect(page.getByText(/Nouvelle version générée/)).toBeVisible();
