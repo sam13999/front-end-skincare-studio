@@ -6,6 +6,11 @@ import * as api from "@/lib/adminApi";
 vi.mock("./PdfPreview", () => ({ default: () => <div aria-label="Aperçu PDF actualisé">Lecteur PDF</div> }));
 
 vi.mock("@/lib/adminApi", () => ({
+  AdminValidationError: class extends Error {
+    constructor(message: string, public readonly issues: Array<{ path: Array<string | number>; code: string; message: string; severity: string }>) {
+      super(message);
+    }
+  },
   fetchReportEditing: vi.fn(), saveReportText: vi.fn(), fetchAdminArtifact: vi.fn(() => Promise.resolve(new Blob(["HTML"]))),
   saveReportCrop: vi.fn(), fetchOriginalZoom: vi.fn(), revertReport: vi.fn(),
 }));
@@ -64,6 +69,23 @@ describe("ReportEditor", () => {
     fireEvent.click(screen.getByRole("button", { name: "Enregistrer et reconstruire HTML/PDF" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("objectif incohérent");
     expect(vi.mocked(api.fetchAdminArtifact).mock.calls.some(([, , kind]) => kind === "pdf")).toBe(false);
+  });
+  it("ouvre le champ en erreur sans perdre la correction refusée", async () => {
+    const path = ["strategy", "advice"];
+    vi.mocked(api.fetchReportEditing).mockResolvedValue({ review_revision: "a".repeat(64), zooms: [], history: [], fields: [
+      { path: ["overview", "summary_sentence"], label: "Résumé", section: "overview", section_id: "glance", value: "Résumé initial" },
+      { path, label: "Conseil", section: "strategy", section_id: "why", value: "Conseil initial" },
+    ] });
+    vi.mocked(api.saveReportText).mockRejectedValue(new api.AdminValidationError("Relation à corriger", [
+      { code: "unresolved_relation", severity: "fail", message: "Produit introuvable", path },
+    ]));
+    render(<ReportEditor token="admin" sessionId="session" onSaved={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "La stratégie SkinView" }));
+    fireEvent.change(screen.getByLabelText("Conseil"), { target: { value: "Ma correction incomplète" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer et reconstruire HTML/PDF" }));
+    const link = await screen.findByRole("button", { name: /Aller à La stratégie SkinView · Conseil/ });
+    fireEvent.click(link);
+    expect(screen.getByLabelText("Conseil")).toHaveValue("Ma correction incomplète");
   });
   it("borne le voile à la photo et garde historique et aperçu utilisables après recadrage", async () => {
     const editing = { review_revision: "c".repeat(64),
