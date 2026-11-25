@@ -145,7 +145,9 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
       result.products.filter(product => product.moments[moment]).map(product => product.id_produit)])) as Record<RoutineMoment, string[]>);
     const next = schedules(result);
     if (result.frequency_draft && !result.frequency_draft.applied) {
-      for (const change of result.frequency_draft.changes) next[change.id_produit] = change.moments;
+      for (const change of result.frequency_draft.changes) {
+        next[change.id_produit] = change.moments as Partial<Record<RoutineMoment, FrequencyPlan>>;
+      }
     }
     setPlans(next);
     const suggested = suggestedWeek(result);
@@ -533,7 +535,7 @@ function RoutineEditorV2({ token, sessionId, onSaved, initialView }: {
       for (const change of next.frequency_draft.changes) {
         const restored = { ...result[change.id_produit] };
         for (const plan of Object.values(change.moments)) {
-          if ("move_from" in (plan || {}) && plan?.move_from) delete restored[plan.move_from];
+          if (plan && "move_from" in plan && plan.move_from) delete restored[plan.move_from];
         }
         result[change.id_produit] = { ...restored,
           ...change.moments as Partial<Record<RoutineMoment, FrequencyPlanV2>> };
