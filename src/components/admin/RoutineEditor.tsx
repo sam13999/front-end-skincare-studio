@@ -603,8 +603,10 @@ function RoutineEditorV2({ token, sessionId, onSaved, initialView }: {
         <summary className="cursor-pointer font-medium">{product.name}</summary>
         {routineMoments.flatMap(moment => {
           const plan = plans[product.id_produit]?.[moment];
-          if (!plan) return [];
           const condition = product.moments[moment]?.condition_utilisation;
+          if (!plan) return condition ? [<fieldset key={moment} disabled className="mt-3 space-y-2">
+            <legend className="font-medium">{momentLabels[moment]} · {condition}</legend>
+          </fieldset>] : [];
           return [<fieldset key={moment} disabled={disabled || !!condition} className="mt-3 space-y-2">
             <legend className="font-medium">{momentLabels[moment]}{condition ? ` · ${condition}` : ""}</legend>
             {!condition && (moment === "matin" || moment === "soir") &&

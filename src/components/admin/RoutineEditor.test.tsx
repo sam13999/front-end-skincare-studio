@@ -241,6 +241,31 @@ describe("Calendrier simplifié", () => {
     expect(button("Relancer Prompt 4 et réarbitrer")).toBeDisabled(); // unsaved day edit
   });
 
+  it("affiche une utilisation conditionnelle sans plan fictif ni changement envoyé", async () => {
+    const view = newView();
+    view.products.push({ id_produit: "cleanser", name: "Démaquillant", moments: {
+      soir: { initial_per_week: null, maximum_per_week: null,
+        condition_utilisation: "Selon le port de maquillage." },
+    } });
+    vi.mocked(api.fetchRoutine).mockResolvedValue(view);
+    vi.mocked(api.saveFrequencies).mockResolvedValue({ review_revision: revised });
+    renderEditor();
+    const conditional = within((await screen.findByText("Démaquillant", { selector: "summary" })).closest("details")!);
+    expect(conditional.getByText("Soir · Selon le port de maquillage.")).toBeInTheDocument();
+    expect(conditional.queryByLabelText("Départ / semaine")).not.toBeInTheDocument();
+    expect(conditional.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(conditional.queryByLabelText("Moment d’application")).not.toBeInTheDocument();
+    const fixed = within(screen.getByText("Sérum correctif", { selector: "summary" }).closest("details")!);
+    fireEvent.change(fixed.getByLabelText("Cible / semaine"), { target: { value: "3" } });
+    fireEvent.click(button("Appliquer et reconstruire HTML/PDF"));
+    await waitFor(() => expect(api.saveFrequencies).toHaveBeenCalledOnce());
+    expect(vi.mocked(api.saveFrequencies).mock.calls[0][3]).toEqual([{
+      id_produit: "serum", moments: { soir: {
+        initial_per_week: 1, maximum_per_week: 3, jours_initialement: undefined, jours_cibles: undefined,
+      } },
+    }]);
+  });
+
   it("déplace un soin au matin autorisé en conservant ses jours", async () => {
     const view = newView();
     view.products[0].allowed_moments = ["matin", "soir"];
