@@ -196,3 +196,48 @@ describe("Révision de la routine", () => {
     expect(await screen.findByText(/Proposition de Prompt 4 retenue/)).toBeInTheDocument();
   });
 });
+
+describe("Calendrier simplifié", () => {
+  beforeEach(() => { vi.resetAllMocks(); });
+
+  function newView(): RoutineView {
+    const view = makeView();
+    view.calendar_contract = "v2";
+    view.products = [{ id_produit: "serum", name: "Sérum correctif", calendar_role: "corrective", moments: {
+      soir: { initial_per_week: 1, maximum_per_week: 2, jours_initialement: [1], jours_cibles: [1, 4] },
+    } }];
+    view.application_order = { matin: [], soir: ["serum"], hebdomadaire: [] };
+    return view;
+  }
+
+  it("augmente le nombre d’applications sans transmettre de relations de calendrier", async () => {
+    vi.mocked(api.fetchRoutine).mockResolvedValue(newView());
+    vi.mocked(api.saveFrequencies).mockResolvedValue({ review_revision: revised });
+    renderEditor();
+    const product = within((await screen.findByText("Sérum correctif", { selector: "summary" })).closest("details")!);
+    fireEvent.change(product.getByLabelText("Départ / semaine"), { target: { value: "2" } });
+    fireEvent.change(product.getByLabelText("Cible / semaine"), { target: { value: "3" } });
+    fireEvent.click(button("Appliquer et reconstruire HTML/PDF"));
+    await waitFor(() => expect(api.saveFrequencies).toHaveBeenCalledWith("test", "session", initial, [{
+      id_produit: "serum", moments: { soir: { initial_per_week: 2, maximum_per_week: 3,
+        jours_initialement: undefined, jours_cibles: undefined } },
+    }]));
+  });
+
+  it("conserve l’édition directe des jours et la sélection d’une route", async () => {
+    vi.mocked(api.fetchRoutine).mockResolvedValue(newView());
+    vi.mocked(api.saveFrequencyDraft).mockResolvedValue({ id: "00000001", base_revision: initial,
+      applied: false, changes: [], validation: { status: "ok", issues: [] } });
+    vi.mocked(api.rerunPrompt4).mockResolvedValue(candidate);
+    renderEditor();
+    const product = within((await screen.findByText("Sérum correctif", { selector: "summary" })).closest("details")!);
+    fireEvent.click(within(product.getByText("Jours cibles").closest("fieldset")!).getByLabelText("Dim"));
+    fireEvent.click(button("Enregistrer le brouillon"));
+    await waitFor(() => expect(api.saveFrequencyDraft).toHaveBeenCalledWith("test", "session", initial, null, [{
+      id_produit: "serum", moments: { soir: { initial_per_week: 1, maximum_per_week: 3,
+        jours_initialement: [1], jours_cibles: [1, 4, 6] } },
+    }]));
+    fireEvent.change(screen.getByLabelText("Mode de sélection"), { target: { value: "b" } });
+    expect(button("Relancer Prompt 4 et réarbitrer")).toBeDisabled(); // unsaved day edit
+  });
+});

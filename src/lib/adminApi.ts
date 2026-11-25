@@ -260,6 +260,16 @@ export interface FrequencyPlan {
   alternate_with: string[];
   pair_with: string[];
   progression: string;
+  jours_initialement?: number[];
+  jours_cibles?: number[];
+  condition_progression?: string;
+  condition_utilisation?: string;
+}
+export interface FrequencyPlanV2 {
+  initial_per_week: number;
+  maximum_per_week: number;
+  jours_initialement?: number[];
+  jours_cibles?: number[];
 }
 export type WeeklyNight = { status: "active" | "recovery" | "rest"; product_ids: string[]; support_product_ids?: string[] };
 export type WeeklyPlan = { initial: WeeklyNight[]; progressed: WeeklyNight[] };
@@ -286,6 +296,7 @@ export interface FrequencyDraft {
   validation: { status: string; issues: RoutineWarning[] };
 }
 export interface RoutineView {
+  calendar_contract?: "v2" | "legacy";
   review_revision: string;
   active_version: number | null;
   frequency_draft?: FrequencyDraft | null;
@@ -329,14 +340,14 @@ function routinePost<T>(token: string, sessionId: string, action: string, revisi
 }
 
 export const saveFrequencies = (token: string, sessionId: string, revision: string,
-  changes: Array<{ id_produit: string; moments: Partial<Record<RoutineMoment, FrequencyPlan>> }>,
+  changes: Array<{ id_produit: string; moments: Partial<Record<RoutineMoment, FrequencyPlan | FrequencyPlanV2>> }>,
   weeklyPlan?: WeeklyPlan) =>
   routinePost<{ review_revision: string }>(token, sessionId, "frequencies", revision, { changes, weekly_plan: weeklyPlan });
 export const saveApplicationOrder = (token: string, sessionId: string, revision: string,
   order: Record<RoutineMoment, string[]>) =>
   routinePost<{ review_revision: string }>(token, sessionId, "order", revision, { order });
 export const saveFrequencyDraft = (token: string, sessionId: string, revision: string,
-  draftRevision: string | null, changes: FrequencyDraft["changes"]) =>
+  draftRevision: string | null, changes: Array<{ id_produit: string; moments: Partial<Record<RoutineMoment, FrequencyPlan | FrequencyPlanV2>> }>) =>
   routinePost<FrequencyDraft>(token, sessionId, "frequencies/draft", revision,
     { changes, draft_revision: draftRevision });
 export const discardFrequencyDraft = (token: string, sessionId: string, revision: string, draftRevision: string) =>
@@ -384,7 +395,11 @@ export interface RouteSchedule {
 export interface RouteLine {
   id_produit: string; levier_id: string; moment: RoutineMoment; schedule: RouteSchedule; reason: string;
 }
+export interface RouteLineV2 {
+  id_produit: string; levier_id: string; reason: string;
+}
 export interface RouteEditorData {
+  calendar_contract?: "v2" | "legacy";
   review_revision: string; route_id: string; editable: boolean; status: RouteDiagnostic["status"];
   levers: Array<{ levier_id: string; role: string; moments: RoutineMoment[]; besoins_couverts: string[] }>;
   products: Array<{ id: string; name: string; brand?: string; subcategory: string; moments: RoutineMoment[] }>;
@@ -397,7 +412,7 @@ const routeEditorPath = (sessionId: string, routeId: string) =>
 export const fetchRouteEditor = (token: string, sessionId: string, routeId: string) =>
   adminFetch<RouteEditorData>(token, routeEditorPath(sessionId, routeId), { cache: "no-store" });
 export const saveRouteEditor = (token: string, sessionId: string, routeId: string, data: {
-  expected_revision: string; draft_revision: string | null; items: RouteLine[];
+  expected_revision: string; draft_revision: string | null; items: (RouteLine | RouteLineV2)[];
   arbitrate: boolean; restore_revision?: string;
 }) => adminFetch<{
   id: string; items: RouteLine[];

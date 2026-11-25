@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   decideRoutineCandidate, fetchAdminArtifact, fetchRoutine, fetchRoutineCandidatePdf,
   rerunPrompt4, routineMoments, saveFrequencies, saveFrequencyDraft, discardFrequencyDraft, saveApplicationOrder,
-  type FrequencyPlan, type RoutineFrequency, type RoutineMoment, type RoutineView, type RoutineWarning,
+  type FrequencyPlan, type FrequencyPlanV2, type RoutineFrequency, type RoutineMoment, type RoutineView, type RoutineWarning,
   type WeeklyPlan, type WeeklyNight,
 } from "@/lib/adminApi";
 
@@ -199,6 +199,7 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
   }
 
   if (!view) return <p role={error ? "alert" : "status"} className="text-sm">{error || "Chargement de la routine…"}</p>;
+  if (view.calendar_contract === "v2") return <RoutineEditorV2 token={token} sessionId={sessionId} onSaved={onSaved} initialView={view} />;
   const initial = schedules(view);
   const orderChanged = !!view.application_order && JSON.stringify(order) !== JSON.stringify(view.application_order);
   const weekChanged = !!week && JSON.stringify(week) !== JSON.stringify(view.weekly_plan || suggestedWeek(view));
@@ -487,5 +488,194 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
     {preview && <section><h3 className="font-semibold">{preview.label}</h3>
       <Suspense fallback={<p>Chargement de l’aperçu…</p>}><PdfPreview blob={preview.blob} /></Suspense>
     </section>}
+  </div>;
+}
+
+type V2Plans = Record<string, Partial<Record<RoutineMoment, FrequencyPlanV2>>>;
+function v2Plans(view: RoutineView): V2Plans {
+  return Object.fromEntries(view.products.map(product => [product.id_produit,
+    Object.fromEntries(routineMoments.flatMap(moment => {
+      const row = product.moments[moment];
+      return row && row.initial_per_week !== null && row.maximum_per_week !== null
+        ? [[moment, { initial_per_week: row.initial_per_week, maximum_per_week: row.maximum_per_week,
+            jours_initialement: [...(row.jours_initialement || [])], jours_cibles: [...(row.jours_cibles || [])] }]] : [];
+    }))]));
+}
+
+function RoutineEditorV2({ token, sessionId, onSaved, initialView }: {
+  token: string; sessionId: string; onSaved: () => void; initialView: RoutineView;
+}) {
+  const [view, setView] = useState(initialView);
+  const [plans, setPlans] = useState<V2Plans>(() => v2Plans(initialView));
+  const [order, setOrder] = useState(initialView.application_order || { matin: [], soir: [], hebdomadaire: [] });
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [candidatePreview, setCandidatePreview] = useState<Blob | null>(null);
+  const [preview, setPreview] = useState<Blob | null>(null);
+  const [route, setRoute] = useState("");
+  const disabled = !view.editable || busy;
+  const days = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+  const original = v2Plans(view);
+  const changes = view.products.flatMap(product => {
+    const pid = product.id_produit;
+    const moments = Object.fromEntries(routineMoments.flatMap(moment => {
+      const current = plans[pid]?.[moment];
+      const prior = original[pid]?.[moment];
+      return current && JSON.stringify(current) !== JSON.stringify(prior) ? [[moment, current]] : [];
+    }));
+    return Object.keys(moments).length ? [{ id_produit: pid, moments }] : [];
+  });
+  const orderChanged = JSON.stringify(order) !== JSON.stringify(view.application_order);
+  function install(next: RoutineView) {
+    setView(next);
+    const result = v2Plans(next);
+    if (next.frequency_draft && !next.frequency_draft.applied) {
+      for (const change of next.frequency_draft.changes) {
+        result[change.id_produit] = { ...result[change.id_produit],
+          ...change.moments as Partial<Record<RoutineMoment, FrequencyPlanV2>> };
+      }
+    }
+    setPlans(result);
+    setOrder(next.application_order || { matin: [], soir: [], hebdomadaire: [] });
+  }
+  async function refresh() { install(await fetchRoutine(token, sessionId)); onSaved(); }
+  async function run(task: () => Promise<void>) {
+    setBusy(true); setMessage("");
+    try { await task(); } catch (error) { setMessage(error instanceof Error ? error.message : "Modification impossible."); }
+    finally { setBusy(false); }
+  }
+  function change(pid: string, moment: RoutineMoment, patch: Partial<FrequencyPlanV2>) {
+    setPlans(current => ({ ...current, [pid]: { ...current[pid],
+      [moment]: { ...current[pid]?.[moment], ...patch } as FrequencyPlanV2 } }));
+  }
+  function dayChange(pid: string, moment: RoutineMoment, phase: "jours_initialement" | "jours_cibles", day: number, checked: boolean) {
+    const row = plans[pid]?.[moment];
+    if (!row) return;
+    const prior = original[pid]?.[moment];
+    const start = [...(row.jours_initialement ?? prior?.jours_initialement ?? [])];
+    const target = [...(row.jours_cibles ?? prior?.jours_cibles ?? [])];
+    const toggleDay = (values: number[]) => checked ? [...new Set([...values, day])].sort() : values.filter(value => value !== day);
+    if (phase === "jours_initialement") {
+      const next = toggleDay(start);
+      change(pid, moment, { jours_initialement: next, jours_cibles: checked ? toggleDay(target) : target,
+        initial_per_week: next.length, maximum_per_week: checked ? toggleDay(target).length : target.length });
+    } else {
+      const next = toggleDay(target);
+      const initial = checked ? start : start.filter(value => value !== day);
+      change(pid, moment, { jours_initialement: initial, jours_cibles: next,
+        initial_per_week: initial.length, maximum_per_week: next.length });
+    }
+  }
+  const valid = changes.every(change => Object.values(change.moments).every(plan =>
+    Number.isInteger(plan.initial_per_week) && Number.isInteger(plan.maximum_per_week)
+    && plan.initial_per_week >= 0 && plan.maximum_per_week <= 7
+    && plan.initial_per_week <= plan.maximum_per_week));
+  return <div className="min-w-0 space-y-5">
+    <section className="space-y-2 rounded-xl border p-3">
+      <h3 className="font-semibold">Routine active · fréquences et calendrier</h3>
+      <FrequencySummary rows={view.frequencies} />
+      <Warnings issues={view.warnings} />
+      <button className="action-button min-h-11" type="button" onClick={() => run(async () =>
+        setPreview(await fetchAdminArtifact(token, sessionId, "pdf")))}>Aperçu PDF</button>
+      {preview && <div><button type="button" className="action-button" onClick={() => setPreview(null)}>Fermer l’aperçu</button><PdfPreview blob={preview} /></div>}
+    </section>
+    <section className="space-y-3 rounded-xl border p-3">
+      <h3 className="font-semibold">Applications par produit</h3>
+      <p className="text-sm text-slate-700">Modifiez un nombre d’applications, ou choisissez directement les jours. Les autres produits restent à leur place.</p>
+      {view.products.map(product => <details key={product.id_produit} className="min-w-0 rounded-lg border p-3">
+        <summary className="cursor-pointer font-medium">{product.name}</summary>
+        {routineMoments.flatMap(moment => {
+          const plan = plans[product.id_produit]?.[moment];
+          if (!plan) return [];
+          const condition = product.moments[moment]?.condition_utilisation;
+          return [<fieldset key={moment} disabled={disabled || !!condition} className="mt-3 space-y-2">
+            <legend className="font-medium">{momentLabels[moment]}{condition ? ` · ${condition}` : ""}</legend>
+            {!condition && <>
+              <div className="grid gap-2 sm:grid-cols-2">{(["initial_per_week", "maximum_per_week"] as const).map(field =>
+                <label key={field} className="text-sm">{field === "initial_per_week" ? "Départ / semaine" : "Cible / semaine"}
+                  <input className={control} type="number" min={0} max={7} inputMode="numeric" value={plan[field]}
+                    onChange={event => change(product.id_produit, moment, { [field]: Number(event.target.value),
+                      jours_initialement: undefined, jours_cibles: undefined })} />
+                </label>)}</div>
+              {(["jours_initialement", "jours_cibles"] as const).map(phase => <fieldset key={phase} className="space-y-1">
+                <legend className="text-sm">{phase === "jours_initialement" ? "Jours de départ" : "Jours cibles"}</legend>
+                <div className="flex flex-wrap gap-1">{days.map((day, index) => <label key={day} className="flex min-h-11 items-center gap-1 rounded border px-2 text-sm">
+                  <input type="checkbox" checked={(plan[phase] || original[product.id_produit]?.[moment]?.[phase] || []).includes(index)}
+                    onChange={event => dayChange(product.id_produit, moment, phase, index, event.target.checked)} />{day}
+                </label>)}</div>
+              </fieldset>)}
+              {!!product.moments[moment]?.condition_progression && <p className="text-sm">Progression : {product.moments[moment]?.condition_progression}</p>}
+            </>}
+          </fieldset>];
+        })}
+      </details>)}
+      <div className="rounded-lg border p-2 text-sm"><strong>Soirs programmés</strong>
+        {(["jours_initialement", "jours_cibles"] as const).map(phase => <div key={phase} className="mt-2">
+          <span>{phase === "jours_initialement" ? "Au départ" : "À terme"}</span>
+          <div className="grid grid-cols-2 gap-1 sm:grid-cols-4 lg:grid-cols-7">{days.map((day, index) => <div key={day} className="rounded border p-2">
+            <strong>{day}</strong><div>{view.products.flatMap(product => {
+              const plan = plans[product.id_produit]?.soir;
+              return (plan?.[phase] || original[product.id_produit]?.soir?.[phase] || []).includes(index) ? [product.name] : [];
+            }).join(", ") || "Aucun soin ciblé prévu"}</div>
+          </div>)}</div>
+        </div>)}</div>
+      <div className="flex flex-wrap gap-2">
+        <button className="action-button min-h-11" type="button" disabled={disabled || !changes.length || !valid}
+          onClick={() => run(async () => { const draft = await saveFrequencyDraft(token, sessionId, view.review_revision,
+            view.frequency_draft?.id || null, changes); setView({ ...view, frequency_draft: draft });
+            setMessage(draft.validation.status === "ok" ? "Brouillon enregistré." : draft.validation.issues.map(i => i.message).join(" ")); onSaved(); })}>Enregistrer le brouillon</button>
+        <button className="primary-button min-h-11 disabled:opacity-50" type="button" disabled={disabled || !changes.length || !valid}
+          onClick={() => run(async () => { await saveFrequencies(token, sessionId, view.review_revision, changes);
+            await refresh(); setMessage("Calendrier enregistré et rapport reconstruit."); })}>Appliquer et reconstruire HTML/PDF</button>
+        {view.frequency_draft && !view.frequency_draft.applied && <button type="button" className="action-button min-h-11" disabled={disabled}
+          onClick={() => run(async () => { await discardFrequencyDraft(token, sessionId, view.review_revision,
+            view.frequency_draft!.id); await refresh(); })}>Abandonner le brouillon</button>}
+      </div>
+      {view.frequency_draft && !view.frequency_draft.applied && <Warnings issues={view.frequency_draft.validation.issues} />}
+    </section>
+    <section className="space-y-2 rounded-xl border p-3">
+      <h3 className="font-semibold">Ordre d’application</h3>
+      {routineMoments.map(moment => <div key={moment}><strong>{momentLabels[moment]}</strong>
+        {(order[moment] || []).map((pid, index) => <div key={pid} className="flex min-h-11 items-center justify-between gap-2 text-sm">
+          <span>{view.products.find(product => product.id_produit === pid)?.name || pid}</span>
+          <div>{([-1, 1] as const).map(direction => <button key={direction} type="button" className="action-button px-2"
+            disabled={disabled || index + direction < 0 || index + direction >= order[moment].length}
+            onClick={() => setOrder(current => { const next = [...current[moment]];
+              [next[index], next[index + direction]] = [next[index + direction], next[index]];
+              return { ...current, [moment]: next }; })}>{direction === -1 ? "↑" : "↓"}</button>)}</div>
+        </div>)}
+      </div>)}
+      <button type="button" className="primary-button disabled:opacity-50" disabled={disabled || !orderChanged || !!changes.length}
+        onClick={() => run(async () => { await saveApplicationOrder(token, sessionId, view.review_revision, order);
+          await refresh(); setMessage("Ordre enregistré et rapport reconstruit."); })}>Enregistrer l’ordre</button>
+    </section>
+    <section className="space-y-2 rounded-xl border p-3">
+      <h3 className="font-semibold">Nouvelle proposition</h3>
+      {view.routes.map(item => <details key={item.route_id} className="rounded border p-2 text-sm">
+        <summary>{item.nom || item.route_id} · {item.available ? "Disponible" : "Indisponible"}</summary>
+        <p>{item.logique_technique}</p><p>{item.difference_majeure}</p>
+        {!!item.precautions.length && <p>{item.precautions.join(" · ")}</p>}
+        {!!item.missing_required_levers?.length && <p>{item.missing_required_levers.join(", ")}</p>}
+      </details>)}
+      <label className="block text-sm">Mode de sélection
+        <select className={control} disabled={disabled} value={route} onChange={event => setRoute(event.target.value)}>
+          <option value="">Sélection automatique</option>
+          {view.routes.map(item => <option key={item.route_id} value={item.route_id} disabled={!item.available}>{item.nom || item.route_id}</option>)}
+        </select>
+      </label>
+      <button type="button" className="action-button min-h-11" disabled={disabled || !!view.candidate || !!changes.length || !view.routes.some(item => item.available)}
+        onClick={() => run(async () => { await rerunPrompt4(token, sessionId, view.review_revision, route || null); await refresh(); })}>Relancer Prompt 4 et réarbitrer</button>
+      {view.candidate && <div className="flex flex-wrap gap-2">
+        <span>Proposition {view.candidate.route_id}</span>
+        <button type="button" className="action-button" onClick={() => run(async () => setCandidatePreview(
+          await fetchRoutineCandidatePdf(token, sessionId, view.candidate!.id)))}>Aperçu de la proposition</button>
+        {[true, false].map(accept => <button type="button" key={String(accept)} className="action-button" disabled={disabled || (accept && view.candidate!.stale)}
+          onClick={() => run(async () => { await decideRoutineCandidate(token, sessionId, view.review_revision,
+            view.candidate!.id, accept); await refresh(); })}>{accept ? "Accepter" : "Refuser"}</button>)}
+      </div>}
+      {candidatePreview && <div><button type="button" className="action-button" onClick={() => setCandidatePreview(null)}>Fermer l’aperçu</button><PdfPreview blob={candidatePreview} /></div>}
+    </section>
+    <TextsToReview fields={view.texts_to_review} />
+    <p role={message ? "alert" : "status"} className="text-sm">{busy ? "En cours…" : message}</p>
   </div>;
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   decideRoutineCandidate, fetchAdminArtifact, fetchRouteEditor, fetchRoutineCandidatePdf, routineMoments, saveRouteEditor,
-  type RouteEditorData, type RouteLine, type RouteSchedule, type RoutineDiagnostics,
+  type RouteEditorData, type RouteLine, type RouteLineV2, type RouteSchedule, type RoutineDiagnostics,
 } from "@/lib/adminApi";
 
 const statusLabels = { valid: "Valide", needs_correction: "À corriger", unavailable: "Indisponible" };
@@ -57,6 +57,7 @@ function RouteDraft({ token, sessionId, routeId, onSaved }: {
   }, [token, sessionId, routeId]);
 
   if (!view) return <p role={feedback ? "alert" : "status"}>{feedback || "Chargement du brouillon…"}</p>;
+  if (view.calendar_contract === "v2") return <RouteDraftV2 token={token} sessionId={sessionId} routeId={routeId} onSaved={onSaved} initialView={view} />;
   const catalogue = view.products.filter(product =>
     `${product.name} ${product.brand || ""} ${product.subcategory}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
   const productLabel = (id: string) => view.products.find(product => product.id === id)?.name || id;
@@ -229,5 +230,101 @@ export default function RouteDiagnostics({ token, sessionId, diagnostics, onSave
       </button>
       {editor === route.route_id && <RouteDraft key={route.route_id} token={token} sessionId={sessionId} routeId={route.route_id} onSaved={onSaved} />}
     </details>)}
+  </section>;
+}
+
+function RouteDraftV2({ token, sessionId, routeId, onSaved, initialView }: {
+  token: string; sessionId: string; routeId: string; onSaved: () => void; initialView: RouteEditorData;
+}) {
+  const [view, setView] = useState(initialView);
+  const [items, setItems] = useState<RouteLineV2[]>(initialView.items as unknown as RouteLineV2[]);
+  const [query, setQuery] = useState("");
+  const [restore, setRestore] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const [validated, setValidated] = useState(initialView.status === "valid");
+  const blocked = busy || !view.editable;
+  async function run(task: () => Promise<void>) {
+    setBusy(true); setFeedback("");
+    try { await task(); } catch (error) { setFeedback(error instanceof Error ? error.message : "Opération impossible."); }
+    finally { setBusy(false); }
+  }
+  async function refresh() {
+    const next = await fetchRouteEditor(token, sessionId, routeId);
+    setView(next); setItems(next.items as unknown as RouteLineV2[]);
+    setValidated(next.status === "valid"); onSaved();
+  }
+  async function persist(arbitrate: boolean, restoreRevision?: string) {
+    const result = await saveRouteEditor(token, sessionId, routeId, {
+      expected_revision: view.review_revision, draft_revision: view.draft_revision,
+      items, arbitrate, restore_revision: restoreRevision,
+    });
+    setView({ ...view, items: result.items as RouteLine[], draft_revision: result.id,
+      history: [result.id, ...view.history], issues: result.validation.issues,
+      status: result.validation.status === "ok" ? "valid" : "needs_correction",
+      candidate: result.candidate ?? view.candidate });
+    setItems(result.items as unknown as RouteLineV2[]);
+    setValidated(result.validation.status === "ok");
+    setFeedback(result.arbitration_error || (result.candidate ? "Proposition prête pour vérification." : "Brouillon enregistré."));
+  }
+  function change(next: RouteLineV2[]) { setItems(next); setValidated(false); }
+  const catalogue = view.products.filter(product =>
+    `${product.brand || ""} ${product.name} ${product.subcategory}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
+  return <section className="mt-3 min-w-0 space-y-3" aria-label={`Édition ${routeId}`}>
+    <p className="text-sm">État du brouillon · <strong>{statusLabels[view.status]}</strong></p>
+    <p className="text-sm">Sélectionnez les produits de cette combinaison. Prompt 5 définira les jours et fréquences après le nouvel arbitrage.</p>
+    <label className="block text-sm">Rechercher dans le catalogue<input className={control} value={query} onChange={event => setQuery(event.target.value)} /></label>
+    {items.map((item, index) => <fieldset key={index} disabled={blocked} className="min-w-0 space-y-2 rounded-xl border p-3">
+      <legend className="text-sm font-semibold">Produit {index + 1}</legend>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <label>Produit<select className={control} value={item.id_produit}
+          onChange={event => change(items.map((row, i) => i === index ? { ...row, id_produit: event.target.value } : row))}>
+          <option value="">Choisir une référence</option>
+          {view.products.find(p => p.id === item.id_produit) && !catalogue.some(p => p.id === item.id_produit) &&
+            <option value={item.id_produit}>{view.products.find(p => p.id === item.id_produit)?.name}</option>}
+          {catalogue.map(product => <option value={product.id} key={product.id}>{product.brand} {product.name}</option>)}
+        </select></label>
+        <label>Levier<select className={control} value={item.levier_id}
+          onChange={event => change(items.map((row, i) => i === index ? { ...row, levier_id: event.target.value } : row))}>
+          {view.levers.map(lever => <option key={lever.levier_id} value={lever.levier_id}>{lever.besoins_couverts.join(", ") || lever.levier_id}</option>)}
+        </select></label>
+      </div>
+      <label>Justification de la sélection<input className={control} value={item.reason} maxLength={400}
+        onChange={event => change(items.map((row, i) => i === index ? { ...row, reason: event.target.value } : row))} /></label>
+      <div className="flex flex-wrap gap-2">{([-1, 1] as const).map(offset => <button type="button" key={offset} className="action-button"
+        disabled={index + offset < 0 || index + offset >= items.length} onClick={() => {
+          const next = [...items]; [next[index], next[index + offset]] = [next[index + offset], next[index]]; change(next);
+        }}>{offset < 0 ? "Monter" : "Descendre"}</button>)}
+        <button type="button" className="action-button" onClick={() => change(items.filter((_, i) => i !== index))}>Supprimer</button>
+      </div>
+    </fieldset>)}
+    {!!view.issues.length && <ul className="space-y-1 rounded-lg bg-amber-50 p-3 text-sm">
+      {view.issues.map((issue, index) => <li key={index}>{issue.message}</li>)}
+    </ul>}
+    <div className="flex flex-wrap gap-2">
+      <button type="button" className="action-button min-h-11" disabled={blocked || !view.levers.length}
+        onClick={() => change([...items, { id_produit: "", levier_id: view.levers[0].levier_id, reason: "" }])}>Ajouter un produit</button>
+      <button type="button" className="action-button min-h-11" disabled={blocked || items.some(row => !row.id_produit)}
+        onClick={() => run(() => persist(false))}>Enregistrer et vérifier</button>
+      <button type="button" className="action-button min-h-11" disabled={blocked || !validated || !!view.candidate || !items.length}
+        onClick={() => run(() => persist(true))}>Relancer l’arbitrage</button>
+    </div>
+    {view.history.length > 1 && <div className="flex flex-wrap items-end gap-2">
+      <label>Historique du brouillon<select className={control} value={restore} onChange={event => setRestore(event.target.value)}>
+        <option value="">Choisir une version</option>{view.history.map(id => <option key={id} value={id}>Version {Number(id)}</option>)}
+      </select></label>
+      <button type="button" className="action-button min-h-11" disabled={blocked || !restore}
+        onClick={() => run(() => persist(false, restore))}>Restaurer</button>
+    </div>}
+    {view.candidate && <div className="flex flex-wrap gap-2 rounded-lg border p-3">
+      <p className="w-full">Proposition après arbitrage · {view.candidate.route_id}</p>
+      <button type="button" className="action-button" disabled={busy} onClick={() => run(async () =>
+        download("proposition-routine.pdf", await fetchRoutineCandidatePdf(token, sessionId, view.candidate!.id)))}>Télécharger le PDF</button>
+      {[true, false].map(accept => <button type="button" className="action-button" key={String(accept)}
+        disabled={blocked || (accept && view.candidate!.stale)} onClick={() => run(async () => {
+          await decideRoutineCandidate(token, sessionId, view.review_revision, view.candidate!.id, accept); await refresh();
+        })}>{accept ? "Retenir pour validation" : "Écarter la proposition"}</button>)}
+    </div>}
+    <p role="status" className="text-sm">{busy ? "Contrôle en cours…" : feedback}</p>
   </section>;
 }
