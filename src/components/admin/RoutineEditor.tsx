@@ -531,7 +531,11 @@ function RoutineEditorV2({ token, sessionId, onSaved, initialView }: {
     const result = v2Plans(next);
     if (next.frequency_draft && !next.frequency_draft.applied) {
       for (const change of next.frequency_draft.changes) {
-        result[change.id_produit] = { ...result[change.id_produit],
+        const restored = { ...result[change.id_produit] };
+        for (const plan of Object.values(change.moments)) {
+          if ("move_from" in (plan || {}) && plan?.move_from) delete restored[plan.move_from];
+        }
+        result[change.id_produit] = { ...restored,
           ...change.moments as Partial<Record<RoutineMoment, FrequencyPlanV2>> };
       }
     }
@@ -547,6 +551,17 @@ function RoutineEditorV2({ token, sessionId, onSaved, initialView }: {
   function change(pid: string, moment: RoutineMoment, patch: Partial<FrequencyPlanV2>) {
     setPlans(current => ({ ...current, [pid]: { ...current[pid],
       [moment]: { ...current[pid]?.[moment], ...patch } as FrequencyPlanV2 } }));
+  }
+  function moveMoment(pid: string, source: RoutineMoment, target: RoutineMoment) {
+    setPlans(current => {
+      const sourcePlan = current[pid]?.[source];
+      if (!sourcePlan || current[pid]?.[target]) return current;
+      const next = { ...current[pid] };
+      delete next[source];
+      next[target] = { ...sourcePlan,
+        move_from: original[pid]?.[target] ? undefined : sourcePlan.move_from || source as "matin" | "soir" };
+      return { ...current, [pid]: next };
+    });
   }
   function dayChange(pid: string, moment: RoutineMoment, phase: "jours_initialement" | "jours_cibles", day: number, checked: boolean) {
     const row = plans[pid]?.[moment];
@@ -590,6 +605,15 @@ function RoutineEditorV2({ token, sessionId, onSaved, initialView }: {
           const condition = product.moments[moment]?.condition_utilisation;
           return [<fieldset key={moment} disabled={disabled || !!condition} className="mt-3 space-y-2">
             <legend className="font-medium">{momentLabels[moment]}{condition ? ` · ${condition}` : ""}</legend>
+            {!condition && (moment === "matin" || moment === "soir") &&
+              (product.allowed_moments || []).some(other => other !== moment && other !== "hebdomadaire" && !plans[product.id_produit]?.[other]) &&
+              <label className="block text-sm">Moment d’application
+                <select className={control} value={moment} onChange={event => moveMoment(product.id_produit, moment, event.target.value as RoutineMoment)}>
+                  <option value={moment}>{momentLabels[moment]}</option>
+                  {(product.allowed_moments || []).filter(other => other !== moment && other !== "hebdomadaire" && !plans[product.id_produit]?.[other])
+                    .map(other => <option key={other} value={other}>{momentLabels[other]}</option>)}
+                </select>
+              </label>}
             {!condition && <>
               <div className="grid gap-2 sm:grid-cols-2">{(["initial_per_week", "maximum_per_week"] as const).map(field =>
                 <label key={field} className="text-sm">{field === "initial_per_week" ? "Départ / semaine" : "Cible / semaine"}

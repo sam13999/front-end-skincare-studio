@@ -240,4 +240,19 @@ describe("Calendrier simplifié", () => {
     fireEvent.change(screen.getByLabelText("Mode de sélection"), { target: { value: "b" } });
     expect(button("Relancer Prompt 4 et réarbitrer")).toBeDisabled(); // unsaved day edit
   });
+
+  it("déplace un soin au matin autorisé en conservant ses jours", async () => {
+    const view = newView();
+    view.products[0].allowed_moments = ["matin", "soir"];
+    vi.mocked(api.fetchRoutine).mockResolvedValue(view);
+    vi.mocked(api.saveFrequencies).mockResolvedValue({ review_revision: revised });
+    renderEditor();
+    const product = within((await screen.findByText("Sérum correctif", { selector: "summary" })).closest("details")!);
+    fireEvent.change(product.getByLabelText("Moment d’application"), { target: { value: "matin" } });
+    fireEvent.click(button("Appliquer et reconstruire HTML/PDF"));
+    await waitFor(() => expect(api.saveFrequencies).toHaveBeenCalledWith("test", "session", initial, [{
+      id_produit: "serum", moments: { matin: { initial_per_week: 1, maximum_per_week: 2,
+        jours_initialement: [1], jours_cibles: [1, 4], move_from: "soir" } },
+    }]));
+  });
 });

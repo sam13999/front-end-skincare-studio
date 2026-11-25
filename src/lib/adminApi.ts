@@ -270,6 +270,7 @@ export interface FrequencyPlanV2 {
   maximum_per_week: number;
   jours_initialement?: number[];
   jours_cibles?: number[];
+  move_from?: "matin" | "soir";
 }
 export type WeeklyNight = { status: "active" | "recovery" | "rest"; product_ids: string[]; support_product_ids?: string[] };
 export type WeeklyPlan = { initial: WeeklyNight[]; progressed: WeeklyNight[] };
@@ -292,7 +293,7 @@ export interface RoutineCandidate {
 }
 export interface FrequencyDraft {
   id: string; base_revision: string; applied: boolean;
-  changes: Array<{ id_produit: string; moments: Partial<Record<RoutineMoment, FrequencyPlan>> }>;
+  changes: Array<{ id_produit: string; moments: Partial<Record<RoutineMoment, FrequencyPlan | FrequencyPlanV2>> }>;
   validation: { status: string; issues: RoutineWarning[] };
 }
 export interface RoutineView {
