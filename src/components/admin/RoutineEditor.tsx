@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   decideRoutineCandidate, fetchAdminArtifact, fetchRoutine, fetchRoutineCandidatePdf,
-  rerunPrompt4, routineMoments, saveFrequencies, saveFrequencyDraft, discardFrequencyDraft, saveApplicationOrder,
+  rerunPrompt4, routineMoments, saveFrequencies, saveFrequencyDraft, discardFrequencyDraft, saveApplicationOrder, removeRoutineProduct,
   type FrequencyPlan, type FrequencyPlanV2, type RoutineFrequency, type RoutineMoment, type RoutineView, type RoutineWarning,
   type WeeklyPlan, type WeeklyNight,
 } from "@/lib/adminApi";
@@ -607,9 +607,9 @@ function RoutineEditorV2({ token, sessionId, onSaved, initialView }: {
           if (!plan) return condition ? [<fieldset key={moment} disabled className="mt-3 space-y-2">
             <legend className="font-medium">{momentLabels[moment]} · {condition}</legend>
           </fieldset>] : [];
-          return [<fieldset key={moment} disabled={disabled || !!condition} className="mt-3 space-y-2">
+          return [<fieldset key={moment} disabled={disabled} className="mt-3 space-y-2">
             <legend className="font-medium">{momentLabels[moment]}{condition ? ` · ${condition}` : ""}</legend>
-            {!condition && (moment === "matin" || moment === "soir") &&
+            {(moment === "matin" || moment === "soir") &&
               (product.allowed_moments || []).some(other => other !== moment && other !== "hebdomadaire" && !plans[product.id_produit]?.[other]) &&
               <label className="block text-sm">Moment d’application
                 <select className={control} value={moment} onChange={event => moveMoment(product.id_produit, moment, event.target.value as RoutineMoment)}>
@@ -618,7 +618,7 @@ function RoutineEditorV2({ token, sessionId, onSaved, initialView }: {
                     .map(other => <option key={other} value={other}>{momentLabels[other]}</option>)}
                 </select>
               </label>}
-            {!condition && <>
+            {<>
               <div className="grid gap-2 sm:grid-cols-2">{(["initial_per_week", "maximum_per_week"] as const).map(field =>
                 <label key={field} className="text-sm">{field === "initial_per_week" ? "Départ / semaine" : "Cible / semaine"}
                   <input className={control} type="number" min={0} max={7} inputMode="numeric" value={plan[field]}
@@ -636,6 +636,16 @@ function RoutineEditorV2({ token, sessionId, onSaved, initialView }: {
             </>}
           </fieldset>];
         })}
+        <button type="button" className="action-button mt-3 min-h-11" disabled={disabled || changes.length > 0}
+          onClick={() => {
+            if (!window.confirm(`Retirer « ${product.name} » de la routine ? Le rapport sera reconstruit.`)) return;
+            run(async () => {
+              const result = await removeRoutineProduct(token, sessionId, view.review_revision, product.id_produit);
+              await refresh();
+              setMessage(`${product.name} retiré de la routine.` + (result.texts_to_review?.length
+                ? " Relisez les textes qui le mentionnent encore." : ""));
+            });
+          }}>Retirer ce produit de la routine</button>
       </details>)}
       <div className="rounded-lg border p-2 text-sm"><strong>Soirs programmés</strong>
         {(["jours_initialement", "jours_cibles"] as const).map(phase => <div key={phase} className="mt-2">
