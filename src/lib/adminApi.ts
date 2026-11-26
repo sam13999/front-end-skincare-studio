@@ -347,6 +347,9 @@ export const saveFrequencies = (token: string, sessionId: string, revision: stri
 export const saveApplicationOrder = (token: string, sessionId: string, revision: string,
   order: Record<RoutineMoment, string[]>) =>
   routinePost<{ review_revision: string }>(token, sessionId, "order", revision, { order });
+export const removeRoutineProduct = (token: string, sessionId: string, revision: string, productId: string) =>
+  routinePost<{ review_revision: string; texts_to_review?: string[] }>(token, sessionId, "remove", revision,
+    { id_produit: productId });
 export const saveFrequencyDraft = (token: string, sessionId: string, revision: string,
   draftRevision: string | null, changes: Array<{ id_produit: string; moments: Partial<Record<RoutineMoment, FrequencyPlan | FrequencyPlanV2>> }>) =>
   routinePost<FrequencyDraft>(token, sessionId, "frequencies/draft", revision,
