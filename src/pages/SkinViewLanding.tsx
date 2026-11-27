@@ -215,7 +215,7 @@ export default function SkinViewLanding() {
     <Header onStart={start} />
     <main>
       <section className="sv-hero" id="top">
-        <div className="sv-hero-image"><p>Analyse<br />de peau<br />personnalisée<br />en ligne</p><img src={heroImage} alt="Femme présentant une peau naturelle, dans une lumière douce" /></div>
+        <div className="sv-hero-image"><p>Analyse<br />de peau<br />personnalisée<br />en ligne</p><img src={heroImage} alt="Deux visages en gros plan, une peau claire à taches de rousseur et une peau foncée, sans maquillage" /></div>
         <h1>Une routine<br />(vraiment) pensée<br />pour votre peau.</h1>
         <p className="sv-lead">SkinView analyse vos photos et vos réponses pour construire une routine adaptée à votre peau, avec uniquement les produits qui ont une vraie raison d’être.</p>
         <Cta onClick={start}>Commencer mon analyse</Cta>

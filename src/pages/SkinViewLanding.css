@@ -52,7 +52,7 @@
 
 .sv-hero { padding: 0 22px 30px; }
 .sv-hero-image { position: relative; height: 470px; margin: 0 -22px; overflow: hidden; }
-.sv-hero-image img { width: 100%; height: 100%; object-fit: cover; object-position: 62% 18%; }
+.sv-hero-image img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; }
 .sv-hero-image::before { content: ""; position: absolute; z-index: 1; inset: 0; background: linear-gradient(100deg, rgba(248, 242, 236, .85) 0%, rgba(248, 242, 236, .35) 30%, transparent 50%); }
 .sv-hero-image::after { content: ""; position: absolute; right: 0; bottom: 0; left: 0; height: 210px; background: linear-gradient(rgba(251, 248, 244, 0), rgba(251, 248, 244, .8) 55%, var(--sv-bg)); }
 .sv-hero-image p { position: absolute; z-index: 2; top: 56px; left: 22px; font-size: 10.5px; line-height: 1.8; letter-spacing: .24em; text-transform: uppercase; }
