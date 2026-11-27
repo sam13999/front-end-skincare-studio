@@ -438,3 +438,18 @@ describe("real-time camera guidance", () => {
     expect(liveState("face", 100, 0.5, 0, 1.4).isRawValid).toBe(false);
   });
 });
+
+describe("équilibre de la lumière sur le visage", async () => {
+  const { evaluateLightingBalance } = await import("@/components/diagnostic/photoValidation");
+  it("accepte une lumière homogène", () => {
+    expect(evaluateLightingBalance(140, 128)).toBeNull();
+  });
+  it("avertit pour un léger déséquilibre", () => {
+    expect(evaluateLightingBalance(150, 100)?.severity).toBe("warning");
+  });
+  it("refuse une joue dans l’ombre", () => {
+    const issue = evaluateLightingBalance(160, 70);
+    expect(issue?.code).toBe("uneven_lighting");
+    expect(issue?.severity).toBe("critical");
+  });
+});

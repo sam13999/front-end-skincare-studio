@@ -225,6 +225,34 @@ export function evaluateFaceObservations(
   return [];
 }
 
+/** Seuils de différence de lumière entre les deux joues (photo de face). */
+export const LIGHTING_BALANCE_THRESHOLDS = { reject: 0.6, warn: 0.72 } as const;
+
+/**
+ * Compare la luminosité moyenne des deux joues. Une ombre marquée d'un côté
+ * (lampe ou fenêtre latérale) fausse l'analyse des rougeurs et des taches.
+ */
+export function evaluateLightingBalance(leftMean: number, rightMean: number): ValidationIssue | null {
+  const brighter = Math.max(leftMean, rightMean);
+  if (brighter <= 0) return null;
+  const ratio = Math.min(leftMean, rightMean) / brighter;
+  if (ratio < LIGHTING_BALANCE_THRESHOLDS.reject) {
+    return {
+      code: "uneven_lighting",
+      message: "Un côté de votre visage est dans l’ombre. Placez-vous face à la lumière (une fenêtre devant vous, pas sur le côté).",
+      severity: "critical",
+    };
+  }
+  if (ratio < LIGHTING_BALANCE_THRESHOLDS.warn) {
+    return {
+      code: "slightly_uneven_lighting",
+      message: "La lumière est un peu plus forte d’un côté. Face à une fenêtre, le résultat sera plus fiable.",
+      severity: "warning",
+    };
+  }
+  return null;
+}
+
 export async function validatePhoto(
   dataUrl: string,
   type: "face" | "profile",
@@ -393,6 +421,20 @@ export async function validatePhoto(
         message: "La photo est surexposée ou prise à contre-jour.",
         severity: "critical",
       });
+    }
+    if (type === "face" && landmarkFaceBox) {
+      // Joues uniquement : on évite les yeux, les cheveux et le fond.
+      const box = landmarkFaceBox;
+      const cheek = (fromX: number, toX: number) => ({
+        x: Math.round((box.left + box.width * fromX) * img.naturalWidth),
+        y: Math.round((box.top + box.height * 0.45) * img.naturalHeight),
+        width: Math.max(1, Math.round(box.width * (toX - fromX) * img.naturalWidth)),
+        height: Math.max(1, Math.round(box.height * 0.3 * img.naturalHeight)),
+      });
+      const left = analyzeLuma(getImageData(img, cheek(0.12, 0.4), 128)).mean;
+      const right = analyzeLuma(getImageData(img, cheek(0.6, 0.88), 128)).mean;
+      const balanceIssue = evaluateLightingBalance(left, right);
+      if (balanceIssue) issues.push(balanceIssue);
     }
     if (sharpness < config.minSharpness * 0.5) {
       issues.push({ code: "very_blurry", message: "La photo semble trop floue.", severity: "critical" });
