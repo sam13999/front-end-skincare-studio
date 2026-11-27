@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import ReportEditor from "./ReportEditor";
+import ReportEditor, { detectionGroups } from "./ReportEditor";
 import * as api from "@/lib/adminApi";
 
 vi.mock("./PdfPreview", () => ({ default: () => <div aria-label="Aperçu PDF actualisé">Lecteur PDF</div> }));
@@ -12,7 +12,7 @@ vi.mock("@/lib/adminApi", () => ({
     }
   },
   fetchReportEditing: vi.fn(), saveReportText: vi.fn(), fetchAdminArtifact: vi.fn(() => Promise.resolve(new Blob(["HTML"]))),
-  saveReportCrop: vi.fn(), fetchOriginalZoom: vi.fn(), revertReport: vi.fn(),
+  saveReportCrop: vi.fn(), fetchOriginalZoom: vi.fn(), revertReport: vi.fn(), deleteReportZoom: vi.fn(),
 }));
 
 describe("ReportEditor", () => {
@@ -123,7 +123,7 @@ describe("ReportEditor", () => {
     Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:photo") });
     Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
     render(<ReportEditor token="admin" sessionId="session" onSaved={vi.fn()} />);
-    const select = await screen.findByRole("combobox", { name: "Détection Zyla du zoom 1" });
+    const select = await screen.findByRole("combobox", { name: "Montrer dans le zoom 1" });
     fireEvent.change(select, { target: { value: "side:skin_spot:0" } });
     await screen.findByAltText("Photo originale : side");
     expect(api.fetchOriginalZoom).toHaveBeenLastCalledWith("admin", "session", 0, "side:skin_spot:0");
@@ -150,5 +150,37 @@ describe("ReportEditor", () => {
     await screen.findByLabelText("Aperçu PDF actualisé");
     expect(saved).toHaveBeenCalledOnce();
     expect(screen.getByText(/aucun email n’a été envoyé/)).toBeInTheDocument();
+  });
+  it("présente les détections en mots clairs, groupées par photo et par type", () => {
+    const rect: [number, number, number, number] = [.1, .1, .2, .2];
+    const base = { source_width: 10, source_height: 10, rect };
+    const groups = detectionGroups([
+      { ...base, id: "face:closed_comedones:0", source_photo: "face", title: "Zone de texture",
+        menu_label: "Petit bouton fermé (micro-comédon)", zone: "joue gauche", confidence: null },
+      { ...base, id: "face:closed_comedones:3", source_photo: "face", title: "Zone de texture",
+        menu_label: "Petit bouton fermé (micro-comédon)", zone: "joue gauche", confidence: .8 },
+      { ...base, id: "face:skin_spot:0", source_photo: "face", title: "Zone pigmentée", zone: "front", confidence: null },
+    ]);
+    expect(groups.map(group => group.label)).toEqual([
+      "Photo de face · Petit bouton fermé (micro-comédon)", "Photo de face · Zone pigmentée"]);
+    expect(groups[0].items.map(item => item.label)).toEqual(["Joue gauche (1)", "Joue gauche (2) · fiabilité 80 %"]);
+    expect(JSON.stringify(groups)).not.toMatch(/confiance inconnue|closed_comedones/);
+  });
+  it("supprime un zoom après confirmation et reconstruit le PDF", async () => {
+    const revision = "a".repeat(64);
+    vi.mocked(api.fetchReportEditing).mockResolvedValue({
+      review_revision: revision, fields: [], history: [], detections: [],
+      zooms: [{ title: "Sillons du sourire", signal_id: "nasolabial_fold", source_photo: "face", crop_method: "manual",
+        source_width: 400, source_height: 400, crop_box: [100, 100, 300, 300] }],
+    });
+    vi.mocked(api.fetchOriginalZoom).mockResolvedValue(new Blob(["photo"]));
+    vi.mocked(api.deleteReportZoom).mockResolvedValue({ review_revision: "d".repeat(64) });
+    vi.mocked(api.fetchAdminArtifact).mockResolvedValue(new Blob(["PDF"]));
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:photo") });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<ReportEditor token="admin" sessionId="session" onSaved={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Supprimer ce zoom" }));
+    await waitFor(() => expect(api.deleteReportZoom).toHaveBeenCalledWith("admin", "session", 0, revision));
   });
 });

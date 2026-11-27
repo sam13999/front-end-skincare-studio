@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   decideRoutineCandidate, fetchAdminArtifact, fetchRoutine, fetchRoutineCandidatePdf,
   rerunPrompt4, routineMoments, saveFrequencies, saveFrequencyDraft, discardFrequencyDraft, saveApplicationOrder, removeRoutineProduct,
+  removeRoutineMoment, replaceRoutineProduct,
   type FrequencyPlan, type FrequencyPlanV2, type RoutineFrequency, type RoutineMoment, type RoutineView, type RoutineWarning,
   type WeeklyPlan, type WeeklyNight,
 } from "@/lib/adminApi";
@@ -494,6 +495,47 @@ export default function RoutineEditor({ token, sessionId, onSaved }: {
 }
 
 type V2Plans = Record<string, Partial<Record<RoutineMoment, FrequencyPlanV2>>>;
+type RoutineProduct = RoutineView["products"][number];
+
+/** Retirer un moment ou remplacer le produit par un autre candidat du même besoin, sans appel IA. */
+function ProductReviewActions({ product, disabled, onRemoveMoment, onReplace }: {
+  product: RoutineProduct; disabled: boolean;
+  onRemoveMoment: (moment: RoutineMoment) => void;
+  onReplace: (productId: string, reason: string) => void;
+}) {
+  const [replacement, setReplacement] = useState("");
+  const [reason, setReason] = useState("");
+  const used = routineMoments.filter(moment => product.moments[moment]);
+  const options = product.alternatives || [];
+  const chosen = options.find(option => option.id_produit === replacement);
+  return <div className="mt-3 space-y-3">
+    {used.length > 1 && <div className="flex flex-wrap gap-2">{used.map(moment =>
+      <button key={moment} type="button" className="action-button min-h-11" disabled={disabled}
+        onClick={() => onRemoveMoment(moment)}>Ne plus l’utiliser : {momentLabels[moment].toLowerCase()}</button>)}
+    </div>}
+    {options.length > 0 && <fieldset className="space-y-2 rounded-md border p-2" disabled={disabled}>
+      <legend className="text-sm font-medium">Remplacer par un autre produit proposé pour ce besoin</legend>
+      <label className="block text-sm">Nouveau produit
+        <select className={control} value={replacement} onChange={event => setReplacement(event.target.value)}>
+          <option value="">Choisir un produit</option>
+          {options.map(option => <option key={option.id_produit} value={option.id_produit}>
+            {option.name}{option.missing_moments.length ? ` (pas prévu le ${option.missing_moments.map(m => momentLabels[m].toLowerCase()).join(", ")})` : ""}
+          </option>)}
+        </select>
+      </label>
+      {chosen && chosen.missing_moments.length > 0 && <p className="text-sm text-amber-800">
+        Ce produit n’est pas prévu le {chosen.missing_moments.map(m => momentLabels[m].toLowerCase()).join(", ")} :
+        retirez d’abord ce moment au produit actuel.</p>}
+      <label className="block text-sm">« Pourquoi ce produit » (texte client, facultatif)
+        <textarea className={control} rows={2} value={reason} onChange={event => setReason(event.target.value)} />
+      </label>
+      <button type="button" className="action-button min-h-11"
+        disabled={!chosen || chosen.missing_moments.length > 0}
+        onClick={() => chosen && onReplace(chosen.id_produit, reason)}>Remplacer le produit</button>
+    </fieldset>}
+  </div>;
+}
+
 function v2Plans(view: RoutineView): V2Plans {
   return Object.fromEntries(view.products.map(product => [product.id_produit,
     Object.fromEntries(routineMoments.flatMap(moment => {
@@ -646,7 +688,33 @@ function RoutineEditorV2({ token, sessionId, onSaved, initialView }: {
                 ? " Relisez les textes qui le mentionnent encore." : ""));
             });
           }}>Retirer ce produit de la routine</button>
+        <ProductReviewActions product={product} disabled={disabled || changes.length > 0}
+          onRemoveMoment={moment => {
+            if (!window.confirm(`Ne plus utiliser « ${product.name} » le ${momentLabels[moment].toLowerCase()} ? Le rapport sera reconstruit.`)) return;
+            run(async () => {
+              const result = await removeRoutineMoment(token, sessionId, view.review_revision, product.id_produit, moment);
+              await refresh();
+              setMessage(`${product.name} : ${momentLabels[moment].toLowerCase()} retiré.` + (result.texts_to_review?.length
+                ? " Relisez les textes signalés." : ""));
+            });
+          }}
+          onReplace={(productId, reason) => {
+            const name = product.alternatives?.find(option => option.id_produit === productId)?.name || productId;
+            if (!window.confirm(`Remplacer « ${product.name} » par « ${name} » ? Mêmes jours et conseils, rapport reconstruit.`)) return;
+            run(async () => {
+              const result = await replaceRoutineProduct(token, sessionId, view.review_revision, product.id_produit, productId, reason);
+              await refresh();
+              setMessage(`${product.name} remplacé par ${name}.` + (result.texts_to_review?.length
+                ? " À relire : " + result.texts_to_review.join(" ; ") : ""));
+            });
+          }} />
       </details>)}
+      {!!view.optional_products?.length && <div className="rounded-lg border p-2 text-sm">
+        <strong>Pour aller plus loin (hors calendrier)</strong>
+        <ul className="mt-1 space-y-1">{view.optional_products.map(option => <li key={option.id_produit}>
+          <span className="font-medium">{option.produit}</span> · {option.demarrage}</li>)}</ul>
+        <p className="mt-1 text-slate-600">Textes modifiables dans « Vos objectifs et repères de suivi ».</p>
+      </div>}
       <div className="rounded-lg border p-2 text-sm"><strong>Soirs programmés</strong>
         {(["jours_initialement", "jours_cibles"] as const).map(phase => <div key={phase} className="mt-2">
           <span>{phase === "jours_initialement" ? "Au départ" : "À terme"}</span>

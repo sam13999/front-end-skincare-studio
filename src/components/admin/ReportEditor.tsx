@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { AdminValidationError, AdminValidationIssue, fetchAdminArtifact, fetchOriginalZoom, fetchReportEditing, ReportEditing, ZylaDetection,
+import { AdminValidationError, AdminValidationIssue, deleteReportZoom, fetchAdminArtifact, fetchOriginalZoom, fetchReportEditing, ReportEditing, ZylaDetection,
   revertReport, saveReportCrop, saveReportText } from "@/lib/adminApi";
 const PdfPreview = lazy(() => import("./PdfPreview"));
 
@@ -21,11 +21,37 @@ function chapter(field: Field): string {
   if (root === "overview") return "glance";
   if (root === "profile") return "profile";
   if (root === "strategy") return key === "goals" ? "goals" : key === "prioritize" || key === "avoid" ? "priorities" : "why";
-  if (root === "routine_overview") return key === "follow_up" || key === "conclusion" ? "goals" : "routine";
+  if (root === "routine_overview") return key === "follow_up" || key === "conclusion" || key === "optional_products" ? "goals" : "routine";
   return "products-soir";
 }
 
 type Rect = [number, number, number, number];
+
+/** Menu de cadrage : une ligne par détection, groupée par vue puis par type, sans identifiant interne. */
+export function detectionGroups(detections: ZylaDetection[]) {
+  const groups: Array<{ label: string; items: Array<{ id: string; label: string }> }> = [];
+  for (const view of ["face", "side"]) {
+    const byType = new Map<string, ZylaDetection[]>();
+    for (const item of detections.filter(detection => detection.source_photo === view)) {
+      const type = item.menu_label || item.title;
+      byType.set(type, [...(byType.get(type) || []), item]);
+    }
+    for (const [type, items] of byType) {
+      const perZone = new Map<string, number>();
+      groups.push({
+        label: `${view === "face" ? "Photo de face" : "Photo de profil"} · ${type}`,
+        items: items.map(item => {
+          const rank = (perZone.get(item.zone) || 0) + 1;
+          perZone.set(item.zone, rank);
+          const repeated = items.filter(other => other.zone === item.zone).length > 1;
+          const confidence = item.confidence == null ? "" : ` · fiabilité ${Math.round(item.confidence * 100)} %`;
+          return { id: item.id, label: `${item.zone.charAt(0).toUpperCase()}${item.zone.slice(1)}${repeated ? ` (${rank})` : ""}${confidence}` };
+        }),
+      });
+    }
+  }
+  return groups;
+}
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 function CropEditor({ token, sessionId, zoom, index, revision, detections, onSaved }: {
@@ -83,18 +109,24 @@ function CropEditor({ token, sessionId, zoom, index, revision, detections, onSav
     finally { setSaving(false); }
   }
 
+  async function remove() {
+    if (!window.confirm(`Supprimer le zoom ${index + 1} « ${zoom.title} » du rapport ? Le PDF sera reconstruit.`)) return;
+    setError(""); setSaving(true);
+    try { await deleteReportZoom(token, sessionId, index, revision); await onSaved(); }
+    catch (e) { setError(e instanceof Error ? e.message : "Suppression refusée"); }
+    finally { setSaving(false); }
+  }
+
   return <div className="rounded-xl border border-slate-200 p-4">
     <h4 className="font-semibold">{zoom.title} · signal {zoom.signal_id || "inconnu"}</h4>
     <p className="mb-3 text-xs text-slate-500">{zoom.source_photo} · {zoom.crop_method === "anatomical_approximation" ? "Zone anatomique approximative" : zoom.crop_method === "manual" ? "Cadrage manuel" : "Coordonnées fournisseur"}</p>
     {detections.length > 0 && <label className="mb-3 block text-sm">
-      Détection Zyla du zoom {index + 1}
+      Montrer dans le zoom {index + 1}
       <select className="ml-2 rounded border p-1" value={detectionId} disabled={saving}
         onChange={event => chooseDetection(event.target.value)}>
-        <option value="">Conserver la preuve actuelle</option>
-        {["face", "side"].map(view => <optgroup key={view} label={view === "face" ? "Face" : "Profil"}>
-          {detections.filter(item => item.source_photo === view).map(item => <option key={item.id} value={item.id}>
-            {item.title} · {item.zone} · {item.id.split(":").at(-1)} · {item.confidence == null ? "confiance inconnue" : `${Math.round(item.confidence * 100)} %`}
-          </option>)}
+        <option value="">Garder l’image actuelle</option>
+        {detectionGroups(detections).map(group => <optgroup key={group.label} label={group.label}>
+          {group.items.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
         </optgroup>)}
       </select>
     </label>}
@@ -118,6 +150,7 @@ function CropEditor({ token, sessionId, zoom, index, revision, detections, onSav
       </div>
       <button type="button" className="action-button mt-3" disabled={saving} onClick={save}>{saving ? "Actualisation du PDF…" : "Enregistrer ce cadrage"}</button>
     </div>}
+    <button type="button" className="action-button mt-3" disabled={saving} onClick={remove}>Supprimer ce zoom</button>
     {error && <p role="alert" className="mt-2 text-sm text-red-700">{error}</p>}
   </div>;
 }

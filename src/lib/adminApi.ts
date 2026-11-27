@@ -116,7 +116,10 @@ export class AdminValidationError extends Error {
 export interface ZylaDetection {
   id: string;
   source_photo: string;
+  signal_id?: string;
   title: string;
+  /** Libellé clair pour le menu de cadrage (ce qui a été détecté). */
+  menu_label?: string;
   zone: string;
   confidence: number | null;
   rect: [number, number, number, number];
@@ -253,6 +256,12 @@ export const saveReportCrop = (token: string, sessionId: string, index: number, 
     body: JSON.stringify({ expected_revision: expectedRevision, rect, detection_id: detectionId }),
   });
 
+export const deleteReportZoom = (token: string, sessionId: string, index: number, expectedRevision: string) =>
+  adminFetch<{ review_revision: string }>(token, `${editingPath(sessionId)}/zoom/${index}`, {
+    method: "DELETE", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ expected_revision: expectedRevision }),
+  });
+
 export const revertReport = (token: string, sessionId: string, revision: number, expectedRevision: string) =>
   adminFetch<{ review_revision: string }>(token, `${editingPath(sessionId)}/revert`, {
     method: "POST", headers: { "Content-Type": "application/json" },
@@ -324,6 +333,14 @@ export interface FrequencyDraft {
   changes: Array<{ id_produit: string; moments: Partial<Record<RoutineMoment, FrequencyPlan | FrequencyPlanV2>> }>;
   validation: { status: string; issues: RoutineWarning[] };
 }
+export interface ReplacementOption {
+  id_produit: string;
+  name: string;
+  moments: RoutineMoment[];
+  /** Moments du produit actuel que ce remplaçant ne couvre pas : à retirer d’abord. */
+  missing_moments: RoutineMoment[];
+}
+
 export interface RoutineView {
   calendar_contract?: "v2" | "legacy";
   review_revision: string;
@@ -336,7 +353,11 @@ export interface RoutineView {
   initial_route_id: string;
   initial_frequencies: RoutineFrequency[];
   frequencies: RoutineFrequency[];
-  products: Array<{ id_produit: string; name: string; calendar_role?: "corrective" | "soothing" | "barrier" | "cleanser" | "spf" | "complement"; allowed_moments?: RoutineMoment[]; moments: Partial<Record<RoutineMoment, Partial<FrequencyPlan>>> }>;
+  products: Array<{ id_produit: string; name: string; calendar_role?: "corrective" | "soothing" | "barrier" | "cleanser" | "spf" | "complement"; allowed_moments?: RoutineMoment[]; moments: Partial<Record<RoutineMoment, Partial<FrequencyPlan>>>;
+    /** Autres produits proposés pour le même besoin (remplacement sans appel IA). */
+    alternatives?: ReplacementOption[] }>;
+  /** Produits facultatifs « Pour aller plus loin », hors calendrier. */
+  optional_products?: Array<{ id_produit: string; produit: string; pourquoi: string; demarrage: string }>;
   application_order?: Record<RoutineMoment, string[]>;
   warnings: RoutineWarning[];
   texts_to_review: string[];
@@ -378,6 +399,13 @@ export const saveApplicationOrder = (token: string, sessionId: string, revision:
 export const removeRoutineProduct = (token: string, sessionId: string, revision: string, productId: string) =>
   routinePost<{ review_revision: string; texts_to_review?: string[] }>(token, sessionId, "remove", revision,
     { id_produit: productId });
+export const removeRoutineMoment = (token: string, sessionId: string, revision: string, productId: string, moment: RoutineMoment) =>
+  routinePost<{ review_revision: string; texts_to_review?: string[] }>(token, sessionId, "remove-moment", revision,
+    { id_produit: productId, moment });
+export const replaceRoutineProduct = (token: string, sessionId: string, revision: string, productId: string,
+  newProductId: string, reason = "") =>
+  routinePost<{ review_revision: string; texts_to_review?: string[] }>(token, sessionId, "replace", revision,
+    { id_produit: productId, nouveau_id_produit: newProductId, pourquoi: reason });
 export const saveFrequencyDraft = (token: string, sessionId: string, revision: string,
   draftRevision: string | null, changes: Array<{ id_produit: string; moments: Partial<Record<RoutineMoment, FrequencyPlan | FrequencyPlanV2>> }>) =>
   routinePost<FrequencyDraft>(token, sessionId, "frequencies/draft", revision,
