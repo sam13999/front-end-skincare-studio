@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { usePressFeedback } from "@/hooks/use-press-feedback";
 import ReportEditor from "@/components/admin/ReportEditor";
 import RouteDiagnostics from "@/components/admin/RouteDiagnostics";
 import {
@@ -641,6 +642,7 @@ function Empty({ text }: { text: string }) {
 }
 
 function AdminPage() {
+  usePressFeedback();
   const tokenFromStorage = sessionStorage.getItem(TOKEN_KEY) || "";
   const [token, setToken] = useState("");
   const [checking, setChecking] = useState(Boolean(tokenFromStorage));
