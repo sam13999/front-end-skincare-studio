@@ -185,6 +185,23 @@ export function startCheckout(sessionId: string, offer: Offer, promoCode?: strin
   });
 }
 
+export interface PhotoCheckResponse {
+  ok: boolean;
+  checked_at?: string;
+  problems: Array<{ photo: "face" | "side"; message: string }>;
+}
+
+export async function checkPhotos(sessionId: string): Promise<PhotoCheckResponse> {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/v1/session/${encodeURIComponent(sessionId)}/photos/check`, {
+    method: "POST",
+  }, PIPELINE_TIMEOUT_MS);
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as { detail?: { message?: string } } | null;
+    throw new Error(body?.detail?.message || "La vérification des photos a échoué. Réessayez dans quelques minutes.");
+  }
+  return response.json() as Promise<PhotoCheckResponse>;
+}
+
 export function confirmPayment(sessionId: string, checkoutSessionId: string): Promise<PaymentStatusResponse> {
   return paymentFetch<PaymentStatusResponse>("/v1/payment/confirm", {
     method: "POST",

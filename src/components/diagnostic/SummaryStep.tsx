@@ -1,15 +1,16 @@
 import { useState } from "react";
 import { DiagnosticData, getVisibleQuestions } from "./types";
 import { Loader2, Pencil } from "lucide-react";
-import { OFFERS, checkPromo, formatEuros, type Offer, type PromoCheckResponse } from "@/lib/api";
+import { OFFERS, checkPromo, formatEuros, type Offer, type PhotoCheckResponse, type PromoCheckResponse } from "@/lib/api";
 
 interface SummaryStepProps {
   data: DiagnosticData;
   onGoToStep: (step: number) => void;
   onLaunch: () => void;
   launching?: boolean;
-  launchStage?: "session" | "photos" | "payment" | null;
+  launchStage?: "session" | "photos" | "checking" | "payment" | null;
   launched?: boolean;
+  photoProblems?: PhotoCheckResponse["problems"];
   offer: Offer;
   onOfferChange: (offer: Offer) => void;
   promoCode: string | null;
@@ -27,6 +28,7 @@ export const SummaryStep = ({
   launching = false,
   launchStage = null,
   launched = false,
+  photoProblems = [],
   offer,
   onOfferChange,
   promoCode,
@@ -142,6 +144,19 @@ export const SummaryStep = ({
         </div>
       ) : (
         <div className="svd-checkout">
+          {photoProblems.length > 0 && (
+            <div className="svd-photo-recheck" role="alert">
+              <p><strong>Une photo est à reprendre avant de continuer.</strong> Rien n’a été payé.</p>
+              {photoProblems.map((problem) => (
+                <div key={problem.photo} className="svd-photo-recheck-item">
+                  <p>{problem.photo === "side" ? "Vue 3/4" : "Photo de face"} : {problem.message}</p>
+                  <button type="button" className="svd-secondary" onClick={() => onGoToStep(problem.photo === "side" ? 2 : 1)}>
+                    Reprendre la {problem.photo === "side" ? "vue 3/4" : "photo de face"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <p className="svd-summary-label">Votre formule</p>
           <div className="svd-offer-options" role="radiogroup" aria-label="Votre formule">
             {(Object.keys(OFFERS) as Offer[]).map((key) => (
@@ -203,7 +218,7 @@ export const SummaryStep = ({
 
           <button type="button" className="svd-primary svd-full" onClick={onLaunch} disabled={launching}>
             {launching ? (
-              <><Loader2 className="svd-spinner" aria-hidden="true" /> {launchStage === "session" ? "Préparation…" : launchStage === "photos" ? "Envoi des photos…" : "Redirection vers le paiement…"}</>
+              <><Loader2 className="svd-spinner" aria-hidden="true" /> {launchStage === "session" ? "Préparation…" : launchStage === "photos" ? "Envoi des photos…" : launchStage === "checking" ? "Vérification de vos photos…" : "Redirection vers le paiement…"}</>
             ) : finalPrice === 0 ? (
               "Lancer mon analyse"
             ) : (

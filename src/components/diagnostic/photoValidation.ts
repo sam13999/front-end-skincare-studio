@@ -133,6 +133,11 @@ export function validatePhotoFile(file: File): ValidationIssue[] {
   return issues;
 }
 
+/** Télécharge le modèle à l'avance pour que la vérification soit immédiate. */
+export function preloadPhotoValidation(): void {
+  void getFaceDetector().catch(() => undefined);
+}
+
 async function getFaceDetector(): Promise<MediaPipeFaceDetector> {
   if (!detectorPromise) {
     detectorPromise = (async () => {

@@ -14,12 +14,15 @@ import { hasUsablePhotoForLaunch } from "./photoLaunch";
 import { ArrowLeft, X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import {
+  checkPhotos,
   createSession,
   savePendingCheckout,
   startCheckout,
   uploadPhotos,
   type Offer,
+  type PhotoCheckResponse,
 } from "@/lib/api";
+import { preloadPhotoValidation } from "./photoValidation";
 import "./DiagnosticFlow.css";
 
 const FIRST_QUESTION_STEP = 3;
@@ -33,7 +36,9 @@ interface DiagnosticFlowProps {
 const DiagnosticFlow = ({ onClose, initialOffer = "analyse" }: DiagnosticFlowProps) => {
   const [step, setStep] = useState(1);
   const [launching, setLaunching] = useState(false);
-  const [launchStage, setLaunchStage] = useState<"session" | "photos" | "payment" | null>(null);
+  const [launchStage, setLaunchStage] = useState<"session" | "photos" | "checking" | "payment" | null>(null);
+  const [checkedPhotoKey, setCheckedPhotoKey] = useState<string | null>(null);
+  const [photoProblems, setPhotoProblems] = useState<PhotoCheckResponse["problems"]>([]);
   const [offer, setOffer] = useState<Offer>(initialOffer);
   const [promoCode, setPromoCode] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -58,6 +63,12 @@ const DiagnosticFlow = ({ onClose, initialOffer = "analyse" }: DiagnosticFlowPro
       /* Ignore storage quota errors. */
     }
   }, [data.answers, data.prenom, data.email]);
+
+  useEffect(() => {
+    // Charge l'outil de vérification des photos pendant que la personne lit les consignes.
+    const timer = window.setTimeout(() => preloadPhotoValidation(), 300);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     // Retour arrière depuis la page de paiement : Safari restaure la page telle quelle.
@@ -136,6 +147,8 @@ const DiagnosticFlow = ({ onClose, initialOffer = "analyse" }: DiagnosticFlowPro
         .map((value) => value ? `${value.length}:${value.slice(-32)}` : "")
         .join("|");
       let currentSessionId = sessionId;
+      let needsPhotoCheck = checkedPhotoKey !== photoKey;
+      let photosReady = photosUploaded && uploadedPhotoKey === photoKey;
       if (!currentSessionId || sessionPayloadKey !== payloadKey) {
         setLaunchStage("session");
         const session = await createSession(result.payload);
@@ -144,12 +157,26 @@ const DiagnosticFlow = ({ onClose, initialOffer = "analyse" }: DiagnosticFlowPro
         setSessionPayloadKey(payloadKey);
         setPhotosUploaded(false);
         setUploadedPhotoKey(null);
+        setCheckedPhotoKey(null);
+        needsPhotoCheck = true;
+        photosReady = false;
       }
-      if (!photosUploaded || uploadedPhotoKey !== photoKey) {
+      if (!photosReady) {
         setLaunchStage("photos");
         await uploadPhotos(currentSessionId, { face: data.photoFace, profil: data.photoProfile });
         setPhotosUploaded(true);
         setUploadedPhotoKey(photoKey);
+        needsPhotoCheck = true;
+      }
+      if (needsPhotoCheck) {
+        setLaunchStage("checking");
+        setPhotoProblems([]);
+        const check = await checkPhotos(currentSessionId);
+        if (!check.ok) {
+          setPhotoProblems(check.problems);
+          return;
+        }
+        setCheckedPhotoKey(photoKey);
       }
       setLaunchStage("payment");
       const checkout = await startCheckout(currentSessionId, offer, promoCode);
@@ -250,6 +277,7 @@ const DiagnosticFlow = ({ onClose, initialOffer = "analyse" }: DiagnosticFlowPro
               launching={launching}
               launchStage={launchStage}
               launched={launched}
+              photoProblems={photoProblems}
               offer={offer}
               onOfferChange={setOffer}
               promoCode={promoCode}
