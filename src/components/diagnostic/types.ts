@@ -87,8 +87,13 @@ export const ALLOWED_VALUES: Record<BackendKey, readonly string[]> = {
   ],
 };
 
+/** Libellés affichés quand ils précisent la valeur envoyée au backend (la valeur ne change pas). */
+const OPTION_LABELS: Partial<Record<string, string>> = {
+  "Une routine très simple": "Une routine très simple (4 produits ou moins)",
+};
+
 const opts = (key: BackendKey): QuestionOption[] =>
-  ALLOWED_VALUES[key].map((value) => ({ label: value, value }));
+  ALLOWED_VALUES[key].map((value) => ({ label: OPTION_LABELS[value] ?? value, value }));
 
 const multi = (
   key: BackendKey,

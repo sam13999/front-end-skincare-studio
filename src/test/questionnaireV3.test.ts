@@ -56,6 +56,12 @@ describe("questionnaire SkinView v3", () => {
     ]);
   });
 
+  it("shows the 4-product limit next to the simple-routine expectation without changing its value", () => {
+    const expectations = questions.find((question) => question.key === "attentes_routine")!;
+    expect(expectations.options).toContainEqual({
+      label: "Une routine très simple (4 produits ou moins)", value: "Une routine très simple" });
+  });
+
   it("hides pregnancy for men and omits it from the payload", () => {
     const data = validData();
     data.answers.genre = "Homme";
