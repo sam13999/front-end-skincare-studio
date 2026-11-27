@@ -8,6 +8,7 @@ vi.mock("@/lib/adminApi", () => ({
   routineMoments: ["matin", "soir", "hebdomadaire"],
   fetchRoutine: vi.fn(), saveFrequencyDraft: vi.fn(), discardFrequencyDraft: vi.fn(), saveFrequencies: vi.fn(), saveApplicationOrder: vi.fn(), rerunPrompt4: vi.fn(),
   decideRoutineCandidate: vi.fn(), fetchAdminArtifact: vi.fn(), fetchRoutineCandidatePdf: vi.fn(),
+  removeRoutineProduct: vi.fn(), removeRoutineMoment: vi.fn(), replaceRoutineProduct: vi.fn(),
 }));
 vi.mock("./PdfPreview", () => ({ default: () => <p>Aperçu PDF chargé</p> }));
 
@@ -279,5 +280,41 @@ describe("Calendrier simplifié", () => {
       id_produit: "serum", moments: { matin: { initial_per_week: 1, maximum_per_week: 2,
         jours_initialement: [1], jours_cibles: [1, 4], move_from: "soir" } },
     }]));
+  });
+
+  it("retire un seul moment d’un produit utilisé matin et soir", async () => {
+    const view = newView();
+    view.products[0].moments.matin = { initial_per_week: 7, maximum_per_week: 7,
+      jours_initialement: [0, 1, 2, 3, 4, 5, 6], jours_cibles: [0, 1, 2, 3, 4, 5, 6] };
+    vi.mocked(api.fetchRoutine).mockResolvedValue(view);
+    vi.mocked(api.removeRoutineMoment).mockResolvedValue({ review_revision: revised, texts_to_review: [] });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderEditor();
+    const product = within((await screen.findByText("Sérum correctif", { selector: "summary" })).closest("details")!);
+    fireEvent.click(product.getByRole("button", { name: "Ne plus l’utiliser : matin" }));
+    await waitFor(() => expect(api.removeRoutineMoment).toHaveBeenCalledWith("test", "session", initial, "serum", "matin"));
+    expect(await screen.findByText(/matin retiré/)).toBeInTheDocument();
+  });
+
+  it("remplace un produit par un candidat du même besoin avec son texte client", async () => {
+    const view = newView();
+    view.products[0].alternatives = [
+      { id_produit: "eye_b3", name: "Avène – Hyaluron Activ B3", moments: ["soir"], missing_moments: [] },
+      { id_produit: "eye_am", name: "Caféine matin", moments: ["matin"], missing_moments: ["soir"] },
+    ];
+    vi.mocked(api.fetchRoutine).mockResolvedValue(view);
+    vi.mocked(api.replaceRoutineProduct).mockResolvedValue({ review_revision: revised, texts_to_review: ["Conseil d’application · B3"] });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderEditor();
+    const product = within((await screen.findByText("Sérum correctif", { selector: "summary" })).closest("details")!);
+    expect(product.queryByRole("button", { name: /Ne plus l’utiliser/ })).not.toBeInTheDocument();
+    fireEvent.change(product.getByLabelText("Nouveau produit"), { target: { value: "eye_am" } });
+    expect(product.getByRole("button", { name: "Remplacer le produit" })).toBeDisabled();
+    fireEvent.change(product.getByLabelText("Nouveau produit"), { target: { value: "eye_b3" } });
+    fireEvent.change(product.getByLabelText(/Pourquoi ce produit/), { target: { value: "Cible le cerne pigmentaire." } });
+    fireEvent.click(product.getByRole("button", { name: "Remplacer le produit" }));
+    await waitFor(() => expect(api.replaceRoutineProduct).toHaveBeenCalledWith(
+      "test", "session", initial, "serum", "eye_b3", "Cible le cerne pigmentaire."));
+    expect(await screen.findByText(/À relire : Conseil d’application · B3/)).toBeInTheDocument();
   });
 });
