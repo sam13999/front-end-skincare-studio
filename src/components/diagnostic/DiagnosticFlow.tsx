@@ -13,7 +13,16 @@ import { IdentityStep } from "./IdentityStep";
 import { hasUsablePhotoForLaunch } from "./photoLaunch";
 import { ArrowLeft, X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { createSession, runPipeline, uploadPhotos, type RunPipelineResponse } from "@/lib/api";
+import {
+  checkPhotos,
+  createSession,
+  savePendingCheckout,
+  startCheckout,
+  uploadPhotos,
+  type Offer,
+  type PhotoCheckResponse,
+} from "@/lib/api";
+import { preloadPhotoValidation } from "./photoValidation";
 import "./DiagnosticFlow.css";
 
 const FIRST_QUESTION_STEP = 3;
@@ -21,17 +30,22 @@ const STORAGE_KEY = "diagnostic_answers_v3";
 
 interface DiagnosticFlowProps {
   onClose: () => void;
+  initialOffer?: Offer;
 }
 
-const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
+const DiagnosticFlow = ({ onClose, initialOffer = "analyse" }: DiagnosticFlowProps) => {
   const [step, setStep] = useState(1);
   const [launching, setLaunching] = useState(false);
-  const [launchStage, setLaunchStage] = useState<"session" | "photos" | "analysis" | null>(null);
+  const [launchStage, setLaunchStage] = useState<"session" | "photos" | "checking" | "payment" | null>(null);
+  const [checkedPhotoKey, setCheckedPhotoKey] = useState<string | null>(null);
+  const [photoProblems, setPhotoProblems] = useState<PhotoCheckResponse["problems"]>([]);
+  const [offer, setOffer] = useState<Offer>(initialOffer);
+  const [promoCode, setPromoCode] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [photosUploaded, setPhotosUploaded] = useState(false);
   const [sessionPayloadKey, setSessionPayloadKey] = useState<string | null>(null);
   const [uploadedPhotoKey, setUploadedPhotoKey] = useState<string | null>(null);
-  const [pipelineResult, setPipelineResult] = useState<RunPipelineResponse | null>(null);
+  const [launched, setLaunched] = useState(false);
   const [data, setData] = useState<DiagnosticData>(() => {
     const stored = restoreStoredDiagnosticData(localStorage.getItem(STORAGE_KEY));
     return { photoFace: null, photoProfile: null, ...stored };
@@ -49,6 +63,24 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
       /* Ignore storage quota errors. */
     }
   }, [data.answers, data.prenom, data.email]);
+
+  useEffect(() => {
+    // Charge l'outil de vérification des photos pendant que la personne lit les consignes.
+    const timer = window.setTimeout(() => preloadPhotoValidation(), 300);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    // Retour arrière depuis la page de paiement : Safari restaure la page telle quelle.
+    const reset = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        setLaunching(false);
+        setLaunchStage(null);
+      }
+    };
+    window.addEventListener("pageshow", reset);
+    return () => window.removeEventListener("pageshow", reset);
+  }, []);
 
   const activeQuestions = getVisibleQuestions(data.answers);
   const identityStep = FIRST_QUESTION_STEP + activeQuestions.length;
@@ -108,12 +140,15 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
       return;
     }
     setLaunching(true);
+    let redirecting = false;
     try {
       const payloadKey = JSON.stringify(result.payload);
       const photoKey = [data.photoFace, data.photoProfile]
         .map((value) => value ? `${value.length}:${value.slice(-32)}` : "")
         .join("|");
       let currentSessionId = sessionId;
+      let needsPhotoCheck = checkedPhotoKey !== photoKey;
+      let photosReady = photosUploaded && uploadedPhotoKey === photoKey;
       if (!currentSessionId || sessionPayloadKey !== payloadKey) {
         setLaunchStage("session");
         const session = await createSession(result.payload);
@@ -122,16 +157,36 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
         setSessionPayloadKey(payloadKey);
         setPhotosUploaded(false);
         setUploadedPhotoKey(null);
+        setCheckedPhotoKey(null);
+        needsPhotoCheck = true;
+        photosReady = false;
       }
-      if (!photosUploaded || uploadedPhotoKey !== photoKey) {
+      if (!photosReady) {
         setLaunchStage("photos");
         await uploadPhotos(currentSessionId, { face: data.photoFace, profil: data.photoProfile });
         setPhotosUploaded(true);
         setUploadedPhotoKey(photoKey);
+        needsPhotoCheck = true;
       }
-      setLaunchStage("analysis");
-      const pipeline = await runPipeline(currentSessionId, result.payload.questionnaire.email);
-      setPipelineResult(pipeline);
+      if (needsPhotoCheck) {
+        setLaunchStage("checking");
+        setPhotoProblems([]);
+        const check = await checkPhotos(currentSessionId);
+        if (!check.ok) {
+          setPhotoProblems(check.problems);
+          return;
+        }
+        setCheckedPhotoKey(photoKey);
+      }
+      setLaunchStage("payment");
+      const checkout = await startCheckout(currentSessionId, offer, promoCode);
+      if (checkout.status === "redirect" && checkout.checkout_url) {
+        savePendingCheckout({ sessionId: currentSessionId, offer, promoCode, email: result.payload.questionnaire.email });
+        redirecting = true;
+        window.location.assign(checkout.checkout_url);
+        return;
+      }
+      setLaunched(true);
       toast({
         title: "Demande reçue",
         description: "Votre rapport sera vérifié par notre équipe puis envoyé par email sous 24 heures après votre demande.",
@@ -140,12 +195,14 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
     } catch (error) {
       toast({
         variant: "destructive",
-        title: "L’analyse n’a pas pu être lancée",
+        title: "Votre demande n’a pas pu être envoyée",
         description: error instanceof Error ? error.message : "Vérifiez votre connexion puis réessayez.",
       });
     } finally {
-      setLaunching(false);
-      setLaunchStage(null);
+      if (!redirecting) {
+        setLaunching(false);
+        setLaunchStage(null);
+      }
     }
   };
 
@@ -219,7 +276,12 @@ const DiagnosticFlow = ({ onClose }: DiagnosticFlowProps) => {
               onLaunch={handleLaunch}
               launching={launching}
               launchStage={launchStage}
-              pipelineResult={pipelineResult}
+              launched={launched}
+              photoProblems={photoProblems}
+              offer={offer}
+              onOfferChange={setOffer}
+              promoCode={promoCode}
+              onPromoChange={setPromoCode}
               firstQuestionStep={FIRST_QUESTION_STEP}
               identityStep={identityStep}
             />

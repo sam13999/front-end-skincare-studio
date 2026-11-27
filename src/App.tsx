@@ -10,6 +10,7 @@ import NotreCombat from "./pages/NotreCombat.tsx";
 import RapportPersonnalise from "./pages/RapportPersonnalise.tsx";
 import Tarif from "./pages/Tarif.tsx";
 import AdminPage from "./pages/Admin.tsx";
+import { PaiementAnnule, PaiementConfirme } from "./pages/Paiement.tsx";
 import RoutineTiktok from "./pages/seo/RoutineTiktok.tsx";
 import TropDeProduits from "./pages/seo/TropDeProduits.tsx";
 import RoutineNeFonctionnePas from "./pages/seo/RoutineNeFonctionnePas.tsx";
@@ -48,6 +49,8 @@ const App = () => (
             <Route path="/notre-combat" element={<NotreCombat />} />
             <Route path="/rapport-skincare-personnalise" element={<RapportPersonnalise />} />
             <Route path="/tarif" element={<Tarif />} />
+            <Route path="/paiement-confirme" element={<PaiementConfirme />} />
+            <Route path="/paiement-annule" element={<PaiementAnnule />} />
             <Route path="/routine-skincare-tiktok" element={<RoutineTiktok />} />
             <Route path="/trop-de-produits-skincare" element={<TropDeProduits />} />
             <Route path="/routine-skincare-ne-fonctionne-pas" element={<RoutineNeFonctionnePas />} />

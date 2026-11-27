@@ -64,6 +64,7 @@ test("réviser une stratégie conservée et contrôler ses étapes", async ({ pa
         ], items, draft_revision: draft, history: [], issues: [],
       };
     } else if (path.endsWith("/session/demo")) payload = detail;
+    else if (path.endsWith("/promo-codes")) payload = { items: [] };
     else throw new Error(`Requête inattendue dans la démonstration ${path}`);
     await route.fulfill({ json: payload, headers: { "Access-Control-Allow-Origin": "*" } });
   });

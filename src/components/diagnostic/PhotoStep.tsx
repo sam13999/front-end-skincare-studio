@@ -33,8 +33,21 @@ const profileChecklist = [
   "Format JPG ou JPEG, 5 Mo maximum",
 ];
 
+/**
+ * Sur iPhone et iPad, tous les navigateurs utilisent WebKit, dont la capture
+ * photo depuis le flux caméra (ImageCapture) échoue souvent (« UnknownError »,
+ * aperçu noir). L'appareil photo natif donne une photo pleine résolution,
+ * vérifiée ensuite exactement comme une photo importée.
+ */
+export function prefersNativeCamera(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
 export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const nativeCameraRef = useRef<HTMLInputElement>(null);
   const validationIdRef = useRef(0);
   const [preview, setPreview] = useState<string | null>(photo);
   const [quality, setQuality] = useState<PhotoQuality>(photo ? "good" : "none");
@@ -276,7 +289,12 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
 
       {!preview ? (
         <div className="svd-photo-tools">
-          <button type="button" className="svd-primary" disabled={analyzing} onClick={() => setCameraOpen(true)}>
+          <button
+            type="button"
+            className="svd-primary"
+            disabled={analyzing}
+            onClick={() => (prefersNativeCamera() ? nativeCameraRef.current?.click() : setCameraOpen(true))}
+          >
             <Camera aria-hidden="true" /> Prendre
           </button>
           <button type="button" className="svd-secondary" disabled={analyzing} onClick={() => fileInputRef.current?.click()}>
@@ -297,6 +315,15 @@ export const PhotoStep = ({ type, photo, onPhotoChange, onNext }: PhotoStepProps
       )}
 
       <input ref={fileInputRef} type="file" accept="image/*" className="svd-hidden-input" onChange={handleInputChange} />
+      <input
+        ref={nativeCameraRef}
+        type="file"
+        accept="image/*"
+        capture="user"
+        className="svd-hidden-input"
+        aria-label="Prendre la photo avec l’appareil photo"
+        onChange={handleInputChange}
+      />
 
       <div className="svd-checklist">
         <h3>Pour une analyse fiable, vérifiez que :</h3>

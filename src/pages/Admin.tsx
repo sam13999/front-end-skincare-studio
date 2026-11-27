@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { usePressFeedback } from "@/hooks/use-press-feedback";
 import ReportEditor from "@/components/admin/ReportEditor";
 import RouteDiagnostics from "@/components/admin/RouteDiagnostics";
+import PromoCodesPanel from "@/components/admin/PromoCodesPanel";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -497,7 +498,7 @@ function DetailView({ token, detail, onBack, onRefresh }: { token: string; detai
           <Info label="Statut global" value={statusLabels[summary.status]} /><Info label="Dernière étape réussie" value={summary.last_successful_stage || "—"} /><Info label="Étape ayant échoué" value={summary.failed_stage || "—"} /><Info label="Email envoyé" value={pretty((summary.email_status || {}).sent)} />
         </InfoCard>
         <InfoCard title="Paiement & livrables">
-          <Info label="Paiement" value={paymentLabels[summary.payment.payment_status]} /><Info label="Montant" value={formatAmount(summary.payment.payment_amount, summary.payment.payment_currency || "EUR")} /><Info label="HTML disponible" value={summary.html_available ? "Oui" : "Non"} /><Info label="PDF disponible" value={summary.pdf_available ? "Oui" : "Non"} />
+          <Info label="Paiement" value={paymentLabels[summary.payment.payment_status]} /><Info label="Montant" value={formatAmount(summary.payment.payment_amount, summary.payment.payment_currency || "EUR")} /><Info label="Formule" value={summary.payment.offer === "suivi" ? "SkinView Suivi" : summary.payment.offer === "analyse" ? "Analyse SkinView" : "—"} /><Info label="Code promo" value={summary.payment.promo_code || "—"} /><Info label="HTML disponible" value={summary.html_available ? "Oui" : "Non"} /><Info label="PDF disponible" value={summary.pdf_available ? "Oui" : "Non"} />
         </InfoCard>
       </div>}
 
@@ -730,6 +731,7 @@ function AdminPage() {
             </button>)}</div>
           <div className="mt-5 hidden overflow-x-auto md:block"><table className="w-full min-w-[760px] text-left"><thead><tr className="border-b border-slate-200 text-[11px] uppercase tracking-[0.1em] text-slate-400"><th className="px-3 py-3 font-semibold">Session</th><th className="px-3 py-3 font-semibold">Date</th><th className="px-3 py-3 font-semibold">Email</th><th className="px-3 py-3 font-semibold">Statut</th><th className="px-3 py-3 font-semibold">Paiement</th><th className="px-3 py-3 font-semibold">Montant</th><th className="px-3 py-3" /></tr></thead><tbody>{filtered.map((item) => <tr key={item.session_id} className="cursor-pointer border-b border-slate-100 transition hover:bg-slate-50" onClick={() => { setDetail(null); navigate(`/admin/session/${item.session_id}`); }}><td className="px-3 py-4"><p className="font-semibold text-slate-900">{item.display_name}</p><p className="mt-1 font-mono text-[10px] text-slate-400">{item.session_id}</p></td><td className="whitespace-nowrap px-3 py-4 text-sm text-slate-600">{formatDate(item.created_at)}</td><td className="px-3 py-4 text-sm text-slate-600">{item.email || "—"}{item.delivery_issue && <p role="alert" className="mt-1 text-xs font-semibold text-red-700">Incident livraison</p>}</td><td className="px-3 py-4"><StatusBadge value={item.review_status || item.status} /></td><td className="px-3 py-4"><StatusBadge value={item.payment.payment_status} /></td><td className="px-3 py-4 text-sm font-semibold text-slate-800">{formatAmount(item.payment.payment_amount, item.payment.payment_currency || "EUR")}</td><td className="px-3 py-4 text-right"><ChevronRight className="ml-auto h-4 w-4 text-slate-300" /></td></tr>)}</tbody></table>{!loading && filtered.length === 0 && <Empty text="Aucune session ne correspond aux critères." />}</div>
         </section>
+        <PromoCodesPanel token={token} />
       </div>
     </main>
   );

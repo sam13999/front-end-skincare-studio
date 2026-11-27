@@ -25,7 +25,7 @@ export const ReportCta = ({
       <Button
         variant={variant}
         size={size}
-        onClick={open}
+        onClick={() => open("analyse")}
         className="group relative h-14 min-h-14 w-full whitespace-normal px-5 py-3 text-center text-[14px] leading-tight"
       >
         <span>{label}</span>
