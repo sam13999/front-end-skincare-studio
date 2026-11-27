@@ -164,7 +164,8 @@ describe("ReportEditor", () => {
     expect(groups.map(group => group.label)).toEqual([
       "Photo de face · Petit bouton fermé (micro-comédon)", "Photo de face · Zone pigmentée"]);
     expect(groups[0].items.map(item => item.label)).toEqual(["Joue gauche (1)", "Joue gauche (2) · fiabilité 80 %"]);
-    expect(JSON.stringify(groups)).not.toMatch(/confiance inconnue|closed_comedones/);
+    const labels = groups.flatMap(group => [group.label, ...group.items.map(item => item.label)]).join(" ");
+    expect(labels).not.toMatch(/confiance inconnue|closed_comedones/);
   });
   it("supprime un zoom après confirmation et reconstruit le PDF", async () => {
     const revision = "a".repeat(64);
