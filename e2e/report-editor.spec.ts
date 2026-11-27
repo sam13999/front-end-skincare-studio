@@ -84,6 +84,7 @@ test("édite un rapport et ses sept soirs sur mobile et ordinateur", async ({ pa
     else if (path.endsWith("/sessions")) result = { items: [summary()], total: 1, stats: {
       sessions_today: 1, sessions_complete: 1, sessions_failed: 0, sessions_paid: 1, revenue_total: 0, currency: "EUR",
     } };
+    else if (path.endsWith("/promo-codes")) result = { items: [] };
     else throw new Error(`Route inattendue: ${path}`);
     await route.fulfill({ json: result, headers: { "Access-Control-Allow-Origin": "*" } });
   });

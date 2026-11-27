@@ -7,6 +7,21 @@ export interface PaymentInfo {
   payment_provider?: string | null;
   payment_id?: string | null;
   paid_at?: string | null;
+  offer?: "analyse" | "suivi" | null;
+  promo_code?: string | null;
+  base_amount?: number | null;
+  analysis_status?: "queued" | "running" | "done" | "failed" | null;
+}
+
+export interface PromoCode {
+  code: string;
+  percent: number;
+  expires_on?: string | null;
+  max_uses?: number | null;
+  uses: number;
+  active: boolean;
+  created_at: string;
+  status: "active" | "inactive" | "expired" | "exhausted";
 }
 
 export interface AdminSessionSummary {
@@ -142,6 +157,19 @@ async function adminFetch<T>(token: string, path: string, init?: RequestInit): P
   }
   return body as T;
 }
+
+export const fetchPromoCodes = (token: string) =>
+  adminFetch<{ items: PromoCode[] }>(token, "/v1/admin/promo-codes", { cache: "no-store" });
+
+export const createPromoCode = (token: string, payload: { code: string; percent: number; expires_on?: string | null; max_uses?: number | null }) =>
+  adminFetch<PromoCode>(token, "/v1/admin/promo-codes", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+  });
+
+export const setPromoCodeActive = (token: string, code: string, active: boolean) =>
+  adminFetch<PromoCode>(token, `/v1/admin/promo-codes/${encodeURIComponent(code)}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active }),
+  });
 
 export async function adminAuthCheck(token: string): Promise<void> {
   await adminFetch<{ authenticated: boolean }>(token, "/v1/admin/auth/check");

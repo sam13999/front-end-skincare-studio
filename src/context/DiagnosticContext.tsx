@@ -1,8 +1,9 @@
 import { createContext, useContext, useState, ReactNode } from "react";
 import DiagnosticFlow from "@/components/diagnostic/DiagnosticFlow";
+import type { Offer } from "@/lib/api";
 
 interface DiagnosticContextValue {
-  open: () => void;
+  open: (offer?: Offer) => void;
   close: () => void;
   isOpen: boolean;
 }
@@ -11,11 +12,14 @@ const DiagnosticContext = createContext<DiagnosticContextValue | undefined>(unde
 
 export const DiagnosticProvider = ({ children }: { children: ReactNode }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [offer, setOffer] = useState<Offer>("analyse");
+  const open = (chosen?: Offer) => {
+    setOffer(chosen === "suivi" ? "suivi" : "analyse");
+    setIsOpen(true);
+  };
   return (
-    <DiagnosticContext.Provider
-      value={{ open: () => setIsOpen(true), close: () => setIsOpen(false), isOpen }}
-    >
-      {isOpen ? <DiagnosticFlow onClose={() => setIsOpen(false)} /> : children}
+    <DiagnosticContext.Provider value={{ open, close: () => setIsOpen(false), isOpen }}>
+      {isOpen ? <DiagnosticFlow initialOffer={offer} onClose={() => setIsOpen(false)} /> : children}
     </DiagnosticContext.Provider>
   );
 };

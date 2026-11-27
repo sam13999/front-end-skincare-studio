@@ -1,14 +1,19 @@
+import { useState } from "react";
 import { DiagnosticData, getVisibleQuestions } from "./types";
 import { Loader2, Pencil } from "lucide-react";
-import { type RunPipelineResponse } from "@/lib/api";
+import { OFFERS, checkPromo, formatEuros, type Offer, type PromoCheckResponse } from "@/lib/api";
 
 interface SummaryStepProps {
   data: DiagnosticData;
   onGoToStep: (step: number) => void;
   onLaunch: () => void;
   launching?: boolean;
-  launchStage?: "session" | "photos" | "analysis" | null;
-  pipelineResult?: RunPipelineResponse | null;
+  launchStage?: "session" | "photos" | "payment" | null;
+  launched?: boolean;
+  offer: Offer;
+  onOfferChange: (offer: Offer) => void;
+  promoCode: string | null;
+  onPromoChange: (code: string | null) => void;
   firstQuestionStep: number;
   identityStep: number;
 }
@@ -21,8 +26,45 @@ export const SummaryStep = ({
   identityStep,
   launching = false,
   launchStage = null,
-  pipelineResult = null,
+  launched = false,
+  offer,
+  onOfferChange,
+  promoCode,
+  onPromoChange,
 }: SummaryStepProps) => {
+  const [promoInput, setPromoInput] = useState(promoCode ?? "");
+  const [promo, setPromo] = useState<PromoCheckResponse | null>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [checkingPromo, setCheckingPromo] = useState(false);
+
+  const basePrice = OFFERS[offer].price;
+  const percent = promo?.percent ?? 0;
+  const finalPrice = Math.round(basePrice * (100 - percent)) / 100;
+
+  const applyPromo = async () => {
+    const code = promoInput.trim();
+    if (!code) return;
+    setCheckingPromo(true);
+    setPromoError(null);
+    try {
+      const result = await checkPromo(code, offer);
+      setPromo(result);
+      onPromoChange(result.code);
+    } catch (error) {
+      setPromo(null);
+      onPromoChange(null);
+      setPromoError(error instanceof Error ? error.message : "Ce code promo n’est pas valide.");
+    } finally {
+      setCheckingPromo(false);
+    }
+  };
+
+  const removePromo = () => {
+    setPromo(null);
+    setPromoInput("");
+    setPromoError(null);
+    onPromoChange(null);
+  };
 
   const renderAnswer = (key: string) => {
     const value = data.answers[key];
@@ -94,18 +136,82 @@ export const SummaryStep = ({
         ))}
       </div>
 
-      {pipelineResult ? (
+      {launched ? (
         <div className="svd-result" role="status">
           <p>Votre demande est reçue. Votre rapport sera vérifié par notre équipe puis envoyé à {data.email} sous 24 heures après votre demande.</p>
         </div>
       ) : (
-        <button type="button" className="svd-primary svd-full" onClick={onLaunch} disabled={launching}>
-          {launching ? (
-            <><Loader2 className="svd-spinner" aria-hidden="true" /> {launchStage === "session" ? "Préparation…" : launchStage === "photos" ? "Envoi des photos…" : "Analyse en cours…"}</>
+        <div className="svd-checkout">
+          <p className="svd-summary-label">Votre formule</p>
+          <div className="svd-offer-options" role="radiogroup" aria-label="Votre formule">
+            {(Object.keys(OFFERS) as Offer[]).map((key) => (
+              <button
+                key={key}
+                type="button"
+                role="radio"
+                aria-checked={offer === key}
+                aria-pressed={offer === key}
+                className="svd-choice svd-offer"
+                onClick={() => onOfferChange(key)}
+                disabled={launching}
+              >
+                <span>{OFFERS[key].label}</span>
+                <strong>{formatEuros(OFFERS[key].price)}</strong>
+              </button>
+            ))}
+          </div>
+
+          {promo ? (
+            <div className="svd-promo-applied">
+              <span>Code <strong>{promo.code}</strong> : −{promo.percent}&nbsp;%</span>
+              <button type="button" className="svd-text-button" onClick={removePromo} disabled={launching}>Retirer</button>
+            </div>
           ) : (
-            "Lancer mon analyse"
+            <div className="svd-field svd-promo">
+              <label htmlFor="promo">Code promo</label>
+              <div className="svd-promo-row">
+                <input
+                  id="promo"
+                  value={promoInput}
+                  onChange={(event) => setPromoInput(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === "Enter") void applyPromo(); }}
+                  placeholder="Facultatif"
+                  autoCapitalize="characters"
+                  autoComplete="off"
+                  maxLength={32}
+                  disabled={launching}
+                />
+                <button
+                  type="button"
+                  className="svd-secondary"
+                  onClick={applyPromo}
+                  disabled={!promoInput.trim() || checkingPromo || launching}
+                >
+                  {checkingPromo ? <Loader2 className="svd-spinner" aria-hidden="true" /> : "Appliquer"}
+                </button>
+              </div>
+              {promoError && <p className="svd-error" role="alert">{promoError}</p>}
+            </div>
           )}
-        </button>
+
+          <div className="svd-total">
+            <span>Total</span>
+            <span>
+              {percent > 0 && <s>{formatEuros(basePrice)}</s>} <strong>{formatEuros(finalPrice)}</strong>
+            </span>
+          </div>
+
+          <button type="button" className="svd-primary svd-full" onClick={onLaunch} disabled={launching}>
+            {launching ? (
+              <><Loader2 className="svd-spinner" aria-hidden="true" /> {launchStage === "session" ? "Préparation…" : launchStage === "photos" ? "Envoi des photos…" : "Redirection vers le paiement…"}</>
+            ) : finalPrice === 0 ? (
+              "Lancer mon analyse"
+            ) : (
+              `Payer ${formatEuros(finalPrice)} et lancer mon analyse`
+            )}
+          </button>
+          {finalPrice > 0 && <p className="svd-secure-note">Paiement sécurisé par Stripe. Votre analyse démarre dès la confirmation du paiement.</p>}
+        </div>
       )}
     </section>
   );
