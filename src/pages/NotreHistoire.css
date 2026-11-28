@@ -1,0 +1,30 @@
+.sv-story .sv-brand { text-decoration: none; }
+.sv-story-back { padding: 10px 0 10px 12px; color: var(--sv-terra-dark); font-size: 15px; text-decoration: underline; text-underline-offset: 4px; }
+
+.sv-story-intro { padding: 44px 22px 34px; border-bottom: 1px solid var(--sv-line); }
+.sv-story-kicker { color: var(--sv-terra); font-size: 11px; letter-spacing: .24em; text-transform: uppercase; }
+.sv-story-intro h1 { margin-top: 16px; font-size: 38px; line-height: 1.08; letter-spacing: -.015em; text-wrap: balance; }
+.sv-story-intro h1 em { color: var(--sv-terra); }
+.sv-story-lead { margin-top: 16px; color: var(--sv-body); font: italic 19px/1.4 var(--sv-serif); }
+
+.sv-story-body { padding: 8px 22px 0; }
+.sv-story-body section { padding-top: 30px; }
+.sv-story-body h2 { font-size: 25px; line-height: 1.15; }
+.sv-story-body p { margin-top: 12px; color: var(--sv-body); font-size: 16.5px; line-height: 1.6; }
+.sv-story-body strong { color: var(--sv-ink); font-weight: 500; }
+
+.sv-story-prices { display: flex; gap: 10px; margin-top: 18px !important; }
+.sv-story-prices span { flex: 1; padding: 12px 0; border: 1px solid var(--sv-line); border-radius: 8px; background: var(--sv-paper); color: var(--sv-ink); font: 22px/1 var(--sv-serif); text-align: center; text-decoration: line-through; text-decoration-color: var(--sv-terra); text-decoration-thickness: 1.5px; }
+
+.sv-story-quote { margin: 34px -22px 0; padding: 30px 26px; background: var(--sv-tint); }
+.sv-story-quote p { margin: 0 !important; color: var(--sv-ink) !important; font: 24px/1.25 var(--sv-serif) !important; }
+.sv-story-quote footer { margin-top: 14px; color: var(--sv-terra-dark); font: italic 17px/1.3 var(--sv-serif); }
+
+.sv-story-rule { margin: 18px 0 4px !important; padding-left: 16px; border-left: 2px solid var(--sv-terra); color: var(--sv-ink) !important; font: 20px/1.35 var(--sv-serif) !important; }
+.sv-story-rule em { color: var(--sv-terra); }
+
+.sv-story-end { margin-top: 40px; padding: 38px 22px 44px; background: #2c2521; color: #fbf8f4; text-align: center; }
+.sv-story-closing { font: 22px/1.35 var(--sv-serif); }
+.sv-story-question { margin-top: 18px; color: #e4cfc3; font-size: 16px; line-height: 1.5; }
+.sv-story-end .sv-btn { margin-top: 24px; }
+.sv-story-end .sv-link { color: #e4cfc3; text-decoration: underline; text-underline-offset: 4px; }

@@ -18,7 +18,8 @@ describe("SkinView landing", () => {
   it("conserve le nouveau positionnement, les offres et le rapport", () => {
     renderLanding();
 
-    expect(screen.getByRole("heading", { name: "Une routine (vraiment) pensée pour votre peau." })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: /26 points analysés/ })).toBeInTheDocument();
+    expect(screen.getByText("Exemple d’analyse")).toBeInTheDocument();
     const prices = document.querySelectorAll(".sv-price");
     expect(prices).toHaveLength(2);
     expect(prices[0].textContent).toContain("39");
@@ -26,7 +27,18 @@ describe("SkinView landing", () => {
     expect(screen.getByRole("heading", { name: "Voyez exactement ce que vous recevez" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Une analyse ne suffit pas. Il faut savoir quoi en faire." })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Pas de conclusions forcées" })).toBeInTheDocument();
-    expect(screen.getAllByRole("tab")).toHaveLength(4);
+    expect(screen.getAllByRole("tab")).toHaveLength(10);
+    expect(screen.getByText("Créateur de routine sur mesure")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Le conseil avant le produit." })).not.toBeInTheDocument();
+  });
+
+  it("explique chaque pastille au toucher", () => {
+    renderLanding();
+
+    fireEvent.click(screen.getByRole("button", { name: "Indépendant" }));
+    expect(screen.getByRole("region", { name: "Indépendant" })).toHaveTextContent("Pas de gamme maison");
+    fireEvent.click(screen.getByRole("button", { name: "Indépendant" }));
+    expect(screen.queryByRole("region", { name: "Indépendant" })).not.toBeInTheDocument();
   });
 
   it("ouvre le menu et le diagnostic depuis le nouveau CTA", () => {

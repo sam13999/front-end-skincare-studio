@@ -9,6 +9,7 @@ import {
   Scale,
   X,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useDiagnostic } from "@/context/DiagnosticContext";
 import logo from "@/assets/landing/logo.png";
 import heroImage from "@/assets/landing/hero.jpg";
@@ -16,75 +17,52 @@ import stepPhotos from "@/assets/landing/step-photos.jpg";
 import stepQuestionnaire from "@/assets/landing/step-questionnaire.jpg";
 import stepReport from "@/assets/landing/step-report.jpg";
 import skinDetail from "@/assets/landing/skin-detail.jpg";
-import valueSkin from "@/assets/landing/value-skin.jpg";
-import valueBrands from "@/assets/landing/value-brands.jpg";
-import valuePlace from "@/assets/landing/value-place.jpg";
-import valueBuy from "@/assets/landing/value-buy.jpg";
-import report1 from "@/assets/landing/report-1.jpg";
-import report2 from "@/assets/landing/report-2.jpg";
-import report3 from "@/assets/landing/report-3.jpg";
-import report4 from "@/assets/landing/report-4.jpg";
-import report5 from "@/assets/landing/report-5.jpg";
-import report6 from "@/assets/landing/report-6.jpg";
-import report7 from "@/assets/landing/report-7.jpg";
-import report8 from "@/assets/landing/report-8.jpg";
+import report01 from "@/assets/landing/rapport/01-cover.jpg";
+import report02 from "@/assets/landing/rapport/02-glance.jpg";
+import report03 from "@/assets/landing/rapport/03-profile.jpg";
+import report04 from "@/assets/landing/rapport/04-priorities.jpg";
+import report05 from "@/assets/landing/rapport/05-goals.jpg";
+import report06 from "@/assets/landing/rapport/06-why.jpg";
+import report07 from "@/assets/landing/rapport/07-routine.jpg";
+import report08 from "@/assets/landing/rapport/08-products-matin-1.jpg";
+import report09 from "@/assets/landing/rapport/09-actives.jpg";
+import report10 from "@/assets/landing/rapport/10-closing.jpg";
 import "./SkinViewLanding.css";
 
-const reportPages = [report1, report2, report3, report4, report5, report6, report7, report8];
-const reportNames = [
-  "Couverture",
-  "Votre peau",
-  "Votre profil",
-  "Vos objectifs",
-  "Routine",
-  "Routine du matin",
-  "Routine du soir",
-  "Routine du soir (suite)",
+const reportScreens = [
+  { image: report01, title: "Votre rapport", text: "Un rapport à votre nom, pensé pour se lire sur téléphone." },
+  { image: report02, title: "Votre peau", text: "Votre type de peau et ce que montrent vos photos, zone par zone." },
+  { image: report03, title: "Votre profil", text: "Ce qu’il faut retenir de votre peau, expliqué simplement." },
+  { image: report04, title: "À prioriser", text: "Les bons réflexes, et ce qu’il vaut mieux éviter pour votre peau." },
+  { image: report05, title: "Vos objectifs", text: "Vos objectifs, avec des repères pour suivre vos progrès." },
+  { image: report06, title: "La stratégie", text: "La logique de votre routine, et ce qui a été volontairement écarté." },
+  { image: report07, title: "Votre routine", text: "Matin et soir, avec la fréquence de chaque soin." },
+  { image: report08, title: "Vos produits", text: "Pour chaque produit : pourquoi ce choix et comment l’appliquer." },
+  { image: report09, title: "Les actifs", text: "Les ingrédients retenus et leur rôle dans votre routine." },
+  { image: report10, title: "Merci", text: "Votre rapport complet, à garder et à relire quand vous voulez." },
 ];
-type ReportStop = {
-  page: number;
-  center: [number, number];
-  focus: [number, number, number, number];
-  scale: number;
-  title: string;
-  text: string;
-};
+const SCREEN_DURATION = 6500;
 
-const REPORT_WIDTH = 1100;
-const reportStops: ReportStop[] = [
+const perks = [
   {
-    page: 1,
-    center: [470, 530],
-    focus: [45, 460, 850, 140],
-    scale: 1.2,
-    title: "Photos",
-    text: "Observations localisées sur les zones utiles.",
+    id: "multimarque",
+    label: "Multimarque",
+    title: "Des soins de toutes les marques",
+    text: "SkinView ne vend aucun produit. Les soins sont choisis parmi de nombreuses marques, uniquement pour leur intérêt dans votre routine.",
   },
   {
-    page: 2,
-    center: [690, 540],
-    focus: [315, 260, 735, 560],
-    scale: 1.35,
-    title: "Profil",
-    text: "Votre type et votre profil de peau expliqués clairement.",
+    id: "personnalise",
+    label: "Personnalisé",
+    title: "Votre peau avant les tendances",
+    text: "Votre routine part de vos photos, de vos réponses et de vos objectifs. Chaque produit doit mériter sa place : aucune étape n’est ajoutée pour faire nombre.",
   },
   {
-    page: 3,
-    center: [405, 365],
-    focus: [45, 315, 720, 110],
-    scale: 1.3,
-    title: "Objectif",
-    text: "Votre priorité déclarée est réellement prise en compte.",
+    id: "independant",
+    label: "Indépendant",
+    title: "Le conseil avant le produit",
+    text: "Pas de gamme maison ni de marque partenaire à pousser. Vous payez pour l’analyse et le conseil, pas pour être dirigé vers un catalogue.",
   },
-  {
-    page: 6,
-    center: [560, 570],
-    focus: [45, 270, 1010, 600],
-    scale: 1.2,
-    title: "Produits",
-    text: "Produits sélectionnés avec rôle et conseil d’utilisation.",
-  },
-];
+] as const;
 
 const faq = [
   ["Pourquoi payer alors que certains diagnostics de peau sont gratuits ?", ["Quand celui qui vous conseille vous vend aussi les produits, il vend autant qu’il conseille.", "SkinView ne vend aucun produit. Vous payez pour l’analyse, la stratégie et la sélection, pas pour être dirigé vers une gamme maison."]],
@@ -107,7 +85,7 @@ function Cta({ children, onClick }: { children: React.ReactNode; onClick: () => 
 
 function Header({ onStart }: { onStart: () => void }) {
   const [open, setOpen] = useState(false);
-  const links = [["fonctionnement", "Comment ça marche"], ["rapport", "Le rapport"], ["conseil", "Le conseil"], ["tarifs", "Tarifs"], ["faq", "FAQ"]];
+  const links = [["fonctionnement", "Comment ça marche"], ["rapport", "Le rapport"], ["tarifs", "Tarifs"], ["faq", "FAQ"]];
   const go = (id: string) => {
     setOpen(false);
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
@@ -117,94 +95,163 @@ function Header({ onStart }: { onStart: () => void }) {
     <header className="sv-header">
       <button type="button" className="sv-brand" onClick={() => go("top")} aria-label="SkinView, accueil">
         <img src={logo} alt="SkinView" />
-        <small>Comprends ta peau avant d’acheter.</small>
+        <small>Créateur de routine sur mesure</small>
       </button>
       <button type="button" className="sv-burger" onClick={() => setOpen((value) => !value)} aria-label={open ? "Fermer le menu" : "Ouvrir le menu"} aria-expanded={open}>
         {open ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
       </button>
-      {open && <nav className="sv-menu">{links.map(([id, label]) => <button type="button" key={id} onClick={() => go(id)}>{label}</button>)}<Cta onClick={onStart}>Commencer mon analyse</Cta></nav>}
+      {open && <nav className="sv-menu">{links.map(([id, label]) => <button type="button" key={id} onClick={() => go(id)}>{label}</button>)}<Link to="/notre-histoire" onClick={() => setOpen(false)}>Notre histoire</Link><Cta onClick={onStart}>Commencer mon analyse</Cta></nav>}
     </header>
   );
 }
 
-function ReportTour() {
+const analysisParams = ["Type de peau", "Pores", "Sensibilité", "Ridules sous les yeux", "Pattes-d’oie", "Poches", "Rides du front", "Rides intersourcilières", "Rougeurs", "Taches", "Imperfections", "Grains de beauté", "Pores des joues", "Pores du front", "Pores du menton", "Pores du nez", "Points noirs", "Teint", "Âge cutané", "Cernes", "Paupière gauche", "Paupière droite", "Sillons nasogéniens", "Comédons fermés", "Pores joue gauche", "Pores joue droite"];
+// Positions sur la photo (en % de l’image), converties pour un cadre 390 × 660 en object-fit: cover.
+const analysisSpots = [
+  { x: 38, y: 12, label: "Taches de rousseur", value: "Intensité 64 %", side: "r" },
+  { x: 75, y: 20, label: "Pores du front", value: "Intensité 38 %", side: "l" },
+  { x: 28, y: 50, label: "Ridules sous les yeux", value: "Intensité 22 %", side: "r" },
+  { x: 82, y: 44, label: "Cernes", value: "Intensité 46 %", side: "l" },
+  { x: 42, y: 58, label: "Taches", value: "Intensité 41 %", side: "r" },
+  { x: 80, y: 66, label: "Pores des joues", value: "Intensité 57 %", side: "l" },
+  { x: 20, y: 72, label: "Teint", value: "Clair, uniforme", side: "r" },
+  { x: 90, y: 72, label: "Brillance", value: "Intensité 33 %", side: "l" },
+].map((spot) => ({ ...spot, left: ((spot.x / 100) * 440.1 - 25.05) / 3.9 }));
+const CYCLE = 160;
+
+function HeroAnalysis() {
+  const [tick, setTick] = useState(95);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return undefined;
+    let timer: number | undefined;
+    let running = false;
+    const play = () => { if (running) return; running = true; setTick(0); timer = window.setInterval(() => setTick((value) => (value + 1) % CYCLE), 100); };
+    const stop = () => { running = false; window.clearInterval(timer); setTick(95); };
+    if (!element || !("IntersectionObserver" in window)) { play(); return () => stop(); }
+    const observer = new IntersectionObserver(([entry]) => (entry.isIntersecting ? play() : stop()), { threshold: 0.25 });
+    observer.observe(element);
+    return () => { observer.disconnect(); stop(); };
+  }, []);
+
+  const progress = Math.max(0, Math.min(1, (tick - 10) / 70));
+  const count = Math.round(26 * progress);
+  const ticker = count === 0 ? "Lecture des deux peaux…" : count < 26 ? `${count % 2 ? "Peau 1" : "Peau 2"} · ${analysisParams[count - 1]}` : "Deux analyses · deux routines";
+
+  return <div className="sv-analysis" ref={ref}>
+    <div className="sv-analysis-zoom">
+      <img src={heroImage} alt="Deux visages en gros plan, une peau claire à taches de rousseur et une peau foncée, analysés point par point" />
+      <span className="sv-analysis-scan" style={{ top: `${Math.min(100, (tick / 12) * 100)}%`, opacity: tick < 13 ? 1 : 0 }} aria-hidden="true" />
+      {analysisSpots.map((spot, index) => {
+        const on = tick >= 10 + index * 6 && tick < 128;
+        return <span key={spot.label} className={`sv-tag sv-tag-${spot.side}${on ? " is-on" : ""}`} style={{ left: `${spot.left}%`, top: `${spot.y}%` }} aria-hidden="true">
+          <span className="sv-tag-box"><b>{spot.label}</b><small>{spot.value}</small></span>
+        </span>;
+      })}
+    </div>
+    <p className="sv-analysis-chip">Exemple d’analyse</p>
+    <div className="sv-analysis-count">
+      <span className="sv-ring">
+        <svg viewBox="0 0 72 72" aria-hidden="true"><circle cx="36" cy="36" r="33" className="sv-ring-dots" /><circle cx="36" cy="36" r="33" pathLength="100" className="sv-ring-fill" style={{ strokeDasharray: `${(progress * 100).toFixed(1)} 100` }} /></svg>
+        <b>{count}</b>
+      </span>
+      <span><strong>Caractéristiques analysées, pour chaque peau</strong><small>{ticker}</small></span>
+    </div>
+  </div>;
+}
+
+function AnalysisBand() {
+  const half = Math.ceil(analysisParams.length / 2);
+  const rows = [analysisParams.slice(0, half), analysisParams.slice(half)];
+  return <section className="sv-band" aria-label="Ce que l’analyse regarde">
+    <p>Ce que l’analyse regarde, <em>zone par zone</em></p>
+    <ul className="sv-visually-hidden">{analysisParams.map((item) => <li key={item}>{item}</li>)}</ul>
+    {rows.map((row, index) => <div className={`sv-band-row${index ? " is-reverse" : ""}`} key={index} aria-hidden="true">{[...row, ...row].map((item, position) => <span key={`${item}-${position}`}>{item}</span>)}</div>)}
+  </section>;
+}
+
+function ReportPhone() {
   const [current, setCurrent] = useState(0);
   const [lightbox, setLightbox] = useState<number | null>(null);
   const [visible, setVisible] = useState(false);
   const [paused, setPaused] = useState(false);
-  const frameRef = useRef<HTMLDivElement>(null);
+  const [reduced, setReduced] = useState(false);
+  const phoneRef = useRef<HTMLButtonElement>(null);
+  const navRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    reportPages.forEach((source) => {
-      const image = new Image();
-      image.src = source;
-    });
+    setReduced(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false);
+    reportScreens.forEach(({ image }) => { const preload = new Image(); preload.src = image; });
   }, []);
 
   useEffect(() => {
-    const element = frameRef.current;
-    if (!element || !("IntersectionObserver" in window)) {
-      setVisible(true);
-      return;
-    }
-    const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting), { threshold: 0.4 });
+    const element = phoneRef.current;
+    if (!element || !("IntersectionObserver" in window)) { setVisible(true); return undefined; }
+    const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting), { threshold: 0.35 });
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
-    if (!visible || paused) return undefined;
-    const timer = window.setTimeout(() => setCurrent((value) => (value + 1) % reportStops.length), 2400);
+    if (!visible || paused || reduced) return undefined;
+    const timer = window.setTimeout(() => setCurrent((value) => (value + 1) % reportScreens.length), SCREEN_DURATION);
     return () => window.clearTimeout(timer);
-  }, [current, paused, visible]);
+  }, [current, paused, reduced, visible]);
+
+  useEffect(() => {
+    const chip = navRef.current?.children[current] as HTMLElement | undefined;
+    const nav = navRef.current;
+    if (chip && nav && typeof nav.scrollTo === "function") nav.scrollTo({ left: chip.offsetLeft - nav.clientWidth / 2 + chip.clientWidth / 2, behavior: "smooth" });
+  }, [current]);
 
   useEffect(() => {
     if (lightbox === null) return undefined;
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setLightbox(null); };
     document.body.style.overflow = "hidden";
     window.addEventListener("keydown", onKey);
+    window.setTimeout(() => document.getElementById(`sv-screen-${lightbox}`)?.scrollIntoView({ block: "start" }), 0);
     return () => { document.body.style.overflow = ""; window.removeEventListener("keydown", onKey); };
   }, [lightbox]);
 
-  const stop = reportStops[current];
-  const [centerX, centerY] = stop.center;
-  const [focusX, focusY, focusWidth, focusHeight] = stop.focus;
-  const imageLeft = 50 - (stop.scale * centerX / REPORT_WIDTH) * 100;
-  const imageTop = 50 - (stop.scale * centerY / REPORT_WIDTH) * 100;
-  const focusLeft = imageLeft + (stop.scale * focusX / REPORT_WIDTH) * 100;
-  const focusTop = imageTop + (stop.scale * focusY / REPORT_WIDTH) * 100;
-  const focusRight = focusLeft + (stop.scale * focusWidth / REPORT_WIDTH) * 100;
-  const focusBottom = focusTop + (stop.scale * focusHeight / REPORT_WIDTH) * 100;
-  const clamp = (value: number) => Math.min(98, Math.max(2, value));
-  const focusStyle = {
-    left: `${clamp(focusLeft)}%`,
-    top: `${clamp(focusTop)}%`,
-    width: `${Math.max(10, clamp(focusRight) - clamp(focusLeft))}%`,
-    height: `${Math.max(10, clamp(focusBottom) - clamp(focusTop))}%`,
-  };
+  const screen = reportScreens[current];
+  const choose = (index: number) => { setPaused(true); setCurrent(index); };
 
   return <>
-    <div className={`sv-tour ${paused ? "is-paused" : ""}`}>
-      <div className="sv-frame" ref={frameRef} aria-live="polite">
-        <img
-          src={reportPages[stop.page]}
-          alt={`Extrait d’un rapport SkinView : ${stop.title}`}
-          style={{ width: `${stop.scale * 100}%`, left: `${imageLeft}%`, top: `${imageTop}%` }}
-        />
-        <span className="sv-focus" style={focusStyle} />
-        <span className="sv-page-no">Page {stop.page} / 7</span>
-      </div>
-      <div className="sv-tour-caption"><h3>{stop.title}</h3><p>{stop.text}</p></div>
-      <div className="sv-tour-nav" role="tablist" aria-label="Preuves du rapport">
-        {reportStops.map((item, index) => <button type="button" role="tab" aria-selected={index === current} key={item.title} onClick={() => { setPaused(true); setCurrent(index); }}><i><b style={{ width: index < current ? "100%" : undefined }} /></i>{item.title}</button>)}
-      </div>
+    <div className={`sv-phone-stage${visible && !reduced ? " is-playing" : ""}`}>
+      <button type="button" className="sv-phone" ref={phoneRef} onClick={() => { setPaused(true); setLightbox(current); }} aria-label={`Agrandir l’écran « ${screen.title} »`}>
+        
+        <span className="sv-phone-screen">
+          <img key={current} src={screen.image} alt={`Rapport SkinView, écran « ${screen.title} »`} style={{ animationDuration: `${SCREEN_DURATION}ms` }} />
+        </span>
+      </button>
+      <span className="sv-phone-shadow" aria-hidden="true" />
     </div>
-    <div className="sv-leaf-head"><h3>Feuilletez le rapport</h3><span>Touchez une page pour l’agrandir</span></div>
-    <div className="sv-pages">{reportPages.map((page, index) => <button type="button" key={page} onClick={() => { setPaused(true); setLightbox(index); }} aria-label={`Agrandir : ${reportNames[index]}`}><img src={page} alt="" loading="lazy" /><small>{reportNames[index]}</small></button>)}</div>
+    <div className="sv-phone-caption" aria-live="polite"><span>{String(current + 1).padStart(2, "0")} / {reportScreens.length}</span><h3>{screen.title}</h3><p>{screen.text}</p></div>
+    <div className={`sv-chips${paused ? " is-paused" : ""}`} ref={navRef} role="tablist" aria-label="Écrans du rapport">
+      {reportScreens.map((item, index) => <button type="button" role="tab" key={item.title} aria-selected={index === current} onClick={() => choose(index)}>{item.title}{index === current && !paused && !reduced && <i style={{ animationDuration: `${SCREEN_DURATION}ms` }} />}</button>)}
+    </div>
     <button type="button" className="sv-btn" onClick={() => { setPaused(true); setLightbox(0); }}>Voir le rapport complet <span aria-hidden="true">→</span></button>
     <p className="sv-note">Rapport réel, anonymisé : prénom modifié, photos de peau remplacées et noms des produits floutés.</p>
-    {lightbox !== null && <div className="sv-lightbox" role="dialog" aria-modal="true" aria-label="Rapport complet"><div className="sv-lightbox-bar"><span>Exemple de rapport</span><button type="button" onClick={() => setLightbox(null)} aria-label="Fermer">✕</button></div><div className="sv-lightbox-scroll">{reportPages.map((page, index) => <img key={page} src={page} alt={reportNames[index]} className={index === lightbox ? "sv-lightbox-current" : ""} />)}</div></div>}
+    {lightbox !== null && <div className="sv-lightbox" role="dialog" aria-modal="true" aria-label="Rapport complet"><div className="sv-lightbox-bar"><span>Exemple de rapport</span><button type="button" onClick={() => setLightbox(null)} aria-label="Fermer">✕</button></div><div className="sv-lightbox-scroll">{reportScreens.map((item, index) => <img key={item.title} id={`sv-screen-${index}`} src={item.image} alt={`Rapport SkinView, écran « ${item.title} »`} loading="lazy" />)}</div></div>}
   </>;
+}
+
+function Perks() {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const active = perks.find((perk) => perk.id === openId);
+  const icons: Record<string, React.ReactNode> = {
+    multimarque: <span aria-hidden="true">▦</span>,
+    personnalise: <Leaf aria-hidden="true" />,
+    independant: <Scale aria-hidden="true" />,
+  };
+  return <div className="sv-perks-wrap">
+    <ul className="sv-perks">
+      {perks.map((perk) => <li key={perk.id}><button type="button" aria-expanded={openId === perk.id} aria-controls="sv-perk-panel" onClick={() => setOpenId((value) => (value === perk.id ? null : perk.id))}><i>{icons[perk.id]}</i>{perk.label}</button></li>)}
+    </ul>
+    {active ? <div className="sv-perk-panel" id="sv-perk-panel" role="region" aria-label={active.label} key={active.id}><h3>{active.title}</h3><p>{active.text}</p></div> : <p className="sv-perk-hint">Touchez une pastille pour en savoir plus.</p>}
+  </div>;
 }
 
 export default function SkinViewLanding() {
@@ -215,30 +262,27 @@ export default function SkinViewLanding() {
     <Header onStart={start} />
     <main>
       <section className="sv-hero" id="top">
-        <div className="sv-hero-image"><p>Analyse<br />de peau<br />personnalisée<br />en ligne</p><img src={heroImage} alt="Femme présentant une peau naturelle, dans une lumière douce" /></div>
-        <h1>Une routine<br />(vraiment) pensée<br />pour votre peau.</h1>
-        <p className="sv-lead">SkinView analyse vos photos et vos réponses pour construire une routine adaptée à votre peau, avec uniquement les produits qui ont une vraie raison d’être.</p>
+        <HeroAnalysis />
+        <h1>26 points analysés.<br /><em>Une seule routine&nbsp;: la vôtre.</em></h1>
+        <p className="sv-lead">Pores, rougeurs, taches, ridules&nbsp;: votre peau est lue zone par zone, avec un niveau de détail que l’œil seul ne voit pas. De là naît une routine sur mesure, où chaque produit a sa raison d’être.</p>
         <Cta onClick={start}>Commencer mon analyse</Cta>
+        <p className="sv-price-line">À partir de 39&nbsp;€ · aucun produit vendu</p>
         <button type="button" className="sv-link" onClick={() => document.getElementById("rapport")?.scrollIntoView({ behavior: "smooth" })}>Voir un exemple de rapport</button>
-        <ul className="sv-perks"><li><i><span>▦</span></i>Multimarque</li><li><i><Leaf aria-hidden="true" /></i>Personnalisé</li><li><i><Scale aria-hidden="true" /></i>Indépendant</li></ul>
+        <Perks />
         <p className="sv-script">Moins d’essais.<span>Plus de certitudes.</span></p>
       </section>
 
+      <AnalysisBand />
+
       <section className="sv-section" id="fonctionnement"><h2>Comment ça marche&nbsp;?</h2><p className="sv-lead">Quelques minutes pour nous aider à comprendre votre peau, vos habitudes et vos objectifs.</p><ol className="sv-steps"><li><div className="sv-step-photo"><img src={stepPhotos} alt="" /><b>1</b></div><div><h3>Vous partagez vos photos</h3><p>Quelques photos permettent d’observer votre peau sous différents angles.</p></div></li><li><div className="sv-step-photo"><img src={stepQuestionnaire} alt="" /><b>2</b></div><div><h3>Vous répondez à un questionnaire</h3><p>Vos habitudes, vos objectifs, votre routine actuelle et votre ressenti donnent le contexte nécessaire à l’analyse.</p></div></li><li><div className="sv-step-photo"><img src={stepReport} alt="" /><b>3</b></div><div><h3>Vous recevez votre analyse complète</h3><p>Découvrez vos priorités, votre stratégie, votre routine et les produits retenus pour votre peau.</p></div></li></ol><Cta onClick={start}>Commencer mon analyse</Cta><p className="sv-script">Simple aujourd’hui,<span>une peau plus sereine demain.</span></p></section>
 
-      <section className="sv-section sv-report" id="rapport"><h2>Voyez exactement ce que vous recevez</h2><p className="sv-lead">De vrais exemples SkinView : votre peau, vos priorités, votre stratégie, votre routine et les produits retenus.</p><ReportTour /><div className="sv-trust sv-report-trust"><Search aria-hidden="true" /><div><h3>Pas de conclusions forcées</h3><p>Si un élément n’est pas suffisamment visible sur vos photos, il n’est pas présenté comme une certitude.</p></div></div></section>
+      <section className="sv-section sv-report" id="rapport"><h2>Voyez exactement ce que vous recevez</h2><p className="sv-lead">Un vrai rapport SkinView, écran par écran : votre peau, vos priorités, votre stratégie, votre routine et les produits retenus.</p><ReportPhone /><div className="sv-trust sv-report-trust"><Search aria-hidden="true" /><div><h3>Pas de conclusions forcées</h3><p>Si un élément n’est pas suffisamment visible sur vos photos, il n’est pas présenté comme une certitude.</p></div></div></section>
 
-      <section className="sv-section sv-combat" id="conseil"><h2>Le conseil avant le produit.</h2><p className="sv-sub">Un bon conseil ne commence pas par un catalogue. Il commence par votre peau.</p><p className="sv-body">SkinView ne vend aucun produit. Nos recommandations sont multimarques et chaque produit doit avoir une fonction précise dans votre routine.</p><div className="sv-values"><Value image={valueSkin} title="Votre peau avant les tendances" text="Nous partons de vos besoins, pas du produit dont tout le monde parle." /><Value image={valueBrands} title="Des recommandations multimarques" text="Les références sont retenues pour leur pertinence dans votre routine." /><Value image={valuePlace} title="Chaque produit doit mériter sa place" text="Une étape inutile n’est pas ajoutée simplement pour rendre la routine plus complète." /><Value image={valueBuy} title="Moins acheter. Mieux choisir." text="L’objectif n’est pas de multiplier les produits mais de construire une routine cohérente." /></div></section>
+      <section className="sv-section" id="tarifs"><h2>Choisissez votre analyse SkinView</h2><div className="sv-plans"><article className="sv-plan"><h3>Analyse SkinView</h3><p className="sv-price">39&nbsp;€</p><p className="sv-tagline">Une analyse complète, une fois.</p><ul><li>Analyse personnalisée</li><li>Rapport complet</li><li>Priorités et stratégie</li><li>Routine matin et soir</li><li>Produits recommandés</li><li>Conseils d’utilisation et fréquences</li></ul><Cta onClick={start}>Commencer mon analyse</Cta></article><article className="sv-plan sv-plan-alt"><span className="sv-badge">LE PLUS COMPLET</span><h3>SkinView Suivi</h3><p className="sv-price">59&nbsp;€</p><p className="sv-tagline">Deux analyses complètes, et la preuve de ce qui a changé.</p><p className="sv-saving">Moins cher que deux analyses séparées (78&nbsp;€), avec en plus le comparatif avant&nbsp;/&nbsp;après.</p><ol className="sv-timeline"><li><b>Aujourd’hui</b><span>Votre analyse complète et votre routine sur mesure.</span></li><li><b>Les mois suivants</b><span>Vous suivez votre routine. Votre peau évolue&nbsp;: saisons, rythme de vie, effet des soins.</span></li><li><b>Dans les 6 mois</b><span>Nouvelles photos, nouvelle analyse et comparatif avant&nbsp;/&nbsp;après, zone par zone.</span></li><li><b>Votre routine réajustée</b><span>On garde ce qui marche, on retire ce qui ne sert plus, on ajuste les fréquences.</span></li></ol><div className="sv-why"><strong>Pourquoi c’est utile</strong><p>La routine idéale pour votre peau d’aujourd’hui ne le sera pas forcément dans 6 mois. Le suivi vous évite de garder des produits dont votre peau n’a plus besoin, et vous montre enfin ce que votre routine a vraiment changé.</p></div><Cta onClick={startSuivi}>Choisir le suivi</Cta><p className="sv-extra">Seulement 20&nbsp;€ de plus que l’analyse seule.</p></article></div></section>
 
-      <section className="sv-section" id="tarifs"><h2>Choisissez votre analyse SkinView</h2><div className="sv-plans"><article className="sv-plan"><h3>Analyse SkinView</h3><p className="sv-price">39&nbsp;€</p><p className="sv-tagline">Une analyse complète, une fois.</p><ul><li>Analyse personnalisée</li><li>Rapport complet</li><li>Priorités et stratégie</li><li>Routine matin et soir</li><li>Produits recommandés</li><li>Conseils d’utilisation et fréquences</li></ul><Cta onClick={start}>Commencer mon analyse</Cta></article><article className="sv-plan sv-plan-alt"><span className="sv-badge">ANALYSE + SUIVI</span><h3>SkinView Suivi</h3><p className="sv-price">59&nbsp;€</p><p className="sv-tagline">Votre peau évolue. Votre routine aussi.</p><p className="sv-desc">Votre analyse initiale est suivie d’un nouveau bilan dans les 6 mois pour comparer l’évolution de votre peau et adapter votre routine à sa nouvelle situation.</p><ol className="sv-journey"><li>Avant</li><li>Évolution</li><li>Après</li><li>Routine réadaptée</li></ol><ul><li>Analyse complète initiale</li><li>Nouvelle analyse à partir de nouvelles photos</li><li>Comparatif avant / après</li><li>Évolution des zones et priorités suivies</li><li>Routine réévaluée selon les progrès observés</li><li>Produits ou fréquences ajustés uniquement si nécessaire</li></ul><p className="sv-extra">20 € de plus pour refaire le point dans les 6 mois.</p><Cta onClick={startSuivi}>Choisir le suivi</Cta></article></div></section>
-
-      <section className="sv-section sv-faq" id="faq"><h2>Questions fréquentes</h2><div className="sv-faq-list">{faq.map(([question, answers], index) => <details key={question} open={index === 0}><summary>{question}</summary><div className="sv-answer">{answers.map((answer) => <p key={answer} className={answer === "Réponse à compléter." ? "sv-todo" : undefined}>{answer}</p>)}</div></details>)}</div></section>
+      <section className="sv-section sv-faq" id="faq"><h2>Questions fréquentes</h2><div className="sv-faq-list">{faq.filter(([, answers]) => !answers.every((answer) => answer === "Réponse à compléter.")).map(([question, answers], index) => <details key={question} open={index === 0}><summary>{question}</summary><div className="sv-answer">{answers.map((answer) => <p key={answer} className={answer === "Réponse à compléter." ? "sv-todo" : undefined}>{answer}</p>)}</div></details>)}</div></section>
       <section className="sv-final"><p>Comprenez votre peau avant votre prochain achat.</p><Cta onClick={start}>Commencer mon analyse</Cta></section>
     </main>
-    <footer className="sv-footer">SkinView est une aide skincare cosmétique non médicale.<br />Le rapport ne remplace pas l’avis d’un professionnel de santé.</footer>
+    <footer className="sv-footer"><Link to="/notre-histoire">Notre histoire</Link><br />SkinView est une aide skincare cosmétique non médicale.<br />Le rapport ne remplace pas l’avis d’un professionnel de santé.</footer>
   </div>;
-}
-
-function Value({ image, title, text }: { image: string; title: string; text: string }) {
-  return <article className="sv-value"><img src={image} alt="" /><div><span aria-hidden="true">✦</span><h3>{title}</h3><p>{text}</p></div></article>;
 }
