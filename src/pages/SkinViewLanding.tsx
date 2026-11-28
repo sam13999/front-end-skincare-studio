@@ -136,7 +136,7 @@ function ReportPhone() {
   useEffect(() => {
     const chip = navRef.current?.children[current] as HTMLElement | undefined;
     const nav = navRef.current;
-    if (chip && nav) nav.scrollTo({ left: chip.offsetLeft - nav.clientWidth / 2 + chip.clientWidth / 2, behavior: "smooth" });
+    if (chip && nav && typeof nav.scrollTo === "function") nav.scrollTo({ left: chip.offsetLeft - nav.clientWidth / 2 + chip.clientWidth / 2, behavior: "smooth" });
   }, [current]);
 
   useEffect(() => {
