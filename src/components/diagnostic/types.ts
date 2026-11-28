@@ -1,4 +1,4 @@
-export const QUESTIONNAIRE_VERSION = "v3" as const;
+export const QUESTIONNAIRE_VERSION = "v4" as const;
 
 export interface DiagnosticData {
   photoFace: string | null;
@@ -38,7 +38,10 @@ export type BackendKey =
   | "niveau_routine_actuelle"
   | "produits_utilises_regulierement"
   | "preferences_a_eviter"
-  | "attentes_routine";
+  | "reactivite_peau_declaree"
+  | "imperfections_frequence"
+  | "type_cernes"
+  | "taille_routine";
 
 export const ALLOWED_VALUES: Record<BackendKey, readonly string[]> = {
   age_range: ["Moins de 18 ans", "18–24 ans", "25–34 ans", "35–44 ans", "45–54 ans", "55 ans et +"],
@@ -59,11 +62,15 @@ export const ALLOWED_VALUES: Record<BackendKey, readonly string[]> = {
   zone_preoccupation: ["Front", "Nez", "Joues", "Menton", "Contour des yeux", "Plusieurs zones", "Ensemble du visage"],
   profil_peau_declare: [
     "Elle tiraille souvent et manque de confort",
-    "Elle est globalement confortable et réagit rarement",
+    "Elle est globalement confortable",
     "Elle brille surtout sur la zone T",
     "Elle brille sur l’ensemble du visage",
-    "Elle réagit facilement, avec rougeurs ou picotements",
     "Son comportement varie beaucoup selon les zones ou les périodes",
+  ],
+  reactivite_peau_declaree: ["Rarement", "Parfois", "Souvent"],
+  imperfections_frequence: ["Jamais ou presque", "De temps en temps", "Régulièrement"],
+  type_cernes: [
+    "Plutôt bruns", "Plutôt bleus ou violets", "Creusés, avec une ombre", "Surtout des poches", "Je ne sais pas",
   ],
   couleur_peau_declaree: ["Très claire", "Claire", "Médium", "Mate", "Brune", "Brun foncé"],
   niveau_routine_actuelle: [
@@ -74,18 +81,19 @@ export const ALLOWED_VALUES: Record<BackendKey, readonly string[]> = {
   ],
   produits_utilises_regulierement: [
     "Nettoyant", "Démaquillant / huile nettoyante", "Sérum", "Crème hydratante", "Protection solaire",
-    "Exfoliant", "Rétinol / rétinoïde", "Traitement anti-imperfections", "Masque", "Autre", "Aucun",
+    "Exfoliant", "Rétinol / rétinoïde", "Traitement anti-imperfections", "Masque", "Autre",
   ],
   preferences_a_eviter: [
-    "Trop d’étapes", "Sensation grasse ou lourde", "Fini collant", "Parfum ou odeur marquée",
-    "Soins qui picotent ou irritent facilement", "Rien en particulier", "Je ne sais pas",
+    "Sensation grasse ou lourde", "Fini collant", "Parfum ou odeur marquée", "Rien en particulier",
   ],
-  attentes_routine: [
-    "Une routine très simple", "Les résultats les plus efficaces possibles", "Des produits doux",
-    "Une routine adaptée aux peaux sensibles", "Peu de produits", "Des textures légères",
-    "Des produits sans parfum", "Autre",
+  taille_routine: [
+    "Une routine très simple (4 produits ou moins)",
+    "Une routine complète pour traiter tout ce qui a été observé",
+    "Je laisse SkinView choisir",
   ],
 };
+
+const isMan = (answers: Record<string, string | string[]>) => answers.genre === "Homme";
 
 const opts = (key: BackendKey): QuestionOption[] =>
   ALLOWED_VALUES[key].map((value) => ({ label: value, value }));
@@ -109,7 +117,7 @@ const questionDefinitions: Omit<Question, "id">[] = [
     subtitle: "Cette information nous aide à écarter certains actifs incompatibles.",
     type: "single",
     options: opts("grossesse_allaitement"),
-    showWhen: (answers) => answers.genre !== "Homme",
+    showWhen: (answers) => !isMan(answers),
   },
   {
     key: "objectif_principal",
@@ -118,8 +126,36 @@ const questionDefinitions: Omit<Question, "id">[] = [
     type: "single",
     options: opts("objectif_principal"),
   },
-  { key: "zone_preoccupation", title: "Où se situe principalement cette préoccupation ?", type: "single", options: opts("zone_preoccupation") },
+  {
+    key: "zone_preoccupation",
+    title: "Où se situe principalement cette préoccupation ?",
+    type: "single",
+    options: opts("zone_preoccupation"),
+    // Sans objet sans préoccupation ; pour les cernes, c'est forcément le contour des yeux.
+    showWhen: (answers) => !["Rien de particulier", "Cernes / poches"].includes(String(answers.objectif_principal ?? "")),
+  },
+  {
+    key: "type_cernes",
+    title: "À quoi ressemblent vos cernes ?",
+    subtitle: "Votre réponse nous aide à choisir le bon soin, les photos servent à la confirmer.",
+    type: "single",
+    options: opts("type_cernes"),
+    showWhen: (answers) => answers.objectif_principal === "Cernes / poches",
+  },
   { key: "profil_peau_declare", title: "Comment décririez-vous votre peau au quotidien ?", type: "single", options: opts("profil_peau_declare") },
+  {
+    key: "reactivite_peau_declaree",
+    title: "Votre peau réagit-elle facilement ?",
+    subtitle: "Rougeurs, picotements ou échauffements après un soin ou selon l’environnement.",
+    type: "single",
+    options: opts("reactivite_peau_declaree"),
+  },
+  {
+    key: "imperfections_frequence",
+    title: "Avez-vous des boutons ou des imperfections ?",
+    type: "single",
+    options: opts("imperfections_frequence"),
+  },
   {
     key: "couleur_peau_declaree",
     title: "Quelle est votre couleur de peau naturelle, sans bronzage ?",
@@ -129,10 +165,15 @@ const questionDefinitions: Omit<Question, "id">[] = [
   },
   { key: "niveau_routine_actuelle", title: "À quoi ressemble actuellement votre routine ?", type: "single", options: opts("niveau_routine_actuelle") },
   {
+    ...multi("produits_utilises_regulierement", "Quels produits utilisez-vous régulièrement ?", "Sélectionnez jusqu’à 4 réponses.", 4),
+    showWhen: (answers) => answers.niveau_routine_actuelle !== "Je n’utilise pratiquement aucun soin",
+  },
+  {
     key: "maquillage_frequence",
     title: "Portez-vous du maquillage ?",
     type: "single",
     options: opts("maquillage_frequence"),
+    showWhen: (answers) => !isMan(answers),
   },
   {
     key: "types_maquillage",
@@ -141,11 +182,10 @@ const questionDefinitions: Omit<Question, "id">[] = [
     type: "multiple",
     maxSelections: 2,
     options: opts("types_maquillage"),
-    showWhen: (answers) => answers.maquillage_frequence !== "Jamais",
+    showWhen: (answers) => !isMan(answers) && answers.maquillage_frequence !== "Jamais",
   },
-  multi("produits_utilises_regulierement", "Quels produits utilisez-vous régulièrement ?", "Sélectionnez jusqu’à 4 réponses.", 4, ["Aucun"]),
-  multi("preferences_a_eviter", "Qu’aimeriez-vous particulièrement éviter dans votre future routine ?", "Sélectionnez jusqu’à 2 réponses.", 2, ["Rien en particulier", "Je ne sais pas"]),
-  multi("attentes_routine", "Qu’attendez-vous principalement de votre future routine ?", "Sélectionnez jusqu’à 2 réponses.", 2),
+  multi("preferences_a_eviter", "Qu’aimeriez-vous éviter dans vos soins ?", "Sélectionnez jusqu’à 2 réponses.", 2, ["Rien en particulier"]),
+  { key: "taille_routine", title: "Quelle routine souhaitez-vous ?", type: "single", options: opts("taille_routine") },
 ];
 
 export const questions: Question[] = questionDefinitions.map((question, index) => ({ ...question, id: index + 1 }));

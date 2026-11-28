@@ -25,49 +25,59 @@ const validData = () => ({
   answers: answerAll(),
 });
 
-describe("questionnaire SkinView v3", () => {
-  it("contains exactly the 13 questions in the required order", () => {
+describe("questionnaire SkinView v4", () => {
+  const visibleKeys = (answers: Record<string, string | string[]>) =>
+    getVisibleQuestions(answers).map((question) => question.key);
+
+  it("lists the v4 questions in order, without duplicates", () => {
     expect(questions.map((question) => question.key)).toEqual([
-      "age_range",
-      "genre",
-      "grossesse_allaitement",
-      "objectif_principal",
-      "zone_preoccupation",
-      "profil_peau_declare",
-      "couleur_peau_declaree",
-      "niveau_routine_actuelle",
-      "maquillage_frequence",
-      "types_maquillage",
-      "produits_utilises_regulierement",
-      "preferences_a_eviter",
-      "attentes_routine",
+      "age_range", "genre", "grossesse_allaitement", "objectif_principal", "zone_preoccupation", "type_cernes",
+      "profil_peau_declare", "reactivite_peau_declaree", "imperfections_frequence", "couleur_peau_declaree",
+      "niveau_routine_actuelle", "produits_utilises_regulierement", "maquillage_frequence", "types_maquillage",
+      "preferences_a_eviter", "taille_routine",
     ]);
-    expect(questions).toHaveLength(13);
-    expect(QUESTIONNAIRE_VERSION).toBe("v3");
+    expect(QUESTIONNAIRE_VERSION).toBe("v4");
+    expect(ALLOWED_VALUES.preferences_a_eviter).not.toContain("Trop d’étapes");
+    expect(ALLOWED_VALUES.preferences_a_eviter).not.toContain("Soins qui picotent ou irritent facilement");
+    expect(ALLOWED_VALUES.profil_peau_declare).not.toContain("Elle réagit facilement, avec rougeurs ou picotements");
+    expect(ALLOWED_VALUES.taille_routine).toContain("Une routine très simple (4 produits ou moins)");
   });
 
-  it("uses the required maxima and exact answer values", () => {
-    expect(ALLOWED_VALUES.produits_utilises_regulierement).toContain("Rétinol / rétinoïde");
+  it("uses the required maxima", () => {
     expect(questions.filter((question) => question.type === "multiple").map((question) => [question.key, question.maxSelections])).toEqual([
-      ["types_maquillage", 2],
       ["produits_utilises_regulierement", 4],
+      ["types_maquillage", 2],
       ["preferences_a_eviter", 2],
-      ["attentes_routine", 2],
     ]);
   });
 
-  it("hides pregnancy for men and omits it from the payload", () => {
+  it("spares men the pregnancy and makeup questions", () => {
     const data = validData();
     data.answers.genre = "Homme";
-    delete data.answers.grossesse_allaitement;
-    delete data.answers.types_maquillage;
-    expect(getVisibleQuestions(data.answers).some((question) => question.key === "grossesse_allaitement")).toBe(false);
+    expect(visibleKeys(data.answers)).not.toContain("grossesse_allaitement");
+    expect(visibleKeys(data.answers)).not.toContain("maquillage_frequence");
+    expect(visibleKeys(data.answers)).not.toContain("types_maquillage");
     const result = buildAndValidatePayload(data);
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.payload.questionnaire.grossesse_allaitement).toBeUndefined();
-      expect(result.payload.questionnaire.types_maquillage).toBeUndefined();
+      expect(result.payload.questionnaire.maquillage_frequence).toBeUndefined();
     }
+  });
+
+  it("asks the dark-circle type instead of the zone when dark circles are the concern", () => {
+    const answers = { ...answerAll(), objectif_principal: "Cernes / poches" };
+    expect(visibleKeys(answers)).toContain("type_cernes");
+    expect(visibleKeys(answers)).not.toContain("zone_preoccupation");
+    expect(visibleKeys({ ...answerAll(), objectif_principal: "Rien de particulier" })).not.toContain("zone_preoccupation");
+    expect(visibleKeys(answerAll())).not.toContain("type_cernes");
+  });
+
+  it("asks used products only to people who already have a routine", () => {
+    expect(visibleKeys({ ...answerAll(), niveau_routine_actuelle: "Je n’utilise pratiquement aucun soin" }))
+      .not.toContain("produits_utilises_regulierement");
+    expect(visibleKeys({ ...answerAll(), niveau_routine_actuelle: "Routine régulière, 3 à 4 produits" }))
+      .toContain("produits_utilises_regulierement");
   });
 
   it("requires makeup type only when makeup is worn", () => {
@@ -82,33 +92,30 @@ describe("questionnaire SkinView v3", () => {
     expect(buildAndValidatePayload(daily).ok).toBe(true);
   });
 
-  it("builds a strict v3 payload with identity at the end of the flow", () => {
+  it("builds a strict v4 payload with identity at the end of the flow", () => {
     const result = buildAndValidatePayload(validData());
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.payload.questionnaire_version).toBe("v3");
-      expect(result.payload.questionnaire.questionnaire_version).toBe("v3");
+      expect(result.payload.questionnaire_version).toBe("v4");
+      expect(result.payload.questionnaire.questionnaire_version).toBe("v4");
       expect(result.payload.questionnaire.prenom).toBe("Samir");
-      expect(result.payload.questionnaire.email).toBe("s@example.com");
+      expect(result.payload.questionnaire.taille_routine).toBe(ALLOWED_VALUES.taille_routine[0]);
     }
   });
 
-  it("enforces product, preference, expectation limits and exclusivity", () => {
+  it("enforces product and preference limits and exclusivity", () => {
     const productsTooMany = validData();
+    productsTooMany.answers.niveau_routine_actuelle = "Routine complète, 5 produits ou plus";
     productsTooMany.answers.produits_utilises_regulierement = ALLOWED_VALUES.produits_utilises_regulierement.slice(0, 5);
     expect(buildAndValidatePayload(productsTooMany).ok).toBe(false);
-
-    const productsNonePlusOther = validData();
-    productsNonePlusOther.answers.produits_utilises_regulierement = ["Aucun", "Nettoyant"];
-    expect(buildAndValidatePayload(productsNonePlusOther).ok).toBe(false);
 
     const preferencesTooMany = validData();
     preferencesTooMany.answers.preferences_a_eviter = ALLOWED_VALUES.preferences_a_eviter.slice(0, 3);
     expect(buildAndValidatePayload(preferencesTooMany).ok).toBe(false);
 
-    const expectationsTooMany = validData();
-    expectationsTooMany.answers.attentes_routine = ALLOWED_VALUES.attentes_routine.slice(0, 3);
-    expect(buildAndValidatePayload(expectationsTooMany).ok).toBe(false);
+    const nothingPlusOther = validData();
+    nothingPlusOther.answers.preferences_a_eviter = ["Rien en particulier", "Fini collant"];
+    expect(buildAndValidatePayload(nothingPlusOther).ok).toBe(false);
   });
 
   it("requires every answer plus prénom and email", () => {
@@ -121,9 +128,9 @@ describe("questionnaire SkinView v3", () => {
     expect(buildAndValidatePayload(missingIdentity).ok).toBe(false);
   });
 
-  it("restores v3 only and does not reuse old questionnaire answers", () => {
+  it("restores v4 only and does not reuse old questionnaire answers", () => {
     const restored = restoreStoredDiagnosticData(JSON.stringify({
-      questionnaire_version: "v2",
+      questionnaire_version: "v3",
       answers: { objectif_principal: "ancienne valeur", signes_remarques: ["ancienne réponse"] },
       prenom: "Samir",
       email: "s@example.com",
