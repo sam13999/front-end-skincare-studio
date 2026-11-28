@@ -18,7 +18,8 @@ describe("SkinView landing", () => {
   it("conserve le nouveau positionnement, les offres et le rapport", () => {
     renderLanding();
 
-    expect(screen.getByRole("heading", { name: "Une routine (vraiment) pensée pour votre peau." })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: /26 points analysés/ })).toBeInTheDocument();
+    expect(screen.getByText("Exemple d’analyse")).toBeInTheDocument();
     const prices = document.querySelectorAll(".sv-price");
     expect(prices).toHaveLength(2);
     expect(prices[0].textContent).toContain("39");

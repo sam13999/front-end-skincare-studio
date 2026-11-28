@@ -105,6 +105,73 @@ function Header({ onStart }: { onStart: () => void }) {
   );
 }
 
+const analysisParams = ["Type de peau", "Pores", "Sensibilité", "Ridules sous les yeux", "Pattes-d’oie", "Poches", "Rides du front", "Rides intersourcilières", "Rougeurs", "Taches", "Imperfections", "Grains de beauté", "Pores des joues", "Pores du front", "Pores du menton", "Pores du nez", "Points noirs", "Teint", "Âge cutané", "Cernes", "Paupière gauche", "Paupière droite", "Sillons nasogéniens", "Comédons fermés", "Pores joue gauche", "Pores joue droite"];
+// Positions sur la photo (en % de l’image), converties pour un cadre 390 × 660 en object-fit: cover.
+const analysisSpots = [
+  { x: 38, y: 12, label: "Taches de rousseur", value: "Intensité 64 %", side: "r" },
+  { x: 75, y: 20, label: "Pores du front", value: "Intensité 38 %", side: "l" },
+  { x: 28, y: 50, label: "Ridules sous les yeux", value: "Intensité 22 %", side: "r" },
+  { x: 82, y: 44, label: "Cernes", value: "Intensité 46 %", side: "l" },
+  { x: 42, y: 58, label: "Taches", value: "Intensité 41 %", side: "r" },
+  { x: 80, y: 66, label: "Pores des joues", value: "Intensité 57 %", side: "l" },
+  { x: 20, y: 72, label: "Teint", value: "Clair, uniforme", side: "r" },
+  { x: 90, y: 72, label: "Brillance", value: "Intensité 33 %", side: "l" },
+].map((spot) => ({ ...spot, left: ((spot.x / 100) * 440.1 - 25.05) / 3.9 }));
+const CYCLE = 160;
+
+function HeroAnalysis() {
+  const [tick, setTick] = useState(95);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return undefined;
+    let timer: number | undefined;
+    let running = false;
+    const play = () => { if (running) return; running = true; setTick(0); timer = window.setInterval(() => setTick((value) => (value + 1) % CYCLE), 100); };
+    const stop = () => { running = false; window.clearInterval(timer); setTick(95); };
+    if (!element || !("IntersectionObserver" in window)) { play(); return () => stop(); }
+    const observer = new IntersectionObserver(([entry]) => (entry.isIntersecting ? play() : stop()), { threshold: 0.25 });
+    observer.observe(element);
+    return () => { observer.disconnect(); stop(); };
+  }, []);
+
+  const progress = Math.max(0, Math.min(1, (tick - 10) / 70));
+  const count = Math.round(26 * progress);
+  const ticker = count === 0 ? "Lecture des deux peaux…" : count < 26 ? `${count % 2 ? "Peau 1" : "Peau 2"} · ${analysisParams[count - 1]}` : "Deux analyses · deux routines";
+
+  return <div className="sv-analysis" ref={ref}>
+    <div className="sv-analysis-zoom">
+      <img src={heroImage} alt="Deux visages en gros plan, une peau claire à taches de rousseur et une peau foncée, analysés point par point" />
+      <span className="sv-analysis-scan" style={{ top: `${Math.min(100, (tick / 12) * 100)}%`, opacity: tick < 13 ? 1 : 0 }} aria-hidden="true" />
+      {analysisSpots.map((spot, index) => {
+        const on = tick >= 10 + index * 6 && tick < 128;
+        return <span key={spot.label} className={`sv-tag sv-tag-${spot.side}${on ? " is-on" : ""}`} style={{ left: `${spot.left}%`, top: `${spot.y}%` }} aria-hidden="true">
+          <span className="sv-tag-box"><b>{spot.label}</b><small>{spot.value}</small></span>
+        </span>;
+      })}
+    </div>
+    <p className="sv-analysis-chip">Exemple d’analyse</p>
+    <div className="sv-analysis-count">
+      <span className="sv-ring">
+        <svg viewBox="0 0 72 72" aria-hidden="true"><circle cx="36" cy="36" r="33" className="sv-ring-dots" /><circle cx="36" cy="36" r="33" pathLength="100" className="sv-ring-fill" style={{ strokeDasharray: `${(progress * 100).toFixed(1)} 100` }} /></svg>
+        <b>{count}</b>
+      </span>
+      <span><strong>Caractéristiques analysées, pour chaque peau</strong><small>{ticker}</small></span>
+    </div>
+  </div>;
+}
+
+function AnalysisBand() {
+  const half = Math.ceil(analysisParams.length / 2);
+  const rows = [analysisParams.slice(0, half), analysisParams.slice(half)];
+  return <section className="sv-band" aria-label="Ce que l’analyse regarde">
+    <p>Ce que l’analyse regarde, <em>zone par zone</em></p>
+    <ul className="sv-visually-hidden">{analysisParams.map((item) => <li key={item}>{item}</li>)}</ul>
+    {rows.map((row, index) => <div className={`sv-band-row${index ? " is-reverse" : ""}`} key={index} aria-hidden="true">{[...row, ...row].map((item, position) => <span key={`${item}-${position}`}>{item}</span>)}</div>)}
+  </section>;
+}
+
 function ReportPhone() {
   const [current, setCurrent] = useState(0);
   const [lightbox, setLightbox] = useState<number | null>(null);
@@ -195,14 +262,17 @@ export default function SkinViewLanding() {
     <Header onStart={start} />
     <main>
       <section className="sv-hero" id="top">
-        <div className="sv-hero-image"><p>Analyse<br />de peau<br />personnalisée<br />en ligne</p><img src={heroImage} alt="Femme présentant une peau naturelle, dans une lumière douce" /></div>
-        <h1>Une routine<br />(vraiment) pensée<br />pour votre peau.</h1>
-        <p className="sv-lead">SkinView analyse vos photos et vos réponses pour construire une routine adaptée à votre peau, avec uniquement les produits qui ont une vraie raison d’être.</p>
+        <HeroAnalysis />
+        <h1>26 points analysés.<br /><em>Avant de vous conseiller un seul soin.</em></h1>
+        <p className="sv-lead">Deux photos de votre visage et quelques questions. Vous recevez votre rapport complet et une routine multimarque, avec uniquement les produits qui ont une vraie raison d’être.</p>
         <Cta onClick={start}>Commencer mon analyse</Cta>
+        <p className="sv-price-line">À partir de 39&nbsp;€ · aucun produit vendu</p>
         <button type="button" className="sv-link" onClick={() => document.getElementById("rapport")?.scrollIntoView({ behavior: "smooth" })}>Voir un exemple de rapport</button>
         <Perks />
         <p className="sv-script">Moins d’essais.<span>Plus de certitudes.</span></p>
       </section>
+
+      <AnalysisBand />
 
       <section className="sv-section" id="fonctionnement"><h2>Comment ça marche&nbsp;?</h2><p className="sv-lead">Quelques minutes pour nous aider à comprendre votre peau, vos habitudes et vos objectifs.</p><ol className="sv-steps"><li><div className="sv-step-photo"><img src={stepPhotos} alt="" /><b>1</b></div><div><h3>Vous partagez vos photos</h3><p>Quelques photos permettent d’observer votre peau sous différents angles.</p></div></li><li><div className="sv-step-photo"><img src={stepQuestionnaire} alt="" /><b>2</b></div><div><h3>Vous répondez à un questionnaire</h3><p>Vos habitudes, vos objectifs, votre routine actuelle et votre ressenti donnent le contexte nécessaire à l’analyse.</p></div></li><li><div className="sv-step-photo"><img src={stepReport} alt="" /><b>3</b></div><div><h3>Vous recevez votre analyse complète</h3><p>Découvrez vos priorités, votre stratégie, votre routine et les produits retenus pour votre peau.</p></div></li></ol><Cta onClick={start}>Commencer mon analyse</Cta><p className="sv-script">Simple aujourd’hui,<span>une peau plus sereine demain.</span></p></section>
 
