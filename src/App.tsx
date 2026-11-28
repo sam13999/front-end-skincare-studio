@@ -7,6 +7,7 @@ import SkinViewLanding from "./pages/SkinViewLanding.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import ExempleRapport from "./pages/ExempleRapport.tsx";
 import NotreCombat from "./pages/NotreCombat.tsx";
+import NotreHistoire from "./pages/NotreHistoire.tsx";
 import RapportPersonnalise from "./pages/RapportPersonnalise.tsx";
 import Tarif from "./pages/Tarif.tsx";
 import AdminPage from "./pages/Admin.tsx";
@@ -47,6 +48,7 @@ const App = () => (
             <Route path="/admin/session/:sessionId" element={<AdminPage />} />
             <Route path="/exemple-rapport" element={<ExempleRapport />} />
             <Route path="/notre-combat" element={<NotreCombat />} />
+            <Route path="/notre-histoire" element={<NotreHistoire />} />
             <Route path="/rapport-skincare-personnalise" element={<RapportPersonnalise />} />
             <Route path="/tarif" element={<Tarif />} />
             <Route path="/paiement-confirme" element={<PaiementConfirme />} />
